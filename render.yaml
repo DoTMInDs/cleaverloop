@@ -1,0 +1,101 @@
+services:
+  # -------------------------------------------------------------
+  # 1. CleverLoop AI Web Service (Django / Gunicorn)
+  # -------------------------------------------------------------
+  - type: web
+    name: cleverloop-web
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 4 --threads 2 --timeout 120"
+    plan: starter
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cleverloop-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cleverloop-redis
+          property: connectionString
+      - key: STORAGE_BACKEND
+        value: s3
+
+  # -------------------------------------------------------------
+  # 2. CleverLoop AI Background Worker (Celery)
+  # -------------------------------------------------------------
+  - type: worker
+    name: cleverloop-celery-worker
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A config worker --loglevel=info --concurrency=4 -Q celery,video,image,render"
+    plan: starter
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: cleverloop-web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cleverloop-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cleverloop-redis
+          property: connectionString
+
+  # -------------------------------------------------------------
+  # 3. CleverLoop AI Celery Beat (Periodic Tasks / Health Poller)
+  # -------------------------------------------------------------
+  - type: worker
+    name: cleverloop-celery-beat
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "celery -A config beat --loglevel=info"
+    plan: starter
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: cleverloop-web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cleverloop-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: cleverloop-redis
+          property: connectionString
+
+# -------------------------------------------------------------
+# Databases & Key-Value Stores
+# -------------------------------------------------------------
+databases:
+  - name: cleverloop-db
+    plan: starter
+    databaseName: cleverloop_prod
+    user: cleverloop_user
+    postgresMajorVersion: 16
+
+# Render Redis / Key-Value
+# Note: On Render, Redis can be provisioned via Dashboard or Render Redis Addon
