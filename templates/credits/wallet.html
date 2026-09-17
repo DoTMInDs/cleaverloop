@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block title %}Credit Wallet & Ledger — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Credit Wallet</h1>
+            <p class="text-xs text-slate-400 mt-1">Audit trail of all transactional holds, consumptions, and refunds.</p>
+        </div>
+        <a href="{% url 'billing:plans' %}" class="btn btn-primary btn-sm bg-gradient-to-r from-brand-600 to-indigo-600 text-white border-none shadow-lg shadow-brand-500/30">
+            + Purchase Credits
+        </a>
+    </div>
+
+    <!-- Balance Summary Card -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="glass-panel-glow rounded-3xl p-6">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1">Available Balance</span>
+            <div class="text-3xl md:text-4xl font-extrabold text-amber-400 tracking-tight">{{ wallet.balance }}</div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Active generation credits</span>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-6">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1">Lifetime Earned</span>
+            <div class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">{{ wallet.lifetime_earned }}</div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Starter bonuses + subscriptions</span>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-6">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1">Lifetime Consumed</span>
+            <div class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">{{ wallet.lifetime_spent }}</div>
+            <span class="text-[11px] text-slate-400 mt-1 block">Settled generation spend</span>
+        </div>
+    </div>
+
+    <!-- Transaction Ledger Table -->
+    <div class="glass-panel rounded-3xl p-6 md:p-8 space-y-4">
+        <h2 class="text-lg font-heading font-bold text-white">Transaction Audit Ledger</h2>
+
+        {% if transactions %}
+            <div class="overflow-x-auto">
+                <table class="table table-sm w-full text-left">
+                    <thead>
+                        <tr class="border-b border-white/10 text-[11px] font-bold uppercase text-slate-400">
+                            <th>Date / Time</th>
+                            <th>Transaction Type</th>
+                            <th>Description</th>
+                            <th class="text-right">Amount</th>
+                            <th class="text-right">Balance After</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5 text-xs text-slate-200">
+                        {% for tx in transactions %}
+                            <tr class="hover:bg-white/[0.02] transition">
+                                <td class="text-slate-400 whitespace-nowrap">{{ tx.created_at|date:"M d, Y H:i:s" }}</td>
+                                <td>
+                                    {% if tx.transaction_type == 'bonus' %}
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Starter Bonus</span>
+                                    {% elif tx.transaction_type == 'generation_hold' %}
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">Reserved Hold</span>
+                                    {% elif tx.transaction_type == 'generation_consume' %}
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-brand-500/10 text-brand-300 border border-brand-500/20">Settled</span>
+                                    {% elif tx.transaction_type == 'generation_refund' %}
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">Refund</span>
+                                    {% else %}
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/5 text-slate-300">{{ tx.get_transaction_type_display }}</span>
+                                    {% endif %}
+                                </td>
+                                <td class="max-w-xs truncate text-slate-300">{{ tx.description }}</td>
+                                <td class="text-right font-bold whitespace-nowrap {% if tx.amount > 0 %}text-emerald-400{% elif tx.amount < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
+                                    {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }}
+                                </td>
+                                <td class="text-right font-semibold text-slate-100 whitespace-nowrap">{{ tx.balance_after }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center py-10 text-xs text-slate-400">No transactions recorded yet.</div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

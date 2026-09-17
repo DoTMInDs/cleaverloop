@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+
+{% block title %}Studio Dashboard — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Hero Creative Studio Hub -->
+    <div class="glass-panel-glow rounded-3xl p-6 md:p-10 relative overflow-hidden">
+        <div class="relative z-10 max-w-3xl space-y-4">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300 text-xs font-semibold">
+                <span class="w-2 h-2 rounded-full bg-brand-400 animate-ping"></span>
+                Next-Gen Multi-Model AI Orchestration
+            </div>
+
+            <h1 class="text-3xl md:text-5xl font-heading font-black text-white tracking-tight leading-tight">
+                Turn your imagination into <span class="bg-clip-text text-transparent bg-gradient-to-r from-brand-400 via-indigo-300 to-cyan-400">cinematic reality.</span>
+            </h1>
+
+            <p class="text-sm md:text-base text-slate-300 leading-relaxed max-w-2xl">
+                Generate high-definition video with Google Veo, Kling & Seedance, craft photorealistic images with GPT Image & Flux, build reusable characters, and assemble multi-scene videos effortlessly.
+            </p>
+
+            <!-- Quick Creation Bar -->
+            <div class="pt-4 flex flex-wrap items-center gap-3">
+                <a href="{% url 'studio:create' %}?type=video" class="btn btn-primary bg-brand-600 hover:bg-brand-500 border-none text-white shadow-xl shadow-brand-500/30 gap-2">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Create Video
+                </a>
+                <a href="{% url 'studio:create' %}?type=image" class="btn btn-outline border-white/20 hover:border-brand-500 text-white gap-2">
+                    <svg class="w-5 h-5 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Create Image
+                </a>
+                <a href="{% url 'agent:studio' %}" class="btn btn-outline border-amber-500/30 text-amber-300 hover:bg-amber-500/10 gap-2">
+                    <span>✨</span> Super Agent Storyboard
+                </a>
+                <a href="{% url 'characters:create' %}" class="btn btn-ghost text-slate-300 gap-2">
+                    <span>👤</span> New Character
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats & Balance -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <!-- Credit Wallet Card -->
+        <div class="glass-panel rounded-2xl p-6 relative overflow-hidden flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Available Balance</span>
+                <span class="p-2 rounded-xl bg-amber-500/10 text-amber-400">🪙</span>
+            </div>
+            <div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{{ wallet.balance }}</div>
+                <div class="text-xs text-slate-400 mt-1">Credits ready for generation</div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                <a href="{% url 'credits:wallet' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">View Ledger →</a>
+                <a href="{% url 'billing:plans' %}" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300">Add Credits +</a>
+            </div>
+        </div>
+
+        <!-- Active Projects Card -->
+        <div class="glass-panel rounded-2xl p-6 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Creative Projects</span>
+                <span class="p-2 rounded-xl bg-brand-500/10 text-brand-400">📁</span>
+            </div>
+            <div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{{ projects.count }}</div>
+                <div class="text-xs text-slate-400 mt-1">Multi-scene storyboard projects</div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                <a href="{% url 'projects:list' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">All Projects →</a>
+                <a href="{% url 'projects:create' %}" class="text-xs font-semibold text-white hover:text-brand-300">+ New Project</a>
+            </div>
+        </div>
+
+        <!-- Reusable Characters Card -->
+        <div class="glass-panel rounded-2xl p-6 flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-4">
+                <span class="text-xs uppercase font-bold tracking-wider text-slate-400">AI Characters</span>
+                <span class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">👥</span>
+            </div>
+            <div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{{ characters.count }}</div>
+                <div class="text-xs text-slate-400 mt-1">Consistent characters with visual traits</div>
+            </div>
+            <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                <a href="{% url 'characters:list' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">View Roster →</a>
+                <a href="{% url 'characters:create' %}" class="text-xs font-semibold text-white hover:text-brand-300">+ Create Character</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Generations Grid -->
+    <div class="space-y-4">
+        <div class="flex items-center justify-between">
+            <h2 class="text-xl font-heading font-bold text-white">Recent Generations</h2>
+            <a href="{% url 'generations:history' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">View All →</a>
+        </div>
+
+        {% if recent_generations %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {% for gen in recent_generations %}
+                    <div class="glass-panel rounded-2xl overflow-hidden group hover:border-white/20 transition duration-300 flex flex-col justify-between">
+                        <div class="aspect-video bg-surface relative flex items-center justify-center overflow-hidden">
+                            {% if gen.output_media %}
+                                {% if gen.generation_type == 'video' %}
+                                    <video class="w-full h-full object-cover" poster="{{ gen.output_media.thumbnail_url }}" preload="metadata">
+                                        <source src="{{ gen.output_media.url }}" type="video/mp4">
+                                    </video>
+                                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                        <span class="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-lg">▶</span>
+                                    </div>
+                                {% else %}
+                                    <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                                {% endif %}
+                            {% else %}
+                                <div class="text-xs text-slate-500 font-medium">Rendering...</div>
+                            {% endif %}
+                            <span class="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-black/60 backdrop-blur-md text-white border border-white/10">
+                                {{ gen.generation_type }}
+                            </span>
+                        </div>
+
+                        <div class="p-3">
+                            <p class="text-xs font-medium text-slate-200 line-clamp-2">{{ gen.prompt }}</p>
+                            <div class="flex items-center justify-between mt-2 pt-2 border-t border-white/5 text-[11px] text-slate-400">
+                                <span>{{ gen.model.display_name|truncatechars:20 }}</span>
+                                <span class="text-slate-500">{{ gen.created_at|timesince }} ago</span>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="glass-panel rounded-2xl p-12 text-center border-dashed border-white/10">
+                <div class="w-12 h-12 rounded-2xl bg-brand-500/10 text-brand-400 flex items-center justify-center mx-auto mb-3 text-xl">
+                    ✨
+                </div>
+                <h3 class="text-base font-bold text-white mb-1">No generations yet</h3>
+                <p class="text-xs text-slate-400 mb-4 max-w-sm mx-auto">Start by generating your first cinematic video or marketing graphic.</p>
+                <a href="{% url 'studio:create' %}" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white">
+                    Start Creating
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

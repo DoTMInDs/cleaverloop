@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Control Panel — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="space-y-8">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 mb-1">
+                Admin Console
+            </div>
+            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Platform Health & Model Controls</h1>
+        </div>
+
+        <button onclick="document.getElementById('credit-adjust-modal').showModal()" class="btn btn-sm btn-outline border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs gap-1.5">
+            🪙 Adjust User Credits
+        </button>
+    </div>
+
+    <!-- Health Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="glass-panel rounded-2xl p-5">
+            <span class="text-xs uppercase font-bold text-slate-400 block">Total Users</span>
+            <div class="text-2xl font-extrabold text-white mt-1">{{ total_users }}</div>
+        </div>
+        <div class="glass-panel rounded-2xl p-5">
+            <span class="text-xs uppercase font-bold text-slate-400 block">Total Jobs</span>
+            <div class="text-2xl font-extrabold text-brand-400 mt-1">{{ total_generations }}</div>
+        </div>
+        <div class="glass-panel rounded-2xl p-5">
+            <span class="text-xs uppercase font-bold text-slate-400 block">Completed</span>
+            <div class="text-2xl font-extrabold text-emerald-400 mt-1">{{ completed_generations }}</div>
+        </div>
+        <div class="glass-panel rounded-2xl p-5">
+            <span class="text-xs uppercase font-bold text-slate-400 block">Failed & Refunded</span>
+            <div class="text-2xl font-extrabold text-rose-400 mt-1">{{ failed_generations }}</div>
+        </div>
+    </div>
+
+    <!-- Provider Health & Model Controls Table -->
+    <div class="glass-panel rounded-3xl p-6 space-y-6">
+        <h2 class="text-lg font-heading font-bold text-white">AI Providers & Dynamic Model Catalog</h2>
+
+        <div class="space-y-6">
+            {% for provider in providers %}
+                <div class="rounded-2xl bg-surface/50 border border-white/5 p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <span class="text-base font-bold text-white">{{ provider.name }}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase {% if provider.health_status == 'healthy' %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20{% else %}bg-rose-500/10 text-rose-400 border border-rose-500/20{% endif %}">
+                                {{ provider.health_status }}
+                            </span>
+                        </div>
+                        <span class="text-xs text-slate-400">Avg Latency: {{ provider.avg_latency_ms }}ms</span>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="table table-xs w-full text-left">
+                            <thead>
+                                <tr class="text-[10px] uppercase text-slate-500 border-b border-white/5">
+                                    <th>Model Name</th>
+                                    <th>Model ID</th>
+                                    <th>Modality</th>
+                                    <th>Base Cost</th>
+                                    <th>Per Sec</th>
+                                    <th>Status</th>
+                                    <th class="text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-white/5 text-xs text-slate-300">
+                                {% for m in provider.models.all %}
+                                    <tr class="hover:bg-white/[0.02]">
+                                        <td class="font-semibold text-white">{{ m.display_name }}</td>
+                                        <td class="text-slate-400 font-mono text-[11px]">{{ m.model_id }}</td>
+                                        <td><span class="px-1.5 py-0.5 rounded bg-white/5 text-[10px] uppercase font-bold">{{ m.modality }}</span></td>
+                                        <td>{{ m.credit_cost_fixed }} credits</td>
+                                        <td>{{ m.credit_cost_per_second }} credits/s</td>
+                                        <td>
+                                            {% if m.is_enabled %}
+                                                <span class="text-emerald-400 text-xs font-semibold">Active</span>
+                                            {% else %}
+                                                <span class="text-slate-500 text-xs font-semibold">Disabled</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-right">
+                                            <a href="{% url 'adminpanel:toggle_model' m.id %}" class="btn btn-xs {% if m.is_enabled %}btn-error btn-outline{% else %}btn-success btn-outline{% endif %} text-[10px]">
+                                                {% if m.is_enabled %}Disable{% else %}Enable{% endif %}
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent Diagnostic Failures Table (Admin Only) -->
+    <div class="glass-panel rounded-3xl p-6 space-y-4">
+        <h2 class="text-lg font-heading font-bold text-white">Recent Upstream Failures (Diagnostic Log)</h2>
+
+        {% if recent_failures %}
+            <div class="overflow-x-auto">
+                <table class="table table-xs w-full text-left">
+                    <thead>
+                        <tr class="text-[10px] uppercase text-slate-500 border-b border-white/5">
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Model</th>
+                            <th>Correlation ID</th>
+                            <th>Error Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5 text-xs text-slate-300">
+                        {% for f in recent_failures %}
+                            <tr>
+                                <td class="text-slate-500 whitespace-nowrap">{{ f.completed_at|date:"M d, H:i:s" }}</td>
+                                <td class="text-slate-300">{{ f.user.email }}</td>
+                                <td class="text-brand-300">{{ f.model_id_snapshot }}</td>
+                                <td class="font-mono text-[10px] text-slate-400">{{ f.correlation_id }}</td>
+                                <td class="text-rose-300 max-w-xs truncate font-mono text-[11px]">{{ f.admin_error_detail }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-xs text-slate-400 py-4">No recent failures logged. All systems functioning normally.</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Modal: Credit Adjustment -->
+<dialog id="credit-adjust-modal" class="modal">
+    <div class="modal-box bg-card border border-white/10 text-white rounded-3xl p-6 max-w-md">
+        <h3 class="font-bold text-lg">Adjust User Credits</h3>
+        <p class="text-xs text-slate-400 mt-1">Every adjustment is immutably logged to the double-entry transaction ledger.</p>
+
+        <form action="{% url 'adminpanel:adjust_credits' %}" method="POST" class="space-y-4 mt-4">
+            {% csrf_token %}
+            <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">User Email</label>
+                <input type="email" name="user_email" required placeholder="user@example.com"
+                       class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none">
+            </div>
+
+            <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">Credit Amount (Use negative to deduct)</label>
+                <input type="number" name="amount" required placeholder="500"
+                       class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none">
+            </div>
+
+            <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">Audit Reason</label>
+                <input type="text" name="reason" required placeholder="e.g. VIP Creator Bonus or Support Compensation"
+                       class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none">
+            </div>
+
+            <div class="modal-action pt-2">
+                <button type="button" onclick="document.getElementById('credit-adjust-modal').close()" class="btn btn-ghost btn-sm text-xs">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm bg-brand-600 border-none text-white text-xs">Commit Transaction</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+{% endblock %}

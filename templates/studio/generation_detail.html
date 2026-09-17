@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Generation Detail — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <span class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Generation Job</span>
+            <h1 class="text-xl md:text-2xl font-heading font-extrabold text-white">Job Inspector</h1>
+        </div>
+        <a href="{% url 'generations:history' %}" class="btn btn-ghost btn-sm text-xs">← Back to Library</a>
+    </div>
+
+    <div class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-6">
+        <!-- Media Preview -->
+        <div class="aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black/80 border border-white/10 flex items-center justify-center">
+            {% if generation.output_media %}
+                {% if generation.generation_type == 'video' %}
+                    <video controls class="w-full h-full object-contain" poster="{{ generation.output_media.thumbnail_url }}">
+                        <source src="{{ generation.output_media.url }}" type="video/mp4">
+                    </video>
+                {% else %}
+                    <img src="{{ generation.output_media.url }}" alt="{{ generation.prompt }}" class="w-full h-full object-cover">
+                {% endif %}
+            {% else %}
+                <div class="text-slate-500 text-xs">No media output available</div>
+            {% endif %}
+        </div>
+
+        <!-- Prompt & Details -->
+        <div class="space-y-3">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt</h3>
+            <p class="text-sm text-slate-200 bg-surface/50 p-4 rounded-xl border border-white/5 leading-relaxed">
+                {{ generation.prompt }}
+            </p>
+        </div>
+
+        {% if generation.negative_prompt %}
+            <div class="space-y-1">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Negative Prompt</h3>
+                <p class="text-xs text-slate-400">{{ generation.negative_prompt }}</p>
+            </div>
+        {% endif %}
+
+        <!-- Metadata Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/5 text-xs">
+            <div>
+                <span class="text-slate-500 block">Model</span>
+                <span class="font-semibold text-brand-300">{{ generation.model.display_name }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500 block">Provider</span>
+                <span class="font-semibold text-white">{{ generation.provider.name }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500 block">Aspect Ratio</span>
+                <span class="font-semibold text-white">{{ generation.aspect_ratio }}</span>
+            </div>
+            <div>
+                <span class="text-slate-500 block">Credits Consumed</span>
+                <span class="font-semibold text-amber-400">{{ generation.credits_consumed|default:generation.credits_reserved }}</span>
+            </div>
+        </div>
+
+        <!-- Diagnostic Correlation ID -->
+        <div class="pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-500">
+            <div class="flex items-center gap-2">
+                <span>Correlation ID:</span>
+                <span class="font-mono text-slate-400">{{ generation.correlation_id }}</span>
+            </div>
+            <span>Completed {{ generation.created_at|date:"M d, Y H:i:s" }}</span>
+        </div>
+    </div>
+</div>
+{% endblock %}

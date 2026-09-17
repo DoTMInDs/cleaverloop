@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Studio — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8" x-data="{
+    generationType: '{{ request.GET.type|default:"video" }}',
+    aspectRatio: '16:9',
+    duration: 5,
+    selectedModel: 'automatic',
+    hasReference: false,
+    estimatedCredits: 100,
+    calculateCredits() {
+        if (this.generationType === 'image') {
+            this.estimatedCredits = 50;
+        } else {
+            this.estimatedCredits = 50 + (this.duration * 50);
+        }
+    }
+}" x-init="calculateCredits()">
+
+    <!-- Studio Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Creation Studio</h1>
+            <p class="text-xs md:text-sm text-slate-400 mt-1">Direct multi-model generative synthesis with smart auto-routing.</p>
+        </div>
+        
+        <div class="flex items-center gap-2 p-1 bg-surface rounded-2xl border border-white/10">
+            <button type="button"
+                    @click="generationType = 'video'; calculateCredits()"
+                    :class="generationType === 'video' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'"
+                    class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                <span>🎬</span> Video
+            </button>
+            <button type="button"
+                    @click="generationType = 'image'; calculateCredits()"
+                    :class="generationType === 'image' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'"
+                    class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+                <span>🎨</span> Image
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Generation Output Container (HTMX Target) -->
+    <div id="active-generation-target" class="empty:hidden"></div>
+
+    <!-- Generator Control Form -->
+    <form hx-post="{% url 'generations:create' %}"
+          hx-target="#active-generation-target"
+          hx-swap="innerHTML"
+          hx-indicator="#gen-spinner"
+          enctype="multipart/form-data"
+          class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-6">
+        {% csrf_token %}
+        <input type="hidden" name="generation_type" :value="generationType">
+
+        <!-- Prompt Textarea -->
+        <div class="space-y-2">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Prompt Idea</label>
+            <textarea name="prompt"
+                      rows="3"
+                      required
+                      placeholder="Describe your vision in vivid detail... (e.g. Cinematic wide tracking shot of a glowing neon cyber vehicle gliding through Tokyo rain at midnight, reflections on wet asphalt, 4k ultra-realistic)"
+                      class="w-full rounded-2xl bg-surface/80 border border-white/10 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-sm text-white placeholder-slate-500 p-4 transition outline-none resize-none"></textarea>
+        </div>
+
+        <!-- Negative Prompt (Collapsible) -->
+        <div x-data="{ open: false }" class="space-y-2">
+            <button type="button" @click="open = !open" class="text-xs text-slate-400 hover:text-brand-300 flex items-center gap-1 transition">
+                <span x-text="open ? '▾' : '▸'"></span> Negative Prompt (Optional)
+            </button>
+            <div x-show="open" x-cloak class="mt-2">
+                <input type="text"
+                       name="negative_prompt"
+                       placeholder="e.g. blurry, distorted, grainy, low quality, artifacts"
+                       class="w-full rounded-xl bg-surface/50 border border-white/10 text-xs text-white placeholder-slate-500 px-4 py-2.5 outline-none focus:border-brand-500">
+            </div>
+        </div>
+
+        <!-- Grid of Controls -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+            <!-- Model Picker -->
+            <div class="space-y-1.5">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Model Selection</label>
+                <select name="model" x-model="selectedModel" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
+                    <option value="automatic">✨ Automatic Smart Routing</option>
+                    <option value="best_quality">⭐ Best Cinematic Quality</option>
+                    <option value="fastest">⚡ Fastest Generation</option>
+                    <option value="budget">🏷️ Budget Economical</option>
+                    <optgroup label="Direct Models">
+                        <template x-if="generationType === 'video'">
+                            {% for m in video_models %}
+                                <option value="{{ m.model_id }}">{{ m.display_name }}</option>
+                            {% endfor %}
+                        </template>
+                        <template x-if="generationType === 'image'">
+                            {% for m in image_models %}
+                                <option value="{{ m.model_id }}">{{ m.display_name }}</option>
+                            {% endfor %}
+                        </template>
+                    </optgroup>
+                </select>
+            </div>
+
+            <!-- Aspect Ratio -->
+            <div class="space-y-1.5">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Aspect Ratio</label>
+                <select name="aspect_ratio" x-model="aspectRatio" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
+                    <option value="16:9">16:9 (Landscape / YouTube)</option>
+                    <option value="9:16">9:16 (Portrait / Reels & TikTok)</option>
+                    <option value="1:1">1:1 (Square / Feed)</option>
+                    <option value="4:3">4:3 (Classic TV)</option>
+                    <option value="21:9">21:9 (Cinematic Widescreen)</option>
+                </select>
+            </div>
+
+            <!-- Duration (Video Only) -->
+            <div x-show="generationType === 'video'" class="space-y-1.5">
+                <div class="flex items-center justify-between">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Duration</label>
+                    <span class="text-xs font-bold text-cyan-400" x-text="duration + 's'"></span>
+                </div>
+                <input type="range"
+                       name="duration"
+                       min="3"
+                       max="15"
+                       step="1"
+                       x-model="duration"
+                       @input="calculateCredits()"
+                       class="range range-xs range-primary mt-2">
+            </div>
+
+            <!-- Quality Preset -->
+            <div class="space-y-1.5">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Render Quality</label>
+                <select name="quality" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
+                    <option value="standard">Standard (High Definition)</option>
+                    <option value="hd">Ultra HD 4K (Premium)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Optional Character & Reference Upload -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-white/5">
+            <!-- Reusable Character Attachment -->
+            <div class="space-y-1.5">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Featured Character</label>
+                <select name="character_id" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
+                    <option value="">No Character (Standalone Scene)</option>
+                    {% for char in characters %}
+                        <option value="{{ char.id }}">👤 {{ char.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Reference Image Upload -->
+            <div class="space-y-1.5">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Reference Image (Image-to-Video)</label>
+                <input type="file"
+                       name="reference_file"
+                       accept="image/png,image/jpeg,image/webp"
+                       @change="hasReference = true"
+                       class="file-input file-input-bordered file-input-sm w-full bg-surface border-white/10 text-xs text-slate-300">
+            </div>
+        </div>
+
+        <!-- Submit Bar with Real-Time Credit Calculator -->
+        <div class="pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+                    <span>🪙 Estimated:</span>
+                    <span class="font-extrabold" x-text="estimatedCredits"></span>
+                    <span>Credits</span>
+                </div>
+                <span class="text-[11px] text-slate-400">Refunded instantly if provider fails</span>
+            </div>
+
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <button type="submit" class="btn btn-primary bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white border-none shadow-xl shadow-brand-500/30 px-8 font-bold w-full sm:w-auto">
+                    <span id="gen-spinner" class="htmx-indicator loading loading-spinner loading-xs mr-1"></span>
+                    Generate Content
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}

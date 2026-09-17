@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+
+{% block title %}Generation Library — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Generation History</h1>
+            <p class="text-xs text-slate-400 mt-1">Audit, preview, and download all your AI creations.</p>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="flex items-center gap-1.5 p-1 bg-surface rounded-2xl border border-white/10 text-xs font-semibold overflow-x-auto">
+            <a href="{% url 'generations:history' %}" class="px-3 py-1.5 rounded-xl transition {% if not request.GET.type %}bg-brand-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+                All
+            </a>
+            <a href="{% url 'generations:history' %}?type=video" class="px-3 py-1.5 rounded-xl transition {% if request.GET.type == 'video' %}bg-brand-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+                Videos
+            </a>
+            <a href="{% url 'generations:history' %}?type=image" class="px-3 py-1.5 rounded-xl transition {% if request.GET.type == 'image' %}bg-brand-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+                Images
+            </a>
+            <a href="{% url 'generations:history' %}?type=favorites" class="px-3 py-1.5 rounded-xl transition {% if request.GET.type == 'favorites' %}bg-brand-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+                Favorites
+            </a>
+            <a href="{% url 'generations:history' %}?type=failed" class="px-3 py-1.5 rounded-xl transition {% if request.GET.type == 'failed' %}bg-brand-600 text-white shadow{% else %}text-slate-400 hover:text-white{% endif %}">
+                Failed & Refunded
+            </a>
+        </div>
+    </div>
+
+    <!-- Generations Grid -->
+    {% if generations %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {% for gen in generations %}
+                <div class="glass-panel rounded-2xl overflow-hidden flex flex-col justify-between group hover:border-white/20 transition duration-300">
+                    <!-- Media Frame -->
+                    <div class="aspect-video bg-black/60 relative overflow-hidden flex items-center justify-center">
+                        {% if gen.output_media %}
+                            {% if gen.generation_type == 'video' %}
+                                <video controls class="w-full h-full object-contain" poster="{{ gen.output_media.thumbnail_url }}">
+                                    <source src="{{ gen.output_media.url }}" type="video/mp4">
+                                </video>
+                            {% else %}
+                                <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" class="w-full h-full object-cover">
+                            {% endif %}
+                        {% elif gen.status == 'failed' %}
+                            <div class="p-4 text-center">
+                                <span class="text-rose-400 text-xs font-semibold block">Generation Failed</span>
+                                <span class="text-slate-500 text-[10px] mt-1 block">Credits Refunded</span>
+                            </div>
+                        {% else %}
+                            <div class="text-slate-500 text-xs">Processing...</div>
+                        {% endif %}
+
+                        <span class="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-black/70 backdrop-blur-md text-white border border-white/10">
+                            {{ gen.generation_type }}
+                        </span>
+
+                        <!-- Favorite Toggle -->
+                        <button hx-post="{% url 'generations:favorite' gen.id %}"
+                                hx-swap="none"
+                                onclick="this.classList.toggle('text-rose-500')"
+                                class="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 backdrop-blur-md text-xs {% if gen.is_favorite %}text-rose-500{% else %}text-slate-400 hover:text-white{% endif %}">
+                            ♥
+                        </button>
+                    </div>
+
+                    <!-- Metadata -->
+                    <div class="p-4 flex-1 flex flex-col justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-slate-200 line-clamp-2">{{ gen.prompt }}</p>
+                            <div class="flex items-center gap-2 mt-2 text-[11px] text-slate-400">
+                                <span class="text-brand-300 font-semibold">{{ gen.model.display_name|truncatechars:18 }}</span>
+                                <span>•</span>
+                                <span>{{ gen.aspect_ratio }}</span>
+                                {% if gen.duration %}<span>• {{ gen.duration }}s</span>{% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px]">
+                            <span class="text-slate-500">{{ gen.created_at|date:"M d, H:i" }}</span>
+                            <div class="flex items-center gap-2">
+                                {% if gen.output_media %}
+                                    <a href="{{ gen.output_media.url }}" download class="text-brand-400 hover:text-brand-300 font-semibold">
+                                        Download ↓
+                                    </a>
+                                {% endif %}
+                                <a href="{% url 'generations:detail' gen.id %}" class="text-slate-400 hover:text-white">
+                                    Details →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="glass-panel rounded-2xl p-16 text-center border-dashed border-white/10">
+            <h3 class="text-base font-bold text-white mb-1">No matching generations</h3>
+            <p class="text-xs text-slate-400 mb-4">No content has been generated matching the current filter.</p>
+            <a href="{% url 'studio:create' %}" class="btn btn-primary btn-sm bg-brand-600 text-white">Create New</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

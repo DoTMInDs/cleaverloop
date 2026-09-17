@@ -1,0 +1,5 @@
+<a href="{% url 'credits:wallet' %}" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-200 transition group shadow-inner">
+    <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+    <span class="text-amber-400 font-bold tracking-tight">{{ credit_balance|default:"0" }}</span>
+    <span class="text-slate-400 text-[11px] uppercase tracking-wider">Credits</span>
+</a>

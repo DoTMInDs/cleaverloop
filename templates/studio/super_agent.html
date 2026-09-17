@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}Super Agent Story Studio — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+    <!-- Header -->
+    <div class="space-y-2 text-center max-w-2xl mx-auto">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+            <span>✨</span> Autonomous AI Storyboard Director
+        </div>
+        <h1 class="text-3xl md:text-5xl font-heading font-black text-white tracking-tight">
+            Creative Super Agent
+        </h1>
+        <p class="text-xs md:text-sm text-slate-300">
+            Enter a single high-level creative prompt. The agent decomposes your idea into structured scenes, generates scene prompts, selects optimal models, and prepares a production plan with strict safety guardrails.
+        </p>
+    </div>
+
+    <!-- Agent Idea Input Form -->
+    <form hx-post="{% url 'agent:plan' %}"
+          hx-target="#agent-plan-result"
+          hx-swap="innerHTML"
+          hx-indicator="#agent-spinner"
+          class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-5">
+        {% csrf_token %}
+
+        <div class="space-y-2">
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">What would you like to create?</label>
+            <textarea name="prompt"
+                      rows="4"
+                      required
+                      placeholder="e.g. Create a 30-second high-energy cinematic commercial for an AI-powered resume builder called ServInk. Show a frustrated job seeker discovering the tool, the AI instantly formatting a brilliant CV, and the candidate smiling as they receive an interview invite."
+                      class="w-full rounded-2xl bg-surface/80 border border-white/10 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-sm text-white placeholder-slate-500 p-4 outline-none resize-none"></textarea>
+        </div>
+
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+            <div class="flex items-center gap-3 w-full sm:w-auto">
+                <label class="text-xs font-semibold text-slate-400">Target Aspect Ratio:</label>
+                <select name="aspect_ratio" class="rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none">
+                    <option value="16:9">16:9 Landscape (YouTube/TV)</option>
+                    <option value="9:16">9:16 Portrait (TikTok/Reels)</option>
+                    <option value="1:1">1:1 Square (Social Feed)</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary bg-gradient-to-r from-amber-500 via-brand-600 to-cyan-500 hover:opacity-95 text-white border-none shadow-xl shadow-brand-500/20 px-8 font-bold w-full sm:w-auto">
+                <span id="agent-spinner" class="htmx-indicator loading loading-spinner loading-xs mr-2"></span>
+                <span>✨</span> Generate Storyboard Plan
+            </button>
+        </div>
+    </form>
+
+    <!-- Target Container for Agent Plan Card -->
+    <div id="agent-plan-result"></div>
+</div>
+{% endblock %}

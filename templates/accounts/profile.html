@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block title %}Account Settings — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+    <div>
+        <h1 class="text-2xl font-heading font-extrabold text-white">Profile & Account</h1>
+        <p class="text-xs text-slate-400 mt-1">Manage your creator identity and subscription status.</p>
+    </div>
+
+    <div class="glass-panel rounded-3xl p-6 md:p-8 space-y-6">
+        <div class="flex items-center gap-4 pb-6 border-b border-white/5">
+            <div class="w-16 h-16 rounded-2xl bg-brand-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-lg">
+                {{ user.email|slice:":1"|upper }}
+            </div>
+            <div>
+                <h2 class="text-lg font-bold text-white">{{ user.username }}</h2>
+                <p class="text-xs text-slate-400">{{ user.email }}</p>
+                <div class="mt-2 flex items-center gap-2">
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        {{ user_wallet.balance }} Credits Available
+                    </span>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/10 text-brand-300 border border-brand-500/20">
+                        Member since {{ user.date_joined|date:"M Y" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Account Actions</h3>
+            <div class="flex flex-wrap gap-3">
+                <a href="{% url 'credits:wallet' %}" class="btn btn-outline border-white/10 btn-sm text-xs">
+                    View Transaction Ledger
+                </a>
+                <a href="{% url 'billing:plans' %}" class="btn btn-primary btn-sm bg-brand-600 border-none text-white text-xs">
+                    Manage Subscription
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

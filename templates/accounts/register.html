@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+
+{% block title %}Create Account — CleverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto my-12 space-y-6">
+    <div class="text-center space-y-2">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold mb-2">
+            🎁 500 Free Starter Credits
+        </div>
+        <h1 class="text-2xl font-heading font-extrabold text-white">Join CleverLoop AI</h1>
+        <p class="text-xs text-slate-400">Unlock cinematic multi-model generative AI creation</p>
+    </div>
+
+    <form method="POST" class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-4">
+        {% csrf_token %}
+
+        {% if form.errors %}
+            <div class="p-3 bg-rose-500/20 text-rose-200 rounded-xl text-xs space-y-1">
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <div>{{ error }}</div>
+                    {% endfor %}
+                {% endfor %}
+                {% for error in form.non_field_errors %}
+                    <div>{{ error }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="space-y-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-300">Email Address</label>
+            <input type="email" name="email" required placeholder="creator@example.com"
+                   class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
+        </div>
+
+        <div class="space-y-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-300">Creator Handle / Username</label>
+            <input type="text" name="username" required placeholder="creator_name"
+                   class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
+        </div>
+
+        <div class="space-y-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-300">Password</label>
+            <input type="password" name="password1" required placeholder="••••••••"
+                   class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
+        </div>
+
+        <div class="space-y-1">
+            <label class="text-xs font-bold uppercase tracking-wider text-slate-300">Confirm Password</label>
+            <input type="password" name="password2" required placeholder="••••••••"
+                   class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
+        </div>
+
+        <button type="submit" class="btn btn-primary w-full bg-brand-600 hover:bg-brand-500 border-none text-white shadow-lg shadow-brand-500/30 text-sm font-bold mt-2">
+            Create Account & Claim 500 Credits
+        </button>
+
+        <div class="text-center pt-2">
+            <span class="text-xs text-slate-400">Already registered?</span>
+            <a href="{% url 'accounts:login' %}" class="text-xs font-bold text-brand-400 hover:text-brand-300 ml-1">Sign In →</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

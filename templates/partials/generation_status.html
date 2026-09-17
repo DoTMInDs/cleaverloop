@@ -1,0 +1,114 @@
+<div id="generation-card-{{ generation.id }}"
+     {% if generation.is_in_progress %}
+     hx-get="{% url 'generations:status' generation.id %}"
+     hx-trigger="load delay:2s"
+     hx-swap="outerHTML"
+     {% endif %}
+     class="glass-panel rounded-2xl p-5 border border-white/10 relative overflow-hidden transition-all duration-300">
+
+    {% if generation.status == 'queued' %}
+        <div class="flex items-center gap-4 py-6">
+            <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <div>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-1">
+                    Queued
+                </span>
+                <h4 class="text-sm font-semibold text-white">Preparing Generation Request</h4>
+                <p class="text-xs text-slate-400 mt-0.5">Assigned to {{ generation.model.display_name }}</p>
+            </div>
+        </div>
+
+    {% elif generation.status == 'processing' %}
+        <div class="flex items-center gap-4 py-6">
+            <div class="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400 relative">
+                <span class="absolute inset-0 rounded-xl bg-brand-500/20 animate-ping opacity-75"></span>
+                <svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+            </div>
+            <div>
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20 mb-1">
+                    Generating...
+                </span>
+                <h4 class="text-sm font-semibold text-white">Rendering Creative Assets</h4>
+                <p class="text-xs text-slate-400 mt-0.5">Orchestrating {{ generation.provider.name }} pipeline...</p>
+            </div>
+        </div>
+
+    {% elif generation.status == 'completed' %}
+        <!-- Trigger live credit pill update -->
+        <div hx-swap-oob="true" id="credit-badge-container">
+            {% include 'partials/credit_badge.html' %}
+        </div>
+
+        <div class="space-y-4">
+            <!-- Media Player / Preview -->
+            <div class="relative rounded-xl overflow-hidden bg-black/50 border border-white/10 aspect-video flex items-center justify-center">
+                {% if generation.output_media %}
+                    {% if generation.generation_type == 'video' %}
+                        <video controls class="w-full h-full object-contain" poster="{{ generation.output_media.thumbnail_url }}">
+                            <source src="{{ generation.output_media.url }}" type="video/mp4">
+                            <source src="{{ generation.output_media.url }}" type="image/webp">
+                            Your browser does not support the video tag.
+                        </video>
+                    {% else %}
+                        <img src="{{ generation.output_media.url }}" alt="{{ generation.prompt }}" class="w-full h-full object-cover">
+                    {% endif %}
+                {% else %}
+                    <div class="text-slate-500 text-xs">Media rendered</div>
+                {% endif %}
+            </div>
+
+            <!-- Details -->
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex-1">
+                    <p class="text-xs text-slate-300 font-medium line-clamp-2">{{ generation.prompt }}</p>
+                    <div class="flex items-center gap-2 mt-2 text-[11px] text-slate-400">
+                        <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-brand-300">{{ generation.model.display_name }}</span>
+                        <span>•</span>
+                        <span>{{ generation.aspect_ratio }}</span>
+                        {% if generation.duration %}
+                            <span>•</span>
+                            <span>{{ generation.duration }}s</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Action Download -->
+                {% if generation.output_media %}
+                    <a href="{{ generation.output_media.url }}" download class="btn btn-sm btn-ghost border border-white/10 text-xs flex items-center gap-1.5 hover:border-brand-500">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+    {% elif generation.status == 'failed' %}
+        <!-- Trigger live credit pill update to reflect refunded credits -->
+        <div hx-swap-oob="true" id="credit-badge-container">
+            {% include 'partials/credit_badge.html' %}
+        </div>
+
+        <div class="p-4 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200">
+            <div class="flex items-center gap-2 text-rose-400 font-semibold text-sm mb-1">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                Generation Failed
+            </div>
+            <p class="text-xs text-rose-200/90 leading-relaxed">{{ generation.error_message }}</p>
+            <div class="mt-2 pt-2 border-t border-rose-500/20 flex items-center justify-between text-[11px] text-rose-300">
+                <span>Model: {{ generation.model_id_snapshot }}</span>
+                <span class="text-emerald-400 font-semibold">Credits Refunded ✓</span>
+            </div>
+        </div>
+    {% endif %}
+</div>
