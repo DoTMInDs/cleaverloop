@@ -72,3 +72,32 @@ class GenerationWorkflowTests(TestCase):
         self.assertEqual(gen.status, "failed")
         self.assertEqual(wallet.balance, initial_balance)  # Fully refunded!
         self.assertIn("restored to your wallet", gen.error_message)
+
+    def test_automatic_runtime_failover_when_primary_provider_fails(self):
+        """Verify dynamic failover when primary provider fails submission."""
+        google_model = AIModel.objects.filter(model_id="veo-3.1-fast-generate-preview").first()
+        self.assertIsNotNone(google_model)
+
+        gen = Generation.objects.create(
+            user=self.user,
+            generation_type="video",
+            provider=google_model.provider,
+            model=google_model,
+            model_id_snapshot=google_model.model_id,
+            prompt="A sleek hovercar flying over a cyberpunk metropolis",
+            duration=5,
+            status="queued"
+        )
+        cost = google_model.calculate_credit_cost(duration=5)
+        CreditService.reserve_credits(self.user, cost, gen)
+
+        # Dispatch generation: Google fails, triggering automatic failover
+        dispatch_generation_task(str(gen.id))
+
+        gen.refresh_from_db()
+        # Verify that generation failed over to alternative model
+        self.assertNotEqual(gen.model.id, google_model.id)
+        self.assertIn(gen.status, ("completed", "queued", "processing"))
+        if gen.status == "completed":
+            self.assertIsNotNone(gen.output_media)
+            self.assertIn("unavailable", gen.admin_error_detail)

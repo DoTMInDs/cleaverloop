@@ -9,6 +9,8 @@ from apps.providers.adapters.seedance import SeedanceProvider
 from apps.providers.adapters.alibaba_wan import AlibabaWanProvider
 from apps.providers.adapters.openai_adapter import OpenAIProvider
 from apps.providers.adapters.flux import FluxProvider
+from apps.providers.adapters.minimax import MiniMaxProvider
+from apps.providers.adapters.fal_ai import FalAIProvider
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +31,8 @@ class ModelRegistry:
         cls._adapters["wan"] = AlibabaWanProvider()
         cls._adapters["openai"] = OpenAIProvider()
         cls._adapters["flux"] = FluxProvider()
+        cls._adapters["minimax"] = MiniMaxProvider()
+        cls._adapters["fal"] = FalAIProvider()
 
     @classmethod
     def get_provider_adapter(cls, provider_slug: str) -> BaseAIProvider:
@@ -74,7 +78,7 @@ class ModelRegistry:
                         "supports_image_reference": True,
                         "credit_cost_fixed": 50,
                         "credit_cost_per_second": 25,
-                        "priority": 100,
+                        "priority": 10,
                     },
                     {
                         "model_id": "cleverloop-mock-image",
@@ -87,7 +91,7 @@ class ModelRegistry:
                         "supports_image_reference": True,
                         "credit_cost_fixed": 30,
                         "credit_cost_per_second": 0,
-                        "priority": 100,
+                        "priority": 10,
                     }
                 ]
             },
@@ -96,7 +100,7 @@ class ModelRegistry:
                 "provider": {"slug": "google", "name": "Google Gemini & Veo", "is_enabled": True},
                 "models": [
                     {
-                        "model_id": "veo-3.1-standard",
+                        "model_id": "veo-3.1-generate-preview",
                         "display_name": "Google Veo 3.1 Cinematic (Premium)",
                         "modality": "video",
                         "capabilities": ["t2v", "i2v", "audio"],
@@ -107,11 +111,11 @@ class ModelRegistry:
                         "supports_image_reference": True,
                         "credit_cost_fixed": 100,
                         "credit_cost_per_second": 75,
-                        "priority": 90,
+                        "priority": 95,
                         "is_premium": True,
                     },
                     {
-                        "model_id": "veo-3.1-fast",
+                        "model_id": "veo-3.1-fast-generate-preview",
                         "display_name": "Google Veo 3.1 Fast",
                         "modality": "video",
                         "capabilities": ["t2v", "i2v"],
@@ -134,7 +138,7 @@ class ModelRegistry:
                         "supported_aspect_ratios": ["16:9", "9:16", "1:1", "4:3"],
                         "credit_cost_fixed": 50,
                         "credit_cost_per_second": 0,
-                        "priority": 85,
+                        "priority": 95,
                     }
                 ]
             },
@@ -143,8 +147,8 @@ class ModelRegistry:
                 "provider": {"slug": "kling", "name": "Kling AI", "is_enabled": True},
                 "models": [
                     {
-                        "model_id": "kling-v1-5",
-                        "display_name": "Kling 1.5 Motion Studio",
+                        "model_id": "kling-v2-6",
+                        "display_name": "Kling 2.6 Motion Studio",
                         "modality": "video",
                         "capabilities": ["t2v", "i2v", "character_ref"],
                         "max_duration": 10,
@@ -231,6 +235,81 @@ class ModelRegistry:
                         "priority": 80,
                     }
                 ]
+            },
+            # MiniMax Hailuo AI
+            {
+                "provider": {"slug": "minimax", "name": "MiniMax Hailuo AI", "is_enabled": True},
+                "models": [
+                    {
+                        "model_id": "minimax-video-01",
+                        "display_name": "MiniMax Hailuo Video-01 (Cinematic Physics)",
+                        "modality": "video",
+                        "capabilities": ["t2v", "i2v"],
+                        "max_duration": 10,
+                        "supported_resolutions": ["720p", "1080p"],
+                        "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
+                        "supports_image_reference": True,
+                        "credit_cost_fixed": 75,
+                        "credit_cost_per_second": 50,
+                        "priority": 92,
+                    }
+                ]
+            },
+            # Fal.ai Universal Multi-Model Fallback Hub
+            {
+                "provider": {"slug": "fal", "name": "Fal.ai Unified Hub", "is_enabled": True},
+                "models": [
+                    {
+                        "model_id": "fal-wan-2.1",
+                        "display_name": "Alibaba Wan 2.1 (via Fal.ai)",
+                        "modality": "video",
+                        "capabilities": ["t2v", "i2v"],
+                        "max_duration": 10,
+                        "supported_resolutions": ["720p", "1080p"],
+                        "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
+                        "supports_image_reference": True,
+                        "credit_cost_fixed": 70,
+                        "credit_cost_per_second": 40,
+                        "priority": 94,
+                    },
+                    {
+                        "model_id": "fal-luma-dream-machine",
+                        "display_name": "Luma Dream Machine (via Fal.ai)",
+                        "modality": "video",
+                        "capabilities": ["t2v", "i2v"],
+                        "max_duration": 10,
+                        "supported_resolutions": ["720p", "1080p"],
+                        "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
+                        "supports_image_reference": True,
+                        "credit_cost_fixed": 75,
+                        "credit_cost_per_second": 45,
+                        "priority": 90,
+                    },
+                    {
+                        "model_id": "fal-cogvideox-5b",
+                        "display_name": "CogVideoX-5B (via Fal.ai)",
+                        "modality": "video",
+                        "capabilities": ["t2v"],
+                        "max_duration": 10,
+                        "supported_resolutions": ["720p"],
+                        "supported_aspect_ratios": ["16:9", "9:16"],
+                        "credit_cost_fixed": 50,
+                        "credit_cost_per_second": 30,
+                        "priority": 75,
+                    },
+                    {
+                        "model_id": "fal-flux-pro",
+                        "display_name": "Flux 1.1 Pro Studio (via Fal.ai)",
+                        "modality": "image",
+                        "capabilities": ["t2i"],
+                        "max_duration": 0,
+                        "supported_resolutions": ["1024x1024", "1792x1024"],
+                        "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
+                        "credit_cost_fixed": 45,
+                        "credit_cost_per_second": 0,
+                        "priority": 82,
+                    }
+                ]
             }
         ]
 
@@ -241,7 +320,7 @@ class ModelRegistry:
                 defaults=prov_cfg
             )
             for m_cfg in p_data["models"]:
-                AIModel.objects.get_or_create(
+                AIModel.objects.update_or_create(
                     model_id=m_cfg["model_id"],
                     defaults={**m_cfg, "provider": provider}
                 )

@@ -26,8 +26,8 @@ class CreateStudioView(LoginRequiredMixin, TemplateView):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
         ctx['wallet'] = CreditService.get_or_create_wallet(user)
-        ctx['image_models'] = AIModel.objects.filter(modality='image', is_enabled=True, provider__is_enabled=True)
-        ctx['video_models'] = AIModel.objects.filter(modality='video', is_enabled=True, provider__is_enabled=True)
+        ctx['image_models'] = AIModel.objects.filter(modality='image', is_enabled=True, provider__is_enabled=True).order_by('-priority')
+        ctx['video_models'] = AIModel.objects.filter(modality='video', is_enabled=True, provider__is_enabled=True).order_by('-priority')
         ctx['characters'] = Character.objects.filter(owner=user)
         ctx['projects'] = Project.objects.filter(owner=user)
         return ctx

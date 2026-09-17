@@ -155,6 +155,10 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 mins hard limit
 
+# Force Redis protocol 2 (RESP2) for universal compatibility with all Redis versions
+CELERY_BROKER_TRANSPORT_OPTIONS = {'protocol': 2}
+CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {'protocol': 2}
+
 # Object Storage Backend Settings
 STORAGE_BACKEND = env('STORAGE_BACKEND', default='local')
 AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default='')
@@ -165,13 +169,22 @@ AWS_S3_ENDPOINT_URL = env('AWS_S3_ENDPOINT_URL', default='')
 
 # AI Provider API Keys
 MOCK_PROVIDERS_ENABLED = env('MOCK_PROVIDERS_ENABLED', default=True)
+
+# Google AI Studio - Generative Media (Veo 3.1 & Imagen 3)
 GOOGLE_AI_API_KEY = env('GOOGLE_AI_API_KEY', default='')
+
+# Google AI Studio - Reasoning LLM (Super Agent Storyboard Planner)
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+AGENT_LLM_PROVIDER = env('AGENT_LLM_PROVIDER', default='gemini')
+
+# Video & Image Commercial Providers
 KLING_API_KEY = env('KLING_API_KEY', default='')
 SEEDANCE_API_KEY = env('SEEDANCE_API_KEY', default='')
 ALIBABA_API_KEY = env('ALIBABA_API_KEY', default='')
 OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 FLUX_API_KEY = env('FLUX_API_KEY', default='')
 MINIMAX_API_KEY = env('MINIMAX_API_KEY', default='')
+FAL_KEY = env('FAL_KEY', default='')
 
 # Platform Economics Configuration
 DEFAULT_STARTER_CREDITS = env('DEFAULT_STARTER_CREDITS', default=500)

@@ -43,6 +43,29 @@
             </div>
         {% endif %}
 
+        {% if generation.status == 'failed' %}
+            <div class="p-4 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-rose-400 flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Generation Failed
+                    </span>
+                    <span class="text-emerald-400 font-semibold text-[11px]">Credits Restored ✓</span>
+                </div>
+                <p class="text-xs text-rose-200/90">{{ generation.error_message }}</p>
+                {% if generation.admin_error_detail %}
+                    <details class="mt-2 text-xs bg-black/40 rounded-lg p-2.5 border border-rose-500/20" open>
+                        <summary class="cursor-pointer font-mono text-[11px] text-rose-300 font-semibold flex items-center gap-1.5">
+                            <span>🔍 Diagnostic Error Details (Technical Log)</span>
+                        </summary>
+                        <pre class="mt-2 text-[10px] font-mono text-rose-300/90 whitespace-pre-wrap overflow-x-auto bg-black/60 p-2.5 rounded border border-white/5 max-h-48">{{ generation.admin_error_detail }}</pre>
+                    </details>
+                {% endif %}
+            </div>
+        {% endif %}
+
         <!-- Metadata Grid -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/5 text-xs">
             <div>

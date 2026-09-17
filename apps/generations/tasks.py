@@ -5,6 +5,7 @@ from celery import shared_task
 from django.utils import timezone
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.conf import settings
 
 from apps.generations.models import Generation
 from apps.media.models import Media
@@ -66,8 +67,67 @@ def dispatch_generation_task(self, generation_id: str):
                 countdown=3
             )
         else:
-            # Immediate provider failure
-            _finalize_failed_generation(generation, result.error_message or "Upstream generation failure")
+            # Immediate provider failure (e.g. 429 Quota or 1008 Balance)
+            logger.warning(
+                f"Primary model {generation.model_id_snapshot} failed ({result.error_message}). "
+                f"Attempting dynamic failover to alternative provider."
+            )
+            from apps.providers.router import ModelRouter
+
+            primary_name = generation.model.display_name
+            primary_id = generation.model.model_id
+            last_err = result.error_message or "Upstream generation failure"
+            chain_logs = [f"{primary_name} ({primary_id}): {last_err}"]
+
+            attempted_slugs = [generation.provider.slug]
+            current_model = generation.model
+
+            # Try fallback tiers: live alternatives (Fal.ai, MiniMax, Kling), then mock safety net
+            max_attempts = 6 if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True) else 3
+            for _ in range(max_attempts):
+                fallback_model = ModelRouter.get_fallback_model(
+                    failed_model=current_model,
+                    duration=generation.duration,
+                    has_refs=bool(ref_urls),
+                    excluded_provider_slugs=attempted_slugs
+                )
+                if not fallback_model or fallback_model.id == current_model.id:
+                    break
+
+                attempted_slugs.append(fallback_model.provider.slug)
+                current_model = fallback_model
+                logger.info(f"Failing over generation {generation.id} to [{fallback_model.model_id}] ({fallback_model.provider.name})")
+
+                fallback_adapter = ModelRegistry.get_provider_adapter(fallback_model.provider.slug)
+                if generation.generation_type == 'image':
+                    fb_result = fallback_adapter.generate_image(fallback_model.model_id, req)
+                else:
+                    fb_result = fallback_adapter.generate_video(fallback_model.model_id, req)
+
+                if fb_result.status in ('completed', 'queued', 'processing'):
+                    generation.model = fallback_model
+                    generation.provider = fallback_model.provider
+                    generation.model_id_snapshot = fallback_model.model_id
+                    generation.admin_error_detail = (
+                        f"Primary model {primary_name} was unavailable ({last_err}). "
+                        f"Automatically completed via fallback to {fallback_model.display_name}."
+                    )
+                    generation.external_job_id = fb_result.external_job_id
+                    generation.provider_response = fb_result.raw_response
+
+                    if fb_result.status == 'completed':
+                        _finalize_successful_generation(generation, fb_result)
+                    else:
+                        generation.save(update_fields=['model', 'provider', 'model_id_snapshot', 'admin_error_detail', 'external_job_id', 'provider_response', 'status'])
+                        poll_generation_task.apply_async(args=[str(generation.id), 1], countdown=3)
+                    return
+                else:
+                    chain_logs.append(f"{fallback_model.display_name} ({fallback_model.model_id}): {fb_result.error_message}")
+                    last_err = fb_result.error_message
+
+            # If all fallback attempts failed or no eligible fallback found
+            combined_err = " -> ".join(chain_logs)
+            _finalize_failed_generation(generation, combined_err)
 
     except Exception as exc:
         logger.exception(f"Unhandled exception during generation {generation_id}: {exc}")
@@ -98,6 +158,9 @@ def poll_generation_task(self, generation_id: str, attempt: int = 1):
             if attempt >= MAX_ATTEMPTS:
                 _finalize_failed_generation(generation, "Generation timed out waiting for provider response.")
             else:
+                if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+                    import time
+                    time.sleep(4)
                 # Re-queue next poll attempt with 4-second backoff
                 poll_generation_task.apply_async(
                     args=[str(generation.id), attempt + 1],
@@ -108,6 +171,9 @@ def poll_generation_task(self, generation_id: str, attempt: int = 1):
         if attempt >= MAX_ATTEMPTS:
             _finalize_failed_generation(generation, f"Polling error: {str(exc)}")
         else:
+            if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+                import time
+                time.sleep(4)
             poll_generation_task.apply_async(args=[str(generation.id), attempt + 1], countdown=5)
 
 def _finalize_successful_generation(generation: Generation, result: ProviderJobResult):
@@ -143,7 +209,7 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
         generation.output_media = media
         generation.status = 'completed'
         generation.completed_at = timezone.now()
-        generation.save(update_fields=['output_media', 'status', 'completed_at', 'external_job_id'])
+        generation.save(update_fields=['output_media', 'status', 'completed_at', 'external_job_id', 'model', 'provider', 'model_id_snapshot', 'admin_error_detail'])
 
         # If attached to a project scene, link it
         if generation.scene:
@@ -173,4 +239,15 @@ def _finalize_failed_generation(generation: Generation, raw_error: str):
 
         # Refund credits back to wallet
         CreditService.refund_credits(generation, reason=f"Generation failed: {raw_error[:100]}")
-        logger.warning(f"Generation {generation.id} failed. Credits refunded.")
+        logger.error(
+            f"\n"
+            f"================================================================================\n"
+            f"[GENERATION FAILED DIAGNOSTICS]\n"
+            f"Generation ID : {generation.id}\n"
+            f"Provider      : {generation.provider.name} ({generation.provider.slug})\n"
+            f"Model         : {generation.model_id_snapshot}\n"
+            f"Prompt        : {generation.prompt[:80]}...\n"
+            f"Error Detail  : {raw_error}\n"
+            f"Action Taken  : {generation.credits_reserved} credits automatically refunded\n"
+            f"================================================================================"
+        )

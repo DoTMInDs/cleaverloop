@@ -43,7 +43,14 @@ class SuperAgent:
         with httpx.Client(timeout=25.0) as client:
             resp = client.post(endpoint, json=payload)
             if resp.status_code == 200:
-                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                if text.startswith("```json"):
+                    text = text[7:]
+                elif text.startswith("```"):
+                    text = text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                text = text.strip()
                 data = json.loads(text)
                 plan = StoryboardPlan(**data)
                 # Compute duration and credits

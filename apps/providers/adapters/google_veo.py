@@ -5,7 +5,8 @@ from apps.providers.base import (
     BaseAIProvider,
     GenerationRequest,
     ProviderJobResult,
-    CostEstimate
+    CostEstimate,
+    load_image_as_base64
 )
 
 logger = logging.getLogger(__name__)
@@ -73,15 +74,36 @@ class GoogleVeoProvider(BaseAIProvider):
                 retryable=False
             )
         try:
-            endpoint = f"{self.BASE_URL}/models/{model_id}:predictLongRunning?key={self.api_key}"
-            payload = {
-                "prompt": request.prompt,
-                "negativePrompt": request.negative_prompt,
-                "aspectRatio": request.aspect_ratio,
-                "durationSeconds": request.duration,
-            }
+            # Map model aliases to Google AI Studio model IDs
+            target_model = model_id
+            if target_model in ["veo-3.1-standard", "veo-3.1"]:
+                target_model = "veo-3.1-generate-preview"
+            elif target_model in ["veo-3.1-fast"]:
+                target_model = "veo-3.1-fast-generate-preview"
+
+            endpoint = f"{self.BASE_URL}/models/{target_model}:predictLongRunning?key={self.api_key}"
+
+            # Google Veo duration must be 4 or 8 seconds
+            duration_sec = 4 if (request.duration or 5) <= 5 else 8
+
+            instance_data = {"prompt": request.prompt}
             if request.reference_image_urls:
-                payload["imageInput"] = {"uri": request.reference_image_urls[0]}
+                b64_str = load_image_as_base64(request.reference_image_urls[0])
+                if b64_str:
+                    instance_data["image"] = {"bytesBase64Encoded": b64_str}
+
+            parameters = {
+                "aspectRatio": request.aspect_ratio or "16:9",
+                "durationSeconds": duration_sec,
+                "sampleCount": 1
+            }
+            if request.negative_prompt:
+                parameters["negativePrompt"] = request.negative_prompt
+
+            payload = {
+                "instances": [instance_data],
+                "parameters": parameters
+            }
 
             with httpx.Client(timeout=30.0) as client:
                 resp = client.post(endpoint, json=payload)
@@ -96,7 +118,7 @@ class GoogleVeoProvider(BaseAIProvider):
                 return ProviderJobResult(
                     external_job_id="",
                     status="failed",
-                    error_message=f"Google Veo API error ({resp.status_code}): {resp.text[:200]}"
+                    error_message=f"Google Veo API error ({resp.status_code}): {resp.text[:400]}"
                 )
         except Exception as exc:
             logger.error(f"Google Veo submission failed: {exc}")

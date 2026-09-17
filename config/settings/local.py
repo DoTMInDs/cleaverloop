@@ -1,6 +1,7 @@
 from .base import *
 
 DEBUG = True
+ALLOWED_HOSTS = ['*']
 
 # Database
 # Parses DATABASE_URL or defaults to SQLite with WAL mode
@@ -22,3 +23,7 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # For local development with WhiteNoise, don't manifest hash static files to avoid missing file errors
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+
+# Execute Celery tasks synchronously in local development if worker is not started
+CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=True)
+CELERY_TASK_EAGER_PROPAGATES = True

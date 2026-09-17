@@ -5,7 +5,8 @@ from apps.providers.base import (
     BaseAIProvider,
     GenerationRequest,
     ProviderJobResult,
-    CostEstimate
+    CostEstimate,
+    load_image_as_base64
 )
 
 logger = logging.getLogger(__name__)
@@ -41,14 +42,19 @@ class KlingProvider(BaseAIProvider):
             endpoint = f"{self.BASE_URL}/videos/{'image2video' if is_i2v else 'text2video'}"
             headers = {"Authorization": f"Bearer {self.api_key}"}
             payload = {
-                "model_name": model_id or "kling-v1-5",
+                "model_name": "kling-v2-6" if (not model_id or "1-" in model_id) else model_id,
                 "prompt": request.prompt,
                 "negative_prompt": request.negative_prompt,
                 "duration": str(request.duration),
                 "aspect_ratio": request.aspect_ratio,
             }
             if is_i2v:
-                payload["image"] = request.reference_image_urls[0]
+                ref_url = request.reference_image_urls[0]
+                if ref_url.startswith(('http://', 'https://')):
+                    payload["image"] = ref_url
+                else:
+                    b64 = load_image_as_base64(ref_url)
+                    payload["image"] = b64 or ref_url
 
             with httpx.Client(timeout=30.0) as client:
                 resp = client.post(endpoint, json=payload, headers=headers)

@@ -83,22 +83,38 @@
             <!-- Model Picker -->
             <div class="space-y-1.5">
                 <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Model Selection</label>
-                <select name="model" x-model="selectedModel" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
+                <!-- Video Models Selector -->
+                <select name="model"
+                        x-show="generationType === 'video'"
+                        :disabled="generationType !== 'video'"
+                        x-model="selectedModel"
+                        class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
                     <option value="automatic">✨ Automatic Smart Routing</option>
                     <option value="best_quality">⭐ Best Cinematic Quality</option>
                     <option value="fastest">⚡ Fastest Generation</option>
                     <option value="budget">🏷️ Budget Economical</option>
-                    <optgroup label="Direct Models">
-                        <template x-if="generationType === 'video'">
-                            {% for m in video_models %}
-                                <option value="{{ m.model_id }}">{{ m.display_name }}</option>
-                            {% endfor %}
-                        </template>
-                        <template x-if="generationType === 'image'">
-                            {% for m in image_models %}
-                                <option value="{{ m.model_id }}">{{ m.display_name }}</option>
-                            {% endfor %}
-                        </template>
+                    <optgroup label="Cinematic Video Models">
+                        {% for m in video_models %}
+                            <option value="{{ m.model_id }}">{{ m.display_name }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+
+                <!-- Image Models Selector -->
+                <select name="model"
+                        x-show="generationType === 'image'"
+                        :disabled="generationType !== 'image'"
+                        x-model="selectedModel"
+                        class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500"
+                        x-cloak>
+                    <option value="automatic">✨ Automatic Smart Routing</option>
+                    <option value="best_quality">⭐ Best Photorealistic Quality</option>
+                    <option value="fastest">⚡ Fastest Generation</option>
+                    <option value="budget">🏷️ Budget Economical</option>
+                    <optgroup label="Generative Image Models">
+                        {% for m in image_models %}
+                            <option value="{{ m.model_id }}">{{ m.display_name }}</option>
+                        {% endfor %}
                     </optgroup>
                 </select>
             </div>
@@ -145,11 +161,18 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-white/5">
             <!-- Reusable Character Attachment -->
             <div class="space-y-1.5">
-                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Featured Character</label>
+                <div class="flex items-center justify-between">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Featured Character</label>
+                    <a href="{% url 'characters:create' %}" target="_blank" class="text-[11px] text-brand-400 hover:text-brand-300 font-semibold transition flex items-center gap-1">
+                        <span>+</span> Create Character
+                    </a>
+                </div>
                 <select name="character_id" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
                     <option value="">No Character (Standalone Scene)</option>
-                    {% for char in characters %}
-                        <option value="{{ char.id }}">👤 {{ char.name }}</option>
+                    {% for c in characters %}
+                        <option value="{{ c.id }}">{{ c.name }}</option>
+                    {% empty %}
+                        <option value="" disabled>No characters created yet (click + Create Character above)</option>
                     {% endfor %}
                 </select>
             </div>

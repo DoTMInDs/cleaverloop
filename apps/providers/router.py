@@ -72,6 +72,11 @@ class ModelRouter:
                 f"(duration: {duration}s, image_ref: {requires_image_ref}, audio: {requires_audio})."
             )
 
+        # If live candidates exist, exclude mock provider from smart auto-routing presets
+        live_candidates = candidates.exclude(provider__slug='mock')
+        if live_candidates.exists():
+            candidates = live_candidates
+
         # Apply preference heuristic sorting
         if user_preference == "best_quality":
             # Sort by priority desc, premium first
@@ -90,24 +95,44 @@ class ModelRouter:
         return selected
 
     @classmethod
-    def get_fallback_model(cls, failed_model: AIModel, duration: int = 5, has_refs: bool = False) -> Optional[AIModel]:
+    def get_fallback_model(
+        cls,
+        failed_model: AIModel,
+        duration: int = 5,
+        has_refs: bool = False,
+        excluded_provider_slugs: Optional[List[str]] = None
+    ) -> Optional[AIModel]:
         """
         Select an alternative model when primary provider fails during execution.
+        Supports multi-tier failover chains (Tier 1 Direct -> Tier 2 Fal.ai -> Tier 3 Mock).
         Preserves exact capability guarantees.
         """
+        slugs_to_exclude = list(excluded_provider_slugs or [])
+        if failed_model and failed_model.provider.slug not in slugs_to_exclude:
+            slugs_to_exclude.append(failed_model.provider.slug)
+
         candidates = AIModel.objects.filter(
             modality=failed_model.modality,
             is_enabled=True,
             provider__is_enabled=True
         ).exclude(
-            id=failed_model.id
+            provider__slug__in=slugs_to_exclude
         ).exclude(
             provider__health_status='offline'
         )
 
-        if failed_model.modality == 'video':
+        if failed_model.modality == 'video' and duration > 0:
             candidates = candidates.filter(max_duration__gte=duration)
         if has_refs:
             candidates = candidates.filter(supports_image_reference=True)
+
+        # Prioritize live fallback candidates over mock
+        live_fallbacks = candidates.exclude(provider__slug='mock')
+        if live_fallbacks.exists():
+            return live_fallbacks.order_by('-priority').first()
+
+        # If mock provider is enabled, fall back to mock
+        if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True):
+            return candidates.filter(provider__slug='mock').order_by('-priority').first()
 
         return candidates.order_by('-priority').first()
