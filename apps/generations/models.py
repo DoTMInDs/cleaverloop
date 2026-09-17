@@ -1,0 +1,131 @@
+import uuid
+from django.db import models
+from django.conf import settings
+
+class Generation(models.Model):
+    """Universal AI generation request tracking image, video, and audio tasks."""
+    GENERATION_TYPES = [
+        ('image', 'Image Generation'),
+        ('video', 'Video Generation'),
+        ('audio', 'Audio Generation'),
+        ('edit', 'Image/Video Edit'),
+        ('upscale', 'Media Upscale'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'Pending Approval'),
+        ('queued', 'Queued for Dispatch'),
+        ('processing', 'Processing Upstream'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+        ('cancelled', 'Cancelled'),
+        ('refunded', 'Refunded'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    correlation_id = models.UUIDField(default=uuid.uuid4, db_index=True)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='generations'
+    )
+    project = models.ForeignKey(
+        'projects.Project',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='generations'
+    )
+    scene = models.ForeignKey(
+        'projects.Scene',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='generations'
+    )
+    generation_type = models.CharField(max_length=20, choices=GENERATION_TYPES, default='image')
+    provider = models.ForeignKey(
+        'providers.AIProviderConfig',
+        on_delete=models.PROTECT,
+        related_name='generations'
+    )
+    model = models.ForeignKey(
+        'providers.AIModel',
+        on_delete=models.PROTECT,
+        related_name='generations'
+    )
+    model_id_snapshot = models.CharField(max_length=120, help_text="Canonical model ID at execution time")
+    
+    # Prompt specification
+    prompt = models.TextField()
+    negative_prompt = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued', db_index=True)
+    
+    # Output parameters
+    width = models.PositiveIntegerField(default=1280)
+    height = models.PositiveIntegerField(default=720)
+    duration = models.PositiveIntegerField(default=5, help_text="Duration in seconds (0 for images)")
+    aspect_ratio = models.CharField(max_length=10, default="16:9")
+    quality = models.CharField(max_length=20, default="standard")
+    seed = models.BigIntegerField(null=True, blank=True)
+
+    # Reference assets
+    reference_media = models.ManyToManyField(
+        'media.Media',
+        blank=True,
+        related_name='referenced_in_generations'
+    )
+    character = models.ForeignKey(
+        'characters.Character',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='generations'
+    )
+
+    # Output media asset
+    output_media = models.OneToOneField(
+        'media.Media',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='source_generation'
+    )
+
+    # Credit accounting
+    credits_reserved = models.BigIntegerField(default=0)
+    credits_consumed = models.BigIntegerField(default=0)
+
+    # External orchestration
+    external_job_id = models.CharField(max_length=255, blank=True, db_index=True)
+    provider_response = models.JSONField(default=dict, blank=True)
+    
+    # Error handling
+    error_message = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Clean, user-friendly error message"
+    )
+    admin_error_detail = models.TextField(
+        blank=True,
+        help_text="Full diagnostic traceback or raw upstream provider error payload"
+    )
+
+    is_favorite = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'generation_type', 'status', 'created_at']),
+            models.Index(fields=['external_job_id']),
+        ]
+
+    def __str__(self):
+        return f"{self.get_generation_type_display()} [{self.status}] - {self.user.email} ({self.id})"
+
+    @property
+    def is_in_progress(self) -> bool:
+        return self.status in ('queued', 'processing')
