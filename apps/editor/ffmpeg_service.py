@@ -50,8 +50,8 @@ class FFmpegService:
             with open(concat_txt_path, "w", encoding="utf-8") as f:
                 for media in scene_media_list:
                     if media.file and os.path.exists(media.file.path):
-                        # Escaped path for FFmpeg
-                        clean_path = media.file.path.replace("\\", "/")
+                        # Escaped path for FFmpeg concat demuxer
+                        clean_path = media.file.path.replace("\\", "/").replace("'", "'\\''")
                         f.write(f"file '{clean_path}'\n")
 
             cmd = [

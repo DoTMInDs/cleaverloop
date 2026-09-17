@@ -78,3 +78,18 @@ class ProviderRegistryAndRouterTests(TestCase):
         self.assertGreater(cost.estimated_credits, 0)
         self.assertEqual(cost.estimated_duration_sec, 5)
 
+    def test_path_traversal_blocked_in_load_image_as_base64(self):
+        """Verify load_image_as_base64 rejects directory traversal patterns."""
+        from apps.providers.base import load_image_as_base64
+        self.assertIsNone(load_image_as_base64("../../.env"))
+        self.assertIsNone(load_image_as_base64("/media/../../../../etc/passwd"))
+        self.assertIsNone(load_image_as_base64("..\\..\\.env"))
+
+    def test_ssrf_blocked_in_load_image_as_base64(self):
+        """Verify load_image_as_base64 blocks private/internal loopback URLs."""
+        from apps.providers.base import load_image_as_base64, is_safe_external_url
+        self.assertFalse(is_safe_external_url("http://127.0.0.1:8000/media/secret.png"))
+        self.assertFalse(is_safe_external_url("http://localhost:8000/"))
+        self.assertFalse(is_safe_external_url("http://169.254.169.254/latest/meta-data/"))
+        self.assertIsNone(load_image_as_base64("http://127.0.0.1:8000/secret.png"))
+

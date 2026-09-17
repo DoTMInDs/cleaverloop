@@ -190,12 +190,19 @@
 
         <!-- Submit Bar with Real-Time Credit Calculator -->
         <div class="pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
                 <div class="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-semibold text-amber-300 flex items-center gap-1.5">
                     <span>🪙 Estimated:</span>
                     <span class="font-extrabold" x-text="estimatedCredits"></span>
                     <span>Credits</span>
                 </div>
+
+                <div class="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <span>💳 Available:</span>
+                    <span class="font-extrabold text-white" id="create-page-wallet-balance">{{ wallet.balance }}</span>
+                    <span>Credits</span>
+                </div>
+
                 <span class="text-[11px] text-slate-400">Refunded instantly if provider fails</span>
             </div>
 
@@ -208,4 +215,17 @@
         </div>
     </form>
 </div>
+
+<script>
+    // Ensure HTMX error responses (e.g. 400 Insufficient Credits / Validation) are dynamically rendered into the target
+    document.body.addEventListener('htmx:responseError', function (evt) {
+        const target = document.getElementById('active-generation-target');
+        if (target && evt.detail && evt.detail.xhr && evt.detail.xhr.responseText) {
+            target.innerHTML = evt.detail.xhr.responseText;
+            target.classList.remove('empty:hidden');
+            target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    });
+</script>
 {% endblock %}
+

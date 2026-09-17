@@ -66,10 +66,31 @@ class BaseAIProvider(ABC):
         """Check availability and connectivity of provider endpoint."""
         pass
 
+def is_safe_external_url(url: str) -> bool:
+    """Verify URL uses https and does not point to internal, private, or loopback IPs."""
+    try:
+        import urllib.parse
+        import ipaddress
+        import socket
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme != 'https':
+            return False
+        hostname = parsed.hostname
+        if not hostname or hostname.lower() in ('localhost', '127.0.0.1', '::1', '0.0.0.0'):
+            return False
+        # Resolve hostname and check IP
+        ip_str = socket.gethostbyname(hostname)
+        ip = ipaddress.ip_address(ip_str)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+        return True
+    except Exception:
+        return False
+
 def load_image_as_base64(image_path_or_url: str) -> Optional[str]:
     """
     Read an image from local media storage or path and return raw base64 string.
-    Works for relative media paths (/media/...), filenames, or file system paths.
+    Strictly prevents Path Traversal (LFI) and Server-Side Request Forgery (SSRF).
     """
     if not image_path_or_url:
         return None
@@ -78,12 +99,19 @@ def load_image_as_base64(image_path_or_url: str) -> Optional[str]:
     if image_path_or_url.startswith('data:') and ';base64,' in image_path_or_url:
         return image_path_or_url.split(';base64,', 1)[1]
 
-    # Clean local media prefix
-    clean_path = image_path_or_url
+    # Clean local media prefix and normalize
+    clean_path = image_path_or_url.replace('\\', '/')
     if clean_path.startswith('/media/'):
         clean_path = clean_path[len('/media/'):]
     elif clean_path.startswith('media/'):
         clean_path = clean_path[len('media/'):]
+    clean_path = clean_path.lstrip('/')
+
+    # Block directory traversal sequences
+    import os
+    norm_parts = os.path.normpath(clean_path).split(os.sep)
+    if '..' in norm_parts:
+        return None
 
     # 1. Try Django default_storage
     try:
@@ -95,26 +123,30 @@ def load_image_as_base64(image_path_or_url: str) -> Optional[str]:
     except Exception:
         pass
 
-    # 2. Try filesystem MEDIA_ROOT
+    # 2. Try filesystem MEDIA_ROOT with strict canonical path boundary validation
     try:
-        import os
         from django.conf import settings
-        media_root = getattr(settings, 'MEDIA_ROOT', '')
-        full_path = os.path.join(str(media_root), clean_path)
-        if os.path.exists(full_path):
-            with open(full_path, 'rb') as f:
-                import base64
-                return base64.b64encode(f.read()).decode('utf-8')
+        media_root = os.path.abspath(str(getattr(settings, 'MEDIA_ROOT', '')))
+        full_path = os.path.abspath(os.path.join(media_root, clean_path))
+        # Ensure full_path resides strictly within media_root
+        if (full_path.startswith(media_root + os.sep) or full_path == media_root) and os.path.exists(full_path):
+            # Enforce max 25MB file size limit for base64 encoding
+            if os.path.getsize(full_path) <= 25 * 1024 * 1024:
+                with open(full_path, 'rb') as f:
+                    import base64
+                    return base64.b64encode(f.read()).decode('utf-8')
     except Exception:
         pass
 
-    # 3. If external HTTP/HTTPS URL, download and encode
+    # 3. If external HTTP/HTTPS URL, validate against SSRF and download safely
     if image_path_or_url.startswith(('http://', 'https://')):
+        if not is_safe_external_url(image_path_or_url):
+            return None
         try:
             import httpx
             with httpx.Client(timeout=15.0) as client:
                 resp = client.get(image_path_or_url)
-                if resp.status_code == 200:
+                if resp.status_code == 200 and len(resp.content) <= 25 * 1024 * 1024:
                     import base64
                     return base64.b64encode(resp.content).decode('utf-8')
         except Exception:

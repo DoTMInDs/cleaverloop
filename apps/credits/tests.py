@@ -98,3 +98,34 @@ class CreditLedgerTests(TestCase):
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, initial_balance)
         self.assertEqual(gen.credits_reserved, 0)
+
+    def test_double_refund_prevented_idempotency(self):
+        """Verify calling refund_credits multiple times on the same generation only refunds once."""
+        wallet = CreditWallet.objects.get(user=self.user)
+        initial_balance = wallet.balance
+
+        gen = Generation.objects.create(
+            user=self.user,
+            generation_type="video",
+            provider=self.provider,
+            model=self.model,
+            model_id_snapshot=self.model.model_id,
+            prompt="Test prompt",
+            duration=5
+        )
+
+        CreditService.reserve_credits(self.user, 150, gen)
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance, initial_balance - 150)
+
+        # First refund
+        tx1 = CreditService.refund_credits(gen, reason="Failure 1")
+        self.assertIsNotNone(tx1)
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance, initial_balance)
+
+        # Duplicate refund call must return None and not double-credit wallet
+        tx2 = CreditService.refund_credits(gen, reason="Failure 2 (Duplicate)")
+        self.assertIsNone(tx2)
+        wallet.refresh_from_db()
+        self.assertEqual(wallet.balance, initial_balance)

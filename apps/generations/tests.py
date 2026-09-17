@@ -101,3 +101,46 @@ class GenerationWorkflowTests(TestCase):
         if gen.status == "completed":
             self.assertIsNotNone(gen.output_media)
             self.assertIn("unavailable", gen.admin_error_detail)
+
+    def test_character_idor_prevented(self):
+        """Verify passing another user's character_id sets character to None."""
+        from django.test import Client
+        from apps.characters.models import Character
+        other_user = User.objects.create_user(email="other@cleverloop.ai", username="otheruser", password="password123")
+        other_char = Character.objects.create(
+            owner=other_user,
+            name="Secret Avatar",
+            appearance_description="A mysterious hooded rogue"
+        )
+
+        client = Client()
+        client.force_login(self.user)
+        resp = client.post('/generations/create/', {
+            'generation_type': 'video',
+            'prompt': 'A hero standing on a cliff',
+            'duration': 5,
+            'aspect_ratio': '16:9',
+            'character_id': str(other_char.id),
+        })
+        self.assertEqual(resp.status_code, 200)
+
+        gen = Generation.objects.filter(user=self.user).order_by('-created_at').first()
+        self.assertIsNone(gen.character)
+
+    def test_invalid_file_extension_rejected(self):
+        """Verify uploaded reference file with forbidden extension is rejected."""
+        from django.test import Client
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        client = Client()
+        client.force_login(self.user)
+
+        bad_file = SimpleUploadedFile("malicious.exe", b"MZ_MALICIOUS_BYTES", content_type="application/x-msdownload")
+        resp = client.post('/generations/create/', {
+            'generation_type': 'video',
+            'prompt': 'A hero standing on a cliff',
+            'duration': 5,
+            'aspect_ratio': '16:9',
+            'reference_file': bad_file
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Unsupported file type", resp.content.decode('utf-8'))

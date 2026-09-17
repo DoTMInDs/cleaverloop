@@ -89,10 +89,12 @@ class CreditService:
     def commit_credits(cls, generation, actual_credits: int = None) -> CreditTransaction:
         """
         Finalize consumption of credits upon successful generation.
-        Adjusts difference if actual_credits differs from reserved.
+        Locks both Generation and CreditWallet rows to guarantee transaction idempotency.
         """
-        user = generation.user
-        reserved = generation.credits_reserved
+        from apps.generations.models import Generation
+        locked_gen = Generation.objects.select_for_update().get(id=generation.id)
+        user = locked_gen.user
+        reserved = locked_gen.credits_reserved
         actual = actual_credits if actual_credits is not None else reserved
 
         wallet = CreditWallet.objects.select_for_update().get(user=user)
@@ -108,24 +110,27 @@ class CreditService:
                 wallet=wallet,
                 amount=difference,
                 transaction_type='generation_refund',
-                generation=generation,
+                generation=locked_gen,
                 balance_before=wallet.balance - difference,
                 balance_after=wallet.balance,
-                description=f"Released unused hold difference for {generation.id}",
+                description=f"Released unused hold difference for {locked_gen.id}",
             )
 
+        locked_gen.credits_consumed = actual
+        locked_gen.credits_reserved = 0
+        locked_gen.save(update_fields=['credits_consumed', 'credits_reserved'])
         generation.credits_consumed = actual
-        generation.save(update_fields=['credits_consumed'])
+        generation.credits_reserved = 0
 
         # Record final consumption
         tx = CreditTransaction.objects.create(
             wallet=wallet,
             amount=0,  # Reserved hold already decremented wallet balance
             transaction_type='generation_consume',
-            generation=generation,
+            generation=locked_gen,
             balance_before=wallet.balance,
             balance_after=wallet.balance,
-            description=f"Settled {actual} credits for completed {generation.generation_type}",
+            description=f"Settled {actual} credits for completed {locked_gen.generation_type}",
         )
         return tx
 
@@ -134,30 +139,35 @@ class CreditService:
     def refund_credits(cls, generation, reason: str = "Generation failed") -> CreditTransaction:
         """
         Fully refund reserved credits back to user wallet if generation fails or cancels.
+        Uses row-level locking on Generation and CreditWallet to eliminate duplicate refund race conditions.
         """
-        reserved = generation.credits_reserved
+        from apps.generations.models import Generation
+        locked_gen = Generation.objects.select_for_update().get(id=generation.id)
+        reserved = locked_gen.credits_reserved
         if reserved <= 0:
             return None
 
-        user = generation.user
+        user = locked_gen.user
         wallet = CreditWallet.objects.select_for_update().get(user=user)
         bal_before = wallet.balance
         wallet.balance += reserved
         bal_after = wallet.balance
         wallet.save(update_fields=['balance', 'updated_at'])
 
+        locked_gen.credits_reserved = 0
+        locked_gen.credits_consumed = 0
+        locked_gen.save(update_fields=['credits_reserved', 'credits_consumed'])
         generation.credits_reserved = 0
         generation.credits_consumed = 0
-        generation.save(update_fields=['credits_reserved', 'credits_consumed'])
 
         tx = CreditTransaction.objects.create(
             wallet=wallet,
             amount=reserved,
             transaction_type='generation_refund',
-            generation=generation,
+            generation=locked_gen,
             balance_before=bal_before,
             balance_after=bal_after,
             description=f"Refund: {reason}",
         )
-        logger.info(f"Refunded {reserved} credits to {user.email} for generation {generation.id}")
+        logger.info(f"Refunded {reserved} credits to {user.email} for generation {locked_gen.id}")
         return tx

@@ -3,6 +3,8 @@ from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse, JsonResponse
+from django.db import transaction
+from apps.ai.schemas import StoryboardPlan
 from apps.ai.agent import SuperAgent
 from apps.ai.safety import AgentSafetyValidator
 from apps.credits.services import CreditService
@@ -40,59 +42,73 @@ def plan_agent_brief_view(request):
 @login_required
 @require_POST
 def execute_agent_plan_view(request):
-    """Executes an approved plan: creates Project, Scenes, Generation records, and queues Celery workers."""
+    """Executes an approved plan: validates safety constraints, creates Project/Scenes/Generations atomically, and queues Celery workers."""
     plan_json = request.POST.get('plan_data', '')
     if not plan_json:
         return HttpResponse("Missing plan data.", status=400)
 
     try:
         data = json.loads(plan_json)
-        project = Project.objects.create(
-            owner=request.user,
-            name=data.get('project_title', 'AI Super Agent Project'),
-            description=data.get('project_description', ''),
-            aspect_ratio=data.get('aspect_ratio', '16:9'),
-            status='active'
-        )
+        # 1. Strictly re-validate client-submitted plan against Pydantic schema
+        plan = StoryboardPlan(**data)
 
-        for scene_data in data.get('scenes', []):
-            scene = Scene.objects.create(
-                project=project,
-                order=scene_data.get('order', 1),
-                title=scene_data.get('title', 'Scene'),
-                prompt=scene_data.get('prompt', ''),
-                duration=scene_data.get('duration', 5),
-                camera_direction=scene_data.get('camera_direction', ''),
-                visual_style=scene_data.get('visual_style', ''),
-                dialogue=scene_data.get('dialogue', ''),
-                status='queued'
+        # 2. Re-validate budget, scene limits, and wallet balance
+        wallet = CreditService.get_or_create_wallet(request.user)
+        AgentSafetyValidator.validate_plan(plan, wallet)
+
+        # 3. Atomically create all records and reserve credits
+        dispatched_gen_ids = []
+        with transaction.atomic():
+            project = Project.objects.create(
+                owner=request.user,
+                name=plan.project_title or 'AI Super Agent Project',
+                description=plan.project_description or '',
+                aspect_ratio=plan.aspect_ratio or '16:9',
+                status='active'
             )
 
-            # Auto-route and reserve
-            model = ModelRouter.select_model(
-                modality='video',
-                user_preference='automatic',
-                duration=scene.duration,
-                aspect_ratio=project.aspect_ratio
-            )
-            cost = model.calculate_credit_cost(scene.duration)
+            for scene_data in plan.scenes:
+                scene = Scene.objects.create(
+                    project=project,
+                    order=scene_data.order,
+                    title=scene_data.title or f"Scene {scene_data.order}",
+                    prompt=scene_data.prompt,
+                    duration=scene_data.duration,
+                    camera_direction=scene_data.camera_direction or '',
+                    visual_style=scene_data.visual_style or '',
+                    dialogue=scene_data.dialogue or '',
+                    status='queued'
+                )
 
-            gen = Generation.objects.create(
-                user=request.user,
-                project=project,
-                scene=scene,
-                generation_type='video',
-                provider=model.provider,
-                model=model,
-                model_id_snapshot=model.model_id,
-                prompt=scene.prompt,
-                duration=scene.duration,
-                aspect_ratio=project.aspect_ratio,
-                status='queued'
-            )
+                # Auto-route and reserve
+                model = ModelRouter.select_model(
+                    modality='video',
+                    user_preference='automatic',
+                    duration=scene.duration,
+                    aspect_ratio=project.aspect_ratio
+                )
+                cost = model.calculate_credit_cost(scene.duration)
 
-            CreditService.reserve_credits(request.user, cost, gen)
-            dispatch_generation_task.delay(str(gen.id))
+                gen = Generation.objects.create(
+                    user=request.user,
+                    project=project,
+                    scene=scene,
+                    generation_type='video',
+                    provider=model.provider,
+                    model=model,
+                    model_id_snapshot=model.model_id,
+                    prompt=scene.prompt,
+                    duration=scene.duration,
+                    aspect_ratio=project.aspect_ratio,
+                    status='queued'
+                )
+
+                CreditService.reserve_credits(request.user, cost, gen)
+                dispatched_gen_ids.append(str(gen.id))
+
+        # 4. Dispatch Celery tasks only after transaction successfully commits
+        for gen_id in dispatched_gen_ids:
+            dispatch_generation_task.delay(gen_id)
 
         return redirect('projects:detail', pk=project.pk)
 

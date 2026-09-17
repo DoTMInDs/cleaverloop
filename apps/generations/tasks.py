@@ -11,11 +11,11 @@ from apps.generations.models import Generation
 from apps.media.models import Media
 from apps.credits.services import CreditService
 from apps.providers.registry import ModelRegistry
-from apps.providers.base import GenerationRequest, ProviderJobResult
+from apps.providers.base import GenerationRequest, ProviderJobResult, is_safe_external_url
 
 logger = logging.getLogger(__name__)
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=5)
+@shared_task(bind=True, max_retries=3, default_retry_delay=5, time_limit=180, soft_time_limit=150)
 def dispatch_generation_task(self, generation_id: str):
     """
     Asynchronously dispatch a generation job to the designated AI provider adapter.
@@ -76,11 +76,20 @@ def dispatch_generation_task(self, generation_id: str):
 
             primary_name = generation.model.display_name
             primary_id = generation.model.model_id
-            last_err = result.error_message or "Upstream generation failure"
-            chain_logs = [f"{primary_name} ({primary_id}): {last_err}"]
+            primary_err = result.error_message or "Upstream generation failure"
+            chain_logs = [f"{primary_name} ({primary_id}): {primary_err}"]
 
             attempted_slugs = [generation.provider.slug]
             current_model = generation.model
+
+            # Classify primary error into a friendly concise reason
+            simple_reason = "upstream rate limit or quota reached"
+            if "429" in primary_err or "quota" in primary_err.lower() or "exhausted" in primary_err.lower():
+                simple_reason = "quota / rate limit reached"
+            elif "balance" in primary_err.lower() or "403" in primary_err or "1102" in primary_err or "1008" in primary_err:
+                simple_reason = "balance exhausted"
+            elif "404" in primary_err:
+                simple_reason = "model endpoint unavailable on API key"
 
             # Try fallback tiers: live alternatives (Fal.ai, MiniMax, Kling), then mock safety net
             max_attempts = 6 if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True) else 3
@@ -109,8 +118,8 @@ def dispatch_generation_task(self, generation_id: str):
                     generation.provider = fallback_model.provider
                     generation.model_id_snapshot = fallback_model.model_id
                     generation.admin_error_detail = (
-                        f"Primary model {primary_name} was unavailable ({last_err}). "
-                        f"Automatically completed via fallback to {fallback_model.display_name}."
+                        f"Generated via {fallback_model.display_name} "
+                        f"(automatic failover from {primary_name} due to {simple_reason})."
                     )
                     generation.external_job_id = fb_result.external_job_id
                     generation.provider_response = fb_result.raw_response
@@ -123,7 +132,6 @@ def dispatch_generation_task(self, generation_id: str):
                     return
                 else:
                     chain_logs.append(f"{fallback_model.display_name} ({fallback_model.model_id}): {fb_result.error_message}")
-                    last_err = fb_result.error_message
 
             # If all fallback attempts failed or no eligible fallback found
             combined_err = " -> ".join(chain_logs)
@@ -133,7 +141,7 @@ def dispatch_generation_task(self, generation_id: str):
         logger.exception(f"Unhandled exception during generation {generation_id}: {exc}")
         _finalize_failed_generation(generation, str(exc))
 
-@shared_task(bind=True)
+@shared_task(bind=True, time_limit=120, soft_time_limit=90)
 def poll_generation_task(self, generation_id: str, attempt: int = 1):
     """Poll upstream provider for async video/image task completion."""
     try:
@@ -192,17 +200,36 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
             storage_key=result.output_media_url or "",
         )
 
-        # Download remote output URL if external HTTP URL
+        # Download remote output URL if external HTTP URL (enforcing SSRF and 50MB streaming safety limit)
+        MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024
         if result.output_media_url and result.output_media_url.startswith(('http://', 'https://')):
-            try:
-                req = urllib.request.Request(result.output_media_url, headers={'User-Agent': 'CleverLoop-Engine/1.0'})
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    ext = "mp4" if media_type == 'video' else "jpg"
-                    content = resp.read()
-                    media.file.save(f"{media.id}.{ext}", ContentFile(content), save=False)
-                    media.file_size = len(content)
-            except Exception as e:
-                logger.warning(f"Could not download remote file into local storage: {e}")
+            if is_safe_external_url(result.output_media_url):
+                try:
+                    req = urllib.request.Request(result.output_media_url, headers={'User-Agent': 'CleverLoop-Engine/1.0'})
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        ext = "mp4" if media_type == 'video' else "jpg"
+                        chunks = []
+                        total_bytes = 0
+                        while True:
+                            chunk = resp.read(65536)  # 64KB chunks
+                            if not chunk:
+                                break
+                            total_bytes += len(chunk)
+                            if total_bytes > MAX_DOWNLOAD_BYTES:
+                                logger.warning(f"Remote file exceeded {MAX_DOWNLOAD_BYTES} bytes. Truncating download.")
+                                break
+                            chunks.append(chunk)
+
+                        content = b"".join(chunks)
+                        if len(content) >= 512:
+                            media.file.save(f"{media.id}.{ext}", ContentFile(content), save=False)
+                            media.file_size = len(content)
+                        else:
+                            logger.warning(f"Downloaded media too small ({len(content)} bytes), likely corrupted.")
+                except Exception as e:
+                    logger.warning(f"Could not download remote file into local storage: {e}")
+            else:
+                logger.warning(f"Blocked downloading from unsafe or non-public URL: {result.output_media_url}")
 
         media.save()
 

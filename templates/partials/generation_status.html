@@ -77,8 +77,8 @@
                             <span>{{ generation.duration }}s</span>
                         {% endif %}
                     </div>
-                    {% if generation.admin_error_detail and "fallback" in generation.admin_error_detail|lower %}
-                        <div class="mt-2 text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1 flex items-center gap-1.5">
+                    {% if generation.admin_error_detail and "failover" in generation.admin_error_detail|lower or "fallback" in generation.admin_error_detail|lower %}
+                        <div class="mt-2 text-[11px] text-brand-300 bg-brand-500/10 border border-brand-500/20 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5">
                             <span>⚡ {{ generation.admin_error_detail }}</span>
                         </div>
                     {% endif %}

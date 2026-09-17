@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.http import require_POST
 from django.contrib import messages
 from django.db.models import Sum, Count
 from django.http import HttpResponse
@@ -37,6 +38,7 @@ def admin_dashboard_view(request):
     return render(request, 'adminpanel/dashboard.html', context)
 
 @staff_member_required
+@require_POST
 def toggle_model_status_view(request, model_id):
     """Enable/disable a model dynamically without redeploying."""
     ai_model = get_object_or_404(AIModel, id=model_id)

@@ -84,9 +84,12 @@
                                             {% endif %}
                                         </td>
                                         <td class="text-right">
-                                            <a href="{% url 'adminpanel:toggle_model' m.id %}" class="btn btn-xs {% if m.is_enabled %}btn-error btn-outline{% else %}btn-success btn-outline{% endif %} text-[10px]">
-                                                {% if m.is_enabled %}Disable{% else %}Enable{% endif %}
-                                            </a>
+                                            <form action="{% url 'adminpanel:toggle_model' m.id %}" method="POST" class="inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-xs {% if m.is_enabled %}btn-error btn-outline{% else %}btn-success btn-outline{% endif %} text-[10px]">
+                                                    {% if m.is_enabled %}Disable{% else %}Enable{% endif %}
+                                                </button>
+                                            </form>
                                         </td>
                                     </tr>
                                 {% endfor %}
