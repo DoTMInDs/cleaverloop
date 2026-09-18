@@ -68,3 +68,12 @@ def adjust_user_credits_view(request):
         )
         messages.success(request, f"Successfully adjusted {amount} credits for {user_email}.")
     return redirect('adminpanel:dashboard')
+
+from apps.providers.diagnostics import ProviderHealthChecker
+
+@staff_member_required
+def provider_health_diagnostics_view(request):
+    """HTMX endpoint returning real-time billing and quota probes for all providers."""
+    diagnostics = ProviderHealthChecker.check_all_providers()
+    return render(request, 'adminpanel/partials/provider_diagnostics.html', {'diagnostics': diagnostics})
+

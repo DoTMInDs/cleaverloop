@@ -42,6 +42,17 @@
         </div>
     </div>
 
+    <!-- Real Commercial AI Status Banner -->
+    <div class="glass-panel rounded-2xl p-4 border border-brand-500/20 bg-brand-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-2.5 text-slate-300">
+            <span class="text-base">💡</span>
+            <span>To generate <strong>real cinematic 1080p AI video</strong>, deposit $5–$10 on <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noopener noreferrer" class="text-brand-400 font-bold underline hover:text-brand-300">Fal.ai</a> (unlocks Alibaba Wan 2.1 & Luma Ray 2) or link Google Cloud billing.</span>
+        </div>
+        <a href="{% url 'adminpanel:dashboard' %}" class="btn btn-xs btn-outline border-white/10 text-[10px] text-slate-300 hover:text-white whitespace-nowrap">
+            View Live API Balances ↗
+        </a>
+    </div>
+
     <!-- Active Generation Output Container (HTMX Target) -->
     <div id="active-generation-target" class="empty:hidden"></div>
 

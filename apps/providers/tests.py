@@ -93,3 +93,38 @@ class ProviderRegistryAndRouterTests(TestCase):
         self.assertFalse(is_safe_external_url("http://169.254.169.254/latest/meta-data/"))
         self.assertIsNone(load_image_as_base64("http://127.0.0.1:8000/secret.png"))
 
+    def test_provider_health_checker_probes(self):
+        """Verify ProviderHealthChecker probes return structured diagnostic data."""
+        from apps.providers.diagnostics import ProviderHealthChecker
+        results = ProviderHealthChecker.check_all_providers()
+        slugs = [r["slug"] for r in results]
+        self.assertIn("fal", slugs)
+        self.assertIn("google_veo", slugs)
+        self.assertIn("kling", slugs)
+        self.assertIn("minimax", slugs)
+        self.assertIn("openai", slugs)
+
+        for r in results:
+            self.assertIn("status_label", r)
+            self.assertIn("details", r)
+            self.assertIn("top_up_url", r)
+
+    def test_allow_mock_fallback_false_blocks_mock_fallback(self):
+        """Verify that disabling ALLOW_MOCK_FALLBACK prevents fallback to mock providers."""
+        from apps.providers.router import ModelRouter
+        from django.test import override_settings
+
+        veo_model = AIModel.objects.filter(model_id="veo-3.1-standard").first()
+        if not veo_model:
+            veo_model = AIModel.objects.filter(modality="video").exclude(provider__slug="mock").first()
+
+        all_live_slugs = list(AIProviderConfig.objects.exclude(slug="mock").values_list("slug", flat=True))
+
+        with override_settings(ALLOW_MOCK_FALLBACK=False):
+            fallback = ModelRouter.get_fallback_model(
+                failed_model=veo_model,
+                duration=5,
+                excluded_provider_slugs=all_live_slugs
+            )
+            self.assertIsNone(fallback)
+

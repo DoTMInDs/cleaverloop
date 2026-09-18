@@ -1,0 +1,48 @@
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for p in diagnostics %}
+        <div class="p-4 rounded-2xl border transition-all duration-300 {% if p.status == 'ready' %}bg-emerald-950/20 border-emerald-500/40 text-emerald-200{% elif p.status == 'rate_limited' %}bg-amber-950/20 border-amber-500/40 text-amber-200{% elif p.status == 'unfunded' %}bg-rose-950/20 border-rose-500/40 text-rose-200{% else %}bg-slate-900/40 border-white/10 text-slate-300{% endif %}">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <div>
+                    <h4 class="font-bold text-sm text-white flex items-center gap-1.5">
+                        {{ p.name }}
+                        {% if p.recommended %}
+                            <span class="px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-400 border border-brand-500/30 text-[9px] font-extrabold uppercase">Recommended</span>
+                        {% endif %}
+                    </h4>
+                    <span class="text-[10px] text-slate-400 uppercase tracking-wider font-mono">{{ p.modality }}</span>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border 
+                    {% if p.status == 'ready' %}bg-emerald-500/20 text-emerald-400 border-emerald-500/30
+                    {% elif p.status == 'rate_limited' %}bg-amber-500/20 text-amber-400 border-amber-500/30
+                    {% elif p.status == 'unfunded' %}bg-rose-500/20 text-rose-400 border-rose-500/30
+                    {% else %}bg-slate-800 text-slate-400 border-slate-700{% endif %}">
+                    {{ p.status_label }}
+                </span>
+            </div>
+
+            <p class="text-xs text-slate-300/90 leading-relaxed mb-4 min-h-[3rem]">
+                {{ p.details }}
+            </p>
+
+            <div class="pt-3 border-t border-white/5 flex items-center justify-between">
+                <span class="text-[10px] text-slate-400">
+                    {% if p.status == 'ready' %}
+                        <span class="text-emerald-400 font-semibold">● Live Generations Active</span>
+                    {% else %}
+                        <span>Needs Account Top-Up</span>
+                    {% endif %}
+                </span>
+
+                {% if p.top_up_url %}
+                    <a href="{{ p.top_up_url }}" target="_blank" rel="noopener noreferrer"
+                       class="btn btn-xs {% if p.recommended %}btn-primary bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white border-none{% else %}btn-ghost border border-white/10 text-white hover:border-brand-500{% endif %} text-[11px] font-bold flex items-center gap-1">
+                        <span>Top Up</span>
+                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+</div>

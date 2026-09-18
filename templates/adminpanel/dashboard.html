@@ -38,9 +38,41 @@
         </div>
     </div>
 
+    <!-- Live Commercial API Balance & Health Diagnostics -->
+    <div class="glass-panel rounded-3xl p-6 space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+                <h2 class="text-lg font-heading font-bold text-white flex items-center gap-2">
+                    <span>📡 Commercial AI Providers: Live Balance & Quota Monitor</span>
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">Real-time billing probe to check which providers have funds to generate real commercial AI video and image outputs.</p>
+            </div>
+            <button id="refresh-api-health-btn"
+                    hx-get="{% url 'adminpanel:api_health' %}"
+                    hx-target="#api-diagnostics-container"
+                    hx-swap="innerHTML"
+                    class="btn btn-sm btn-outline border-white/10 hover:border-brand-500 text-xs font-bold flex items-center gap-1.5 text-slate-200">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Re-Check Live Balances</span>
+            </button>
+        </div>
+
+        <div id="api-diagnostics-container"
+             hx-get="{% url 'adminpanel:api_health' %}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <div class="p-6 text-center text-xs text-slate-400 font-mono animate-pulse">
+                Probing live provider API keys (Fal.ai, Google, Kling, MiniMax, OpenAI)...
+            </div>
+        </div>
+    </div>
+
     <!-- Provider Health & Model Controls Table -->
     <div class="glass-panel rounded-3xl p-6 space-y-6">
         <h2 class="text-lg font-heading font-bold text-white">AI Providers & Dynamic Model Catalog</h2>
+
 
         <div class="space-y-6">
             {% for provider in providers %}

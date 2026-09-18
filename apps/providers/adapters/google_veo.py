@@ -88,9 +88,19 @@ class GoogleVeoProvider(BaseAIProvider):
 
             instance_data = {"prompt": request.prompt}
             if request.reference_image_urls:
-                b64_str = load_image_as_base64(request.reference_image_urls[0])
+                ref_path = request.reference_image_urls[0]
+                b64_str = load_image_as_base64(ref_path)
                 if b64_str:
-                    instance_data["image"] = {"bytesBase64Encoded": b64_str}
+                    mime = "image/jpeg"
+                    if ref_path.lower().endswith(".png"):
+                        mime = "image/png"
+                    elif ref_path.lower().endswith(".webp"):
+                        mime = "image/webp"
+                    instance_data["image"] = {
+                        "bytesBase64Encoded": b64_str,
+                        "mimeType": mime
+                    }
+
 
             parameters = {
                 "aspectRatio": request.aspect_ratio or "16:9",

@@ -131,8 +131,9 @@ class ModelRouter:
         if live_fallbacks.exists():
             return live_fallbacks.order_by('-priority').first()
 
-        # If mock provider is enabled, fall back to mock
-        if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True):
+        # If mock provider is enabled and fallback is allowed, fall back to mock
+        if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True) and getattr(settings, 'ALLOW_MOCK_FALLBACK', True):
             return candidates.filter(provider__slug='mock').order_by('-priority').first()
 
-        return candidates.order_by('-priority').first()
+        return None
+

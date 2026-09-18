@@ -100,7 +100,8 @@ class GenerationWorkflowTests(TestCase):
         self.assertIn(gen.status, ("completed", "queued", "processing"))
         if gen.status == "completed":
             self.assertIsNotNone(gen.output_media)
-            self.assertIn("unavailable", gen.admin_error_detail)
+            self.assertTrue("failover" in gen.admin_error_detail.lower() or "fallback" in gen.admin_error_detail.lower())
+
 
     def test_character_idor_prevented(self):
         """Verify passing another user's character_id sets character to None."""

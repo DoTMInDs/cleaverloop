@@ -168,7 +168,8 @@ AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='auto')
 AWS_S3_ENDPOINT_URL = env('AWS_S3_ENDPOINT_URL', default='')
 
 # AI Provider API Keys
-MOCK_PROVIDERS_ENABLED = env('MOCK_PROVIDERS_ENABLED', default=True)
+MOCK_PROVIDERS_ENABLED = env.bool('MOCK_PROVIDERS_ENABLED', default=True)
+ALLOW_MOCK_FALLBACK = env.bool('ALLOW_MOCK_FALLBACK', default=True)
 
 # Google AI Studio - Generative Media (Veo 3.1 & Imagen 3)
 GOOGLE_AI_API_KEY = env('GOOGLE_AI_API_KEY', default='')
