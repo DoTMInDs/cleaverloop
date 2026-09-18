@@ -15,13 +15,13 @@ class ProviderRegistryAndRouterTests(TestCase):
 
         # Image generation test
         img_req = GenerationRequest(prompt="A futuristic neon city", aspect_ratio="16:9")
-        img_res = adapter.generate_image("cleverloop-mock-image", img_req)
+        img_res = adapter.generate_image("cleaverloop-mock-image", img_req)
         self.assertEqual(img_res.status, "completed")
         self.assertTrue(img_res.output_media_url.endswith(".png"))
 
         # Video generation test
         vid_req = GenerationRequest(prompt="A spaceship flying through an asteroid field", aspect_ratio="16:9", duration=5)
-        vid_res = adapter.generate_video("cleverloop-mock-video", vid_req)
+        vid_res = adapter.generate_video("cleaverloop-mock-video", vid_req)
         self.assertEqual(vid_res.status, "completed")
         self.assertTrue(vid_res.output_media_url.endswith(".webp"))
 

@@ -64,10 +64,10 @@ class ModelRegistry:
         defaults = [
             # Mock Provider
             {
-                "provider": {"slug": "mock", "name": "CleverLoop Mock Studio", "is_enabled": True},
+                "provider": {"slug": "mock", "name": "CleaverLoop Mock Studio", "is_enabled": True},
                 "models": [
                     {
-                        "model_id": "cleverloop-mock-video",
+                        "model_id": "cleaverloop-mock-video",
                         "display_name": "Mock Video Generator (Fast Synthetic)",
                         "modality": "video",
                         "capabilities": ["t2v", "i2v", "audio"],
@@ -81,7 +81,7 @@ class ModelRegistry:
                         "priority": 10,
                     },
                     {
-                        "model_id": "cleverloop-mock-image",
+                        "model_id": "cleaverloop-mock-image",
                         "display_name": "Mock Image Generator (Instant)",
                         "modality": "image",
                         "capabilities": ["t2i", "i2i"],

@@ -30,7 +30,7 @@ class SuperAgent:
         """Calls Google Gemini LLM with structured output schema."""
         endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         system_instruction = (
-            "You are CleverLoop Super Agent, a world-class creative director. Decompose the user's idea "
+            "You are CleaverLoop Super Agent, a world-class creative director. Decompose the user's idea "
             "into a 3 to 5 scene video storyboard. Output strictly valid JSON matching this schema: "
             '{"project_title": "...", "project_description": "...", "aspect_ratio": "...", '
             '"scenes": [{"order": 1, "title": "...", "prompt": "...", "duration": 5, "camera_direction": "...", "visual_style": "..."}]}'

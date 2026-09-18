@@ -2,17 +2,19 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from django.views.generic import RedirectView
+from apps.studio.views import HomeView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # Root redirects to Studio Dashboard
-    path('', RedirectView.as_view(pattern_name='studio:dashboard', permanent=False), name='root'),
+    # Dedicated Homepage
+    path('', HomeView.as_view(), name='home'),
 
-    # CleverLoop Applications
+    # CleaverLoop Applications
     path('accounts/', include('apps.accounts.urls', namespace='accounts')),
+    path('accounts/', include('allauth.urls')),
     path('credits/', include('apps.credits.urls', namespace='credits')),
+
     path('billing/', include('apps.billing.urls', namespace='billing')),
     path('studio/', include('apps.studio.urls', namespace='studio')),
     path('characters/', include('apps.characters.urls', namespace='characters')),

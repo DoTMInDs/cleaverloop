@@ -205,7 +205,7 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
         if result.output_media_url and result.output_media_url.startswith(('http://', 'https://')):
             if is_safe_external_url(result.output_media_url):
                 try:
-                    req = urllib.request.Request(result.output_media_url, headers={'User-Agent': 'CleverLoop-Engine/1.0'})
+                    req = urllib.request.Request(result.output_media_url, headers={'User-Agent': 'CleaverLoop-Engine/1.0'})
                     with urllib.request.urlopen(req, timeout=30) as resp:
                         ext = "mp4" if media_type == 'video' else "jpg"
                         chunks = []

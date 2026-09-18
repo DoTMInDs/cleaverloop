@@ -7,7 +7,7 @@ class AdminPanelSecurityTests(TestCase):
     def setUp(self):
         ModelRegistry.seed_initial_catalog()
         self.staff_user = User.objects.create_user(
-            email="staff@cleverloop.ai",
+            email="staff@cleaverloop.ai",
             username="staffuser",
             password="password123",
             is_staff=True

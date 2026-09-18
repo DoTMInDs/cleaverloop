@@ -7,7 +7,7 @@ from apps.providers.models import AIProviderConfig, AIModel
 
 class CreditLedgerTests(TestCase):
     def setUp(self):
-        self.user = User.objects.create_user(email="test@cleverloop.ai", username="testuser", password="password123")
+        self.user = User.objects.create_user(email="test@cleaverloop.ai", username="testuser", password="password123")
         self.provider = AIProviderConfig.objects.create(slug="mock", name="Mock Provider")
         self.model = AIModel.objects.create(
             provider=self.provider,

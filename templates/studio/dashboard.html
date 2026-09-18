@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 
-{% block title %}Studio Dashboard — CleverLoop AI{% endblock %}
+{% block title %}Studio Dashboard — CleaverLoop AI{% endblock %}
 
 {% block content %}
 <div class="space-y-8">
@@ -53,12 +53,17 @@
                 <span class="p-2 rounded-xl bg-amber-500/10 text-amber-400">🪙</span>
             </div>
             <div>
-                <div class="text-3xl font-extrabold text-white tracking-tight">{{ wallet.balance }}</div>
-                <div class="text-xs text-slate-400 mt-1">Credits ready for generation</div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{% if wallet %}{{ wallet.balance }}{% else %}500 Credits{% endif %}</div>
+                <div class="text-xs text-slate-400 mt-1">{% if wallet %}Credits ready for generation{% else %}Claim starter credits on sign up{% endif %}</div>
             </div>
             <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                <a href="{% url 'credits:wallet' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">View Ledger →</a>
-                <a href="{% url 'billing:plans' %}" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300">Add Credits +</a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'credits:wallet' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">View Ledger →</a>
+                    <a href="{% url 'billing:plans' %}" class="text-xs font-semibold text-emerald-400 hover:text-emerald-300">Add Credits +</a>
+                {% else %}
+                    <a href="{% url 'accounts:register' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">Claim 500 Credits →</a>
+                    <a href="{% url 'accounts:login' %}" class="text-xs font-semibold text-slate-400 hover:text-white">Sign In</a>
+                {% endif %}
             </div>
         </div>
 
@@ -69,12 +74,16 @@
                 <span class="p-2 rounded-xl bg-brand-500/10 text-brand-400">📁</span>
             </div>
             <div>
-                <div class="text-3xl font-extrabold text-white tracking-tight">{{ projects.count }}</div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{% if user.is_authenticated %}{{ projects.count }}{% else %}Unlimited{% endif %}</div>
                 <div class="text-xs text-slate-400 mt-1">Multi-scene storyboard projects</div>
             </div>
             <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                <a href="{% url 'projects:list' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">All Projects →</a>
-                <a href="{% url 'projects:create' %}" class="text-xs font-semibold text-white hover:text-brand-300">+ New Project</a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'projects:list' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">All Projects →</a>
+                    <a href="{% url 'projects:create' %}" class="text-xs font-semibold text-white hover:text-brand-300">+ New Project</a>
+                {% else %}
+                    <a href="{% url 'accounts:register' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">Get Started →</a>
+                {% endif %}
             </div>
         </div>
 
@@ -85,12 +94,16 @@
                 <span class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">👥</span>
             </div>
             <div>
-                <div class="text-3xl font-extrabold text-white tracking-tight">{{ characters.count }}</div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{% if user.is_authenticated %}{{ characters.count }}{% else %}Consistent{% endif %}</div>
                 <div class="text-xs text-slate-400 mt-1">Consistent characters with visual traits</div>
             </div>
             <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                <a href="{% url 'characters:list' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">View Roster →</a>
-                <a href="{% url 'characters:create' %}" class="text-xs font-semibold text-white hover:text-brand-300">+ Create Character</a>
+                {% if user.is_authenticated %}
+                    <a href="{% url 'characters:list' %}" class="text-xs font-semibold text-brand-400 hover:text-brand-300">View Roster →</a>
+                    <a href="{% url 'characters:create' %}" class="text-xs font-semibold text-white hover:text-brand-300">+ Create Character</a>
+                {% else %}
+                    <a href="{% url 'accounts:register' %}" class="text-xs font-semibold text-cyan-400 hover:text-cyan-300">Create Character →</a>
+                {% endif %}
             </div>
         </div>
     </div>

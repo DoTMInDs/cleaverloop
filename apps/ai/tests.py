@@ -10,7 +10,7 @@ from apps.providers.registry import ModelRegistry
 class SuperAgentSafetyTests(TestCase):
     def setUp(self):
         ModelRegistry.seed_initial_catalog()
-        self.user = User.objects.create_user(email="director@cleverloop.ai", username="director", password="password123")
+        self.user = User.objects.create_user(email="director@cleaverloop.ai", username="director", password="password123")
         self.wallet = CreditWallet.objects.get(user=self.user)
         self.client = Client()
         self.client.force_login(self.user)

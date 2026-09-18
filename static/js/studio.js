@@ -1,4 +1,4 @@
-// CleverLoop AI - Client-side Studio Interactions
+// CleaverLoop AI - Client-side Studio Interactions
 
 document.addEventListener('DOMContentLoaded', () => {
     // Auto-dismiss Django messages after 5 seconds

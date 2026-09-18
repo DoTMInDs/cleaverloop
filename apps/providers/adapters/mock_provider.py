@@ -54,7 +54,7 @@ class MockAIProvider(BaseAIProvider):
             draw.line([(0, y), (width, y)], fill=(25, 30, 45), width=1)
 
         # Draw text overlays
-        title = "CLEVERLOOP AI - GENERATIVE STUDIO"
+        title = "CLEAVERLOOP AI - GENERATIVE STUDIO"
         model_info = f"Model: {model_id} | Aspect Ratio: {aspect_ratio} ({width}x{height})"
         prompt_preview = f"Prompt: {prompt[:80]}..." if len(prompt) > 80 else f"Prompt: {prompt}"
 
@@ -101,7 +101,7 @@ class MockAIProvider(BaseAIProvider):
             circle_x = int(100 + (f / num_frames) * (width - 200))
             draw.ellipse([circle_x - 30, height // 2 - 30, circle_x + 30, height // 2 + 30], fill=pulse_color)
 
-            draw.text((40, 40), f"CLEVERLOOP AI VIDEO RENDER [{model_id}]", fill=(255, 255, 255))
+            draw.text((40, 40), f"CLEAVERLOOP AI VIDEO RENDER [{model_id}]", fill=(255, 255, 255))
             draw.text((40, 70), f"Frame {f+1}/{num_frames} | Duration: {duration}s | {aspect_ratio}", fill=(180, 190, 220))
             draw.text((40, height - 60), f"Prompt: {prompt[:60]}", fill=(130, 150, 250))
 

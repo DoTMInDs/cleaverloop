@@ -3,4 +3,4 @@ from django.apps import AppConfig
 class StudioConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'apps.studio'
-    verbose_name = 'CleverLoop Creative Studio'
+    verbose_name = 'CleaverLoop Creative Studio'

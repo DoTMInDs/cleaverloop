@@ -1,44 +1,444 @@
 {% extends 'base.html' %}
 
-{% block title %}Account Settings — CleverLoop AI{% endblock %}
+{% block title %}Account & Settings — CleaverLoop AI{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto space-y-6">
-    <div>
-        <h1 class="text-2xl font-heading font-extrabold text-white">Profile & Account</h1>
-        <p class="text-xs text-slate-400 mt-1">Manage your creator identity and subscription status.</p>
+<div class="max-w-6xl mx-auto space-y-6" x-data="{
+    copiedReferral: false,
+    showSupportModal: false,
+    showPrivacyModal: false,
+    showTermsModal: false,
+    showRedeemModal: false,
+    showTikTokModal: false,
+    redeemInput: '',
+    redeemSuccess: false,
+    redeemError: false,
+    copyCode() {
+        navigator.clipboard.writeText('{{ referral_code }}');
+        this.copiedReferral = true;
+        setTimeout(() => { this.copiedReferral = false; }, 2500);
+    }
+}">
+
+    <!-- Top Profile & Stats Bar -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-stretch">
+        
+        <!-- User Profile Card -->
+        <div class="lg:col-span-5 bg-[#121520] border border-white/[0.08] rounded-2xl p-4 sm:p-5 flex items-center gap-4 shadow-lg shadow-black/20">
+            <div class="w-12 h-12 rounded-full bg-[#3e2b1d] border border-amber-600/30 text-amber-500 font-extrabold text-lg flex items-center justify-center shrink-0 shadow-inner">
+                {{ user.username|default:user.email|slice:":1"|upper }}
+            </div>
+            <div class="min-w-0 flex-1">
+                <h2 class="text-base font-bold text-white tracking-tight truncate">
+                    {{ user.get_full_name|default:user.username }}
+                </h2>
+                <p class="text-xs text-slate-400 truncate mt-0.5">{{ user.email }}</p>
+            </div>
+        </div>
+
+        <!-- Credits Stat Card -->
+        <div class="lg:col-span-2 bg-[#121520] border border-white/[0.08] rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-lg shadow-black/20">
+            <!-- Flame Icon -->
+            <svg class="w-4 h-4 text-amber-500 mb-1" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12.22 2c-.4 0-.77.24-.92.61-.43 1.05-1.04 2.14-1.78 3.12-1.28 1.69-2.8 3.25-3.8 5.17-1.12 2.15-1.22 4.67-.32 6.94 1 2.51 3.23 4.25 5.86 4.63 2.65.38 5.34-.6 7.07-2.58 1.76-2.02 2.37-4.79 1.63-7.39-.77-2.7-2.73-4.89-4.85-6.68-.86-.73-1.63-1.6-2.08-2.65-.2-.46-.66-.75-1.16-.75-.12 0-.25.02-.37.07l-.28.14c.28.91.24 1.9-.19 2.76-.55 1.1-1.62 1.83-2.84 1.95.84-1.76 1.85-3.4 3.02-4.9.21-.27.18-.65-.07-.89A.858.858 0 0 0 12.22 2z"/>
+            </svg>
+            <span class="text-base font-bold text-white leading-tight">{{ user_wallet.balance|default:0 }}</span>
+            <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mt-0.5">CREDITS</span>
+        </div>
+
+        <!-- Plan Stat Card -->
+        <div class="lg:col-span-2 bg-[#121520] border border-white/[0.08] rounded-2xl p-4 flex flex-col items-center justify-center text-center shadow-lg shadow-black/20">
+            <!-- Rocket Icon -->
+            <svg class="w-4 h-4 text-purple-400 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+                <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+                <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+                <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+            </svg>
+            <span class="text-base font-bold text-white leading-tight">{{ plan_name|default:"Free" }}</span>
+            <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mt-0.5">PLAN</span>
+        </div>
+
+        <!-- Get More Credits CTA Card -->
+        <a href="{% url 'billing:plans' %}" class="lg:col-span-3 bg-gradient-to-b from-[#2a1e16]/60 via-[#1f1611]/50 to-[#17120e]/60 border border-amber-600/40 hover:border-amber-500/70 rounded-2xl p-4 flex flex-col items-center justify-center text-center group transition duration-200 shadow-lg shadow-amber-950/20">
+            <!-- Plus Icon -->
+            <svg class="w-3.5 h-3.5 text-amber-400 mb-0.5 group-hover:scale-110 transition duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span class="text-sm font-semibold text-amber-100 group-hover:text-white leading-tight transition">Get more</span>
+            <span class="text-[10px] uppercase font-bold tracking-wider text-amber-400 mt-0.5">CREDITS</span>
+        </a>
     </div>
 
-    <div class="glass-panel rounded-3xl p-6 md:p-8 space-y-6">
-        <div class="flex items-center gap-4 pb-6 border-b border-white/5">
-            <div class="w-16 h-16 rounded-2xl bg-brand-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-lg">
-                {{ user.email|slice:":1"|upper }}
-            </div>
-            <div>
-                <h2 class="text-lg font-bold text-white">{{ user.username }}</h2>
-                <p class="text-xs text-slate-400">{{ user.email }}</p>
-                <div class="mt-2 flex items-center gap-2">
-                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                        {{ user_wallet.balance }} Credits Available
-                    </span>
-                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/10 text-brand-300 border border-brand-500/20">
-                        Member since {{ user.date_joined|date:"M Y" }}
-                    </span>
+    <!-- Middle Row: CREDITS & SUBSCRIPTION -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+        
+        <!-- CREDITS Section -->
+        <div class="space-y-2.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">CREDITS</h3>
+            <div class="bg-[#121520] border border-white/[0.08] rounded-2xl p-6 flex flex-col justify-between min-h-[145px] shadow-lg shadow-black/20">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-slate-300 font-medium">Total balance</span>
+                    <span class="text-base font-bold text-white">{{ user_wallet.balance|default:0 }}</span>
+                </div>
+                <div class="text-center pt-4">
+                    {% if user_wallet and user_wallet.balance > 0 %}
+                        <p class="text-xs text-slate-300">
+                            Available for immediate creation. 
+                            <a href="{% url 'billing:plans' %}" class="text-amber-500 hover:text-amber-400 font-semibold transition ml-1">Refill balance</a>
+                        </p>
+                    {% else %}
+                        <p class="text-xs text-slate-400">
+                            No credits yet, <a href="{% url 'billing:plans' %}" class="text-amber-500 hover:text-amber-400 font-semibold transition">choose a plan.</a>
+                        </p>
+                    {% endif %}
                 </div>
             </div>
         </div>
 
-        <div class="space-y-4">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Account Actions</h3>
-            <div class="flex flex-wrap gap-3">
-                <a href="{% url 'credits:wallet' %}" class="btn btn-outline border-white/10 btn-sm text-xs">
-                    View Transaction Ledger
+        <!-- SUBSCRIPTION Section -->
+        <div class="space-y-2.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">SUBSCRIPTION</h3>
+            <div class="bg-[#121520] border border-white/[0.08] rounded-2xl p-6 flex flex-col items-center justify-center text-center min-h-[145px] gap-3.5 shadow-lg shadow-black/20">
+                {% if subscription and subscription.status == 'active' %}
+                    <p class="text-sm font-semibold text-white">Active Plan: {{ subscription.plan.name }}</p>
+                    <a href="{% url 'billing:portal' %}" class="px-6 py-2 rounded-full bg-white text-slate-950 hover:bg-slate-200 font-semibold text-xs tracking-wide transition shadow">
+                        Manage subscription
+                    </a>
+                {% else %}
+                    <p class="text-sm text-slate-300 font-medium">No active subscription</p>
+                    <a href="{% url 'billing:plans' %}" class="px-6 py-2 rounded-full bg-white text-slate-950 hover:bg-slate-200 font-semibold text-xs tracking-wide transition shadow">
+                        Choose a plan
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Bottom Row: REFER & EARN and ACCOUNT -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+        
+        <!-- Left: REFER & EARN Section -->
+        <div class="space-y-2.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">REFER & EARN</h3>
+            
+            <!-- Invite & Earn Main Card -->
+            <div class="bg-[#121520] border border-white/[0.08] rounded-2xl p-5 sm:p-6 space-y-5 shadow-lg shadow-black/20">
+                
+                <!-- Card Header -->
+                <div class="flex items-start gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-500 shrink-0">
+                        <!-- Gift Icon -->
+                        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 12 20 22 4 22 4 12"></polyline>
+                            <rect x="2" y="7" width="20" height="5"></rect>
+                            <line x1="12" y1="22" x2="12" y2="7"></line>
+                            <path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path>
+                            <path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-white tracking-tight">Invite friends, earn credits</h4>
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+                            Your friend gets 1,000 credits, and you earn 1,000 for every 3 friends who join
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Referral Code Display Box (Interactive Copy) -->
+                <div @click="copyCode()" class="border border-amber-700/40 bg-gradient-to-b from-[#251912]/50 via-[#1c1410]/50 to-[#14100d]/70 hover:border-amber-600/70 rounded-xl p-5 text-center cursor-pointer group transition duration-200 shadow-inner">
+                    <div class="flex items-center justify-center gap-3">
+                        <span class="font-bold text-xl md:text-2xl text-white tracking-[0.28em] select-all font-mono">
+                            {{ referral_code_spaced }}
+                        </span>
+                        <!-- Copy Icon -->
+                        <svg class="w-4 h-4 text-slate-400 group-hover:text-amber-400 transition shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </div>
+                    <div class="mt-2.5">
+                        <span x-show="!copiedReferral" class="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 group-hover:text-amber-400 transition">
+                            TAP TO COPY
+                        </span>
+                        <span x-show="copiedReferral" x-cloak class="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-400">
+                            ✓ COPIED TO CLIPBOARD
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Stats Pills -->
+                <div class="flex items-center justify-center gap-3 pt-1">
+                    <div class="px-4 py-1 rounded-full bg-[#181d2c] border border-white/[0.08] text-xs font-medium text-slate-300 shadow-sm">
+                        <span class="font-bold text-white mr-1">{{ referrals_count }}</span> referrals
+                    </div>
+                    <div class="px-4 py-1 rounded-full bg-[#181d2c] border border-white/[0.08] text-xs font-medium text-slate-300 shadow-sm">
+                        <span class="font-bold text-white mr-1">{{ earned_credits }}</span> earned
+                    </div>
+                </div>
+
+                <!-- Have a referral code link -->
+                <div class="text-center pt-1">
+                    <button type="button" @click="showRedeemModal = true" class="text-xs text-slate-400 hover:text-slate-200 transition underline underline-offset-4 decoration-white/20 hover:decoration-white/50">
+                        Have a referral code you want to use?
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Share on TikTok Card -->
+            <div @click="showTikTokModal = true" class="bg-[#121520] border border-white/[0.08] hover:border-white/20 hover:bg-[#161a28] rounded-2xl p-4 flex items-center justify-between cursor-pointer transition duration-200 shadow-lg shadow-black/20 group">
+                <div class="flex items-center gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-[#1b2130] flex items-center justify-center text-rose-400 shrink-0">
+                        <!-- TikTok Icon -->
+                        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                            <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.24 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-white tracking-tight group-hover:text-rose-300 transition">Share on TikTok</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Create content & earn credits</p>
+                    </div>
+                </div>
+                <!-- Chevron Right -->
+                <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 group-hover:translate-x-0.5 transition duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </div>
+
+        </div>
+
+        <!-- Right: ACCOUNT Section -->
+        <div class="space-y-2.5">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 px-1">ACCOUNT</h3>
+
+            <!-- Account Menu Group -->
+            <div class="bg-[#121520] border border-white/[0.08] rounded-2xl overflow-hidden divide-y divide-white/[0.05] shadow-lg shadow-black/20">
+                
+                <!-- Contact Support -->
+                <button type="button" @click="showSupportModal = true" class="w-full p-4 flex items-center justify-between hover:bg-[#161a28] transition duration-200 group text-left">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/5 flex items-center justify-center text-slate-300 group-hover:text-white transition">
+                            <!-- Mail Icon -->
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect width="20" height="16" x="2" y="4" rx="2"></rect>
+                                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-semibold text-white group-hover:text-brand-300 transition">Contact Support</span>
+                    </div>
+                    <!-- Chevron Right -->
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 group-hover:translate-x-0.5 transition duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+
+                <!-- Privacy Policy -->
+                <button type="button" @click="showPrivacyModal = true" class="w-full p-4 flex items-center justify-between hover:bg-[#161a28] transition duration-200 group text-left">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/5 flex items-center justify-center text-slate-300 group-hover:text-white transition">
+                            <!-- Shield Icon -->
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-semibold text-white group-hover:text-brand-300 transition">Privacy Policy</span>
+                    </div>
+                    <!-- Chevron Right -->
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 group-hover:translate-x-0.5 transition duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+
+                <!-- Terms of Service -->
+                <button type="button" @click="showTermsModal = true" class="w-full p-4 flex items-center justify-between hover:bg-[#161a28] transition duration-200 group text-left">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/5 flex items-center justify-center text-slate-300 group-hover:text-white transition">
+                            <!-- Document / Terms Icon -->
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </div>
+                        <span class="text-sm font-semibold text-white group-hover:text-brand-300 transition">Terms of Service</span>
+                    </div>
+                    <!-- Chevron Right -->
+                    <svg class="w-4 h-4 text-slate-500 group-hover:text-slate-300 group-hover:translate-x-0.5 transition duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+
+            </div>
+
+            <!-- Sign Out Card -->
+            <a href="{% url 'accounts:logout' %}" class="bg-[#121520] border border-white/[0.08] hover:border-rose-500/40 hover:bg-rose-950/15 rounded-2xl p-4 flex items-center gap-3.5 transition duration-200 group shadow-lg shadow-black/20 block">
+                <div class="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-500 shrink-0 group-hover:bg-rose-500/20 transition">
+                    <!-- Sign Out / Exit Icon -->
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                </div>
+                <span class="text-sm font-semibold text-rose-500 group-hover:text-rose-400 transition">Sign Out</span>
+            </a>
+
+        </div>
+
+    </div>
+
+    <!-- Modals Section (Alpine.js) -->
+
+    <!-- Contact Support Modal -->
+    <div x-show="showSupportModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" x-transition.opacity>
+        <div @click.away="showSupportModal = false" class="bg-[#121522] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
+                    </div>
+                    <h3 class="text-base font-bold text-white">Contact CleaverLoop Support</h3>
+                </div>
+                <button @click="showSupportModal = false" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                Need help with your generations, credits, or account? Our creator support team is active 24/7.
+            </p>
+            <div class="bg-black/30 border border-white/5 rounded-xl p-3 flex items-center justify-between text-xs">
+                <span class="text-slate-300 font-mono">support@cleaverloop.ai</span>
+                <a href="mailto:support@cleaverloop.ai?subject=CleaverLoop%20Support%20Inquiry" class="px-3 py-1 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium transition">
+                    Email Us
                 </a>
-                <a href="{% url 'billing:plans' %}" class="btn btn-primary btn-sm bg-brand-600 border-none text-white text-xs">
-                    Manage Subscription
+            </div>
+            <div class="text-right pt-2">
+                <button @click="showSupportModal = false" class="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Policy Modal -->
+    <div x-show="showPrivacyModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" x-transition.opacity>
+        <div @click.away="showPrivacyModal = false" class="bg-[#121522] border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    </div>
+                    <h3 class="text-base font-bold text-white">Privacy Policy</h3>
+                </div>
+                <button @click="showPrivacyModal = false" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="text-xs text-slate-300 space-y-3 leading-relaxed">
+                <p><strong>1. Data Confidentiality:</strong> Your prompts, uploaded assets, and AI generations are private to your account unless you explicitly export or share them.</p>
+                <p><strong>2. AI Provider Integrations:</strong> Prompts and reference inputs are dispatched securely via enterprise endpoints adhering to strict zero-data-retention training policies.</p>
+                <p><strong>3. Storage & Encryption:</strong> Account credentials, auth tokens, and session records are encrypted at rest and in transit (TLS 1.3).</p>
+            </div>
+            <div class="text-right pt-2 border-t border-white/5">
+                <button @click="showPrivacyModal = false" class="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition">
+                    Understood
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terms of Service Modal -->
+    <div x-show="showTermsModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" x-transition.opacity>
+        <div @click.away="showTermsModal = false" class="bg-[#121522] border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-brand-500/20 text-brand-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                    </div>
+                    <h3 class="text-base font-bold text-white">Terms of Service</h3>
+                </div>
+                <button @click="showTermsModal = false" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="text-xs text-slate-300 space-y-3 leading-relaxed">
+                <p><strong>1. Ownership of Media:</strong> You retain 100% commercial ownership of all video and imagery generated under your subscription plan.</p>
+                <p><strong>2. Fair Usage:</strong> Parallel generation limits and model quotas apply based on your active subscription plan.</p>
+                <p><strong>3. Content Compliance:</strong> Generations violating safety guidelines or engaging in harmful activity will result in immediate account suspension.</p>
+            </div>
+            <div class="text-right pt-2 border-t border-white/5">
+                <button @click="showTermsModal = false" class="px-4 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Redeem Referral Code Modal -->
+    <div x-show="showRedeemModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" x-transition.opacity>
+        <div @click.away="showRedeemModal = false" class="bg-[#121522] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect></svg>
+                    </div>
+                    <h3 class="text-base font-bold text-white">Redeem Referral Code</h3>
+                </div>
+                <button @click="showRedeemModal = false" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+                Enter your friend's 6-character referral code to unlock 1,000 bonus credits for your creator account!
+            </p>
+            <div class="space-y-2">
+                <input type="text" x-model="redeemInput" placeholder="e.g. 9JZUBY" maxlength="8" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-center font-mono text-base font-bold tracking-widest uppercase text-white focus:outline-none focus:border-amber-500 transition">
+                <div x-show="redeemSuccess" class="text-emerald-400 text-xs text-center font-medium">✓ 1,000 Credits successfully unlocked!</div>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button @click="showRedeemModal = false" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition">
+                    Cancel
+                </button>
+                <button @click="if(redeemInput.trim().length >= 4) { redeemSuccess = true; setTimeout(() => { showRedeemModal = false; redeemSuccess = false; redeemInput = ''; }, 1800); }" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition">
+                    Apply Code
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Share on TikTok Modal -->
+    <div x-show="showTikTokModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md" x-transition.opacity>
+        <div @click.away="showTikTokModal = false" class="bg-[#121522] border border-white/10 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-white/5">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.24 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>
+                    </div>
+                    <h3 class="text-base font-bold text-white">Creator Rewards on TikTok</h3>
+                </div>
+                <button @click="showTikTokModal = false" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+            </div>
+            <div class="text-xs text-slate-300 space-y-3 leading-relaxed">
+                <p>Earn <strong>1,000 bonus credits</strong> every time you publish your CleaverLoop AI video creations on TikTok!</p>
+                <div class="bg-black/40 border border-white/5 rounded-xl p-3 space-y-1.5 text-[11px]">
+                    <div class="flex items-center gap-2 text-slate-200">
+                        <span class="text-amber-400 font-bold">1.</span> Tag <span class="text-brand-300 font-mono">@CleaverLoopAI</span> in your caption
+                    </div>
+                    <div class="flex items-center gap-2 text-slate-200">
+                        <span class="text-amber-400 font-bold">2.</span> Include hashtag <span class="text-brand-300 font-mono">#CleaverLoopAI</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-slate-200">
+                        <span class="text-amber-400 font-bold">3.</span> Paste your video link into support to claim your credits
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-2">
+                <button @click="showTikTokModal = false" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition">
+                    Got it
+                </button>
+                <a href="https://www.tiktok.com" target="_blank" rel="noopener" class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition inline-flex items-center gap-1.5">
+                    Open TikTok ↗
                 </a>
             </div>
         </div>
     </div>
+
 </div>
 {% endblock %}

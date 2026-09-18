@@ -22,7 +22,7 @@ env_file = BASE_DIR / '.env'
 if env_file.exists():
     environ.Env.read_env(str(env_file))
 
-SECRET_KEY = env('SECRET_KEY', default='django-insecure-cleverloop-fallback-secret-key-12345')
+SECRET_KEY = env('SECRET_KEY', default='django-insecure-cleaverloop-fallback-secret-key-12345')
 DEBUG = env('DEBUG')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['*'])
 
@@ -39,6 +39,11 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     'rest_framework',
     'corsheaders',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.apple',
 ]
 
 LOCAL_APPS = [
@@ -67,10 +72,12 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'apps.analytics.middleware.CorrelationIDMiddleware',
 ]
+
 
 ROOT_URLCONF = 'config.urls'
 
@@ -198,3 +205,50 @@ MAX_SCENES_PER_REQUEST = env('MAX_SCENES_PER_REQUEST', default=6)
 LOGIN_URL = 'accounts:login'
 LOGIN_REDIRECT_URL = 'studio:dashboard'
 LOGOUT_REDIRECT_URL = 'accounts:login'
+
+# Authentication Backends (Django default + allauth)
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# django-allauth Configuration
+ACCOUNT_USER_MODEL_USERNAME_FIELD = 'username'
+ACCOUNT_LOGIN_METHODS = {'email'}
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_DEFAULT_HTTP_PROTOCOL = env('ACCOUNT_DEFAULT_HTTP_PROTOCOL', default='http')
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_ADAPTER = 'apps.accounts.adapters.CustomSocialAccountAdapter'
+
+
+# Google and Apple Social Account Provider Configuration
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': env('GOOGLE_OAUTH_CLIENT_ID', default=''),
+            'secret': env('GOOGLE_OAUTH_CLIENT_SECRET', default=''),
+            'key': '',
+        },
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        },
+    },
+    'apple': {
+        'APP': {
+            'client_id': env('APPLE_OAUTH_CLIENT_ID', default=''),
+            'secret': env('APPLE_OAUTH_SECRET_KEY', default=''),
+            'key': env('APPLE_OAUTH_KEY_ID', default=''),
+            'settings': {
+                'certificate_key': env('APPLE_OAUTH_CERTIFICATE_KEY', default=''),
+            },
+        },
+        'SCOPE': ['email', 'name'],
+    },
+
+}
+

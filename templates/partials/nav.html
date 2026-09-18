@@ -1,0 +1,92 @@
+{% load static %}
+<!-- Top Navbar -->
+<header class="glass-panel sticky mb-5 top-0 z-40 border-b border-white/10 px-4 lg:px-8 py-3 rounded-2xl flex items-center justify-between">
+
+    <div class="flex items-center gap-3">
+        <a href="{% if user.is_authenticated %}{% url 'studio:dashboard' %}{% else %}{% url 'home' %}{% endif %}" class="flex items-center gap-2 group">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 via-indigo-500 to-cyan-400 p-[1px] shadow-lg shadow-brand-500/20 group-hover:scale-105 transition duration-200">
+                <div class="w-full h-full bg-obsidian rounded-[11px] flex items-center justify-center">
+                    <svg class="w-5 h-5 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                </div>
+            </div>
+            <span class="font-heading font-extrabold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400">
+                Cleaver<span class="text-brand-500">Loop</span>
+            </span>
+            <span class="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 ml-1">Studio</span>
+        </a>
+    </div>
+
+    <!-- Quick Navigation (Desktop) -->
+    <nav class="hidden md:flex items-center gap-1">
+        {% if user.is_authenticated %}
+            <a href="{% url 'studio:dashboard' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if request.resolver_match.url_name == 'dashboard' %}text-brand-400 bg-white/5{% else %}text-slate-300{% endif %}">
+                Dashboard
+            </a>
+            <a href="{% url 'studio:create' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if request.resolver_match.url_name == 'create' %}text-brand-400 bg-white/5{% else %}text-slate-300{% endif %}">
+                Create
+            </a>
+            <a href="{% url 'agent:studio' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition flex items-center gap-1.5 text-amber-300">
+                <span class="text-xs">✨</span> Super Agent
+            </a>
+            <a href="{% url 'projects:list' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if 'projects' in request.path %}text-brand-400 bg-white/5{% else %}text-slate-300{% endif %}">
+                Projects
+            </a>
+            <a href="{% url 'characters:list' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if 'characters' in request.path %}text-brand-400 bg-white/5{% else %}text-slate-300{% endif %}">
+                Characters
+            </a>
+            <a href="{% url 'generations:history' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if 'generations' in request.path %}text-brand-400 bg-white/5{% else %}text-slate-300{% endif %}">
+                History
+            </a>
+        {% else %}
+            <a href="{% url 'home' %}#features" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 text-slate-300 hover:text-white transition">
+                Features
+            </a>
+            <a href="{% url 'home' %}#showcase" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 text-slate-300 hover:text-white transition">
+                Showcase
+            </a>
+            <a href="{% url 'home' %}#models" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 text-slate-300 hover:text-white transition">
+                AI Models
+            </a>
+            <a href="{% url 'billing:plans' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 text-slate-300 hover:text-white transition">
+                Pricing
+            </a>
+        {% endif %}
+    </nav>
+
+    <!-- User Balance & Profile -->
+    <div class="flex items-center gap-3">
+        {% if user.is_authenticated %}
+            <!-- Dynamic Live Credit Pill -->
+            <div id="credit-badge-container" hx-get="{% url 'credits:badge' %}" hx-trigger="creditUpdated from:body" hx-swap="innerHTML">
+                {% include 'partials/credit_badge.html' %}
+            </div>
+
+            <!-- User Menu -->
+            <div class="dropdown dropdown-end">
+                <label tabindex="0" class="btn btn-ghost btn-circle flex items-center justify-center avatar btn-sm">
+                    <div class="w-8 rounded-full flex items-center justify-center text-white font-bold text-xs border border-white/10 bg-brand-600 hover:border-brand-500">
+                        {{ user.email|slice:":1"|upper }}
+                    </div>
+                </label>
+                <ul tabindex="0" class="mt-3 z-[1] p-2 shadow-2xl menu menu-sm dropdown-content bg-card rounded-2xl w-56 border border-white/10 backdrop-blur-xl">
+                    <li class="menu-title px-4 py-2 border-b border-white/5">
+                        <span class="text-xs text-slate-400 block truncate">{{ user.email }}</span>
+                    </li>
+                    <li><a href="{% url 'accounts:profile' %}" class="py-2">Profile & Settings</a></li>
+                    <li><a href="{% url 'credits:wallet' %}" class="py-2">Credit Wallet</a></li>
+                    <li><a href="{% url 'billing:plans' %}" class="py-2">Upgrade Subscription</a></li>
+                    {% if user.is_staff %}
+                        <li><a href="{% url 'adminpanel:dashboard' %}" class="py-2 text-amber-400">Admin Control Panel</a></li>
+                    {% endif %}
+                    <div class="divider my-1 border-white/5"></div>
+                    <li><a href="{% url 'accounts:logout' %}" class="text-rose-400 py-2">Log Out</a></li>
+                </ul>
+            </div>
+        {% else %}
+            <a href="{% url 'accounts:login' %}" class="btn btn-ghost btn-sm text-sm">Sign In</a>
+            <a href="{% url 'accounts:register' %}" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white shadow-lg shadow-brand-500/30">Get Started</a>
+        {% endif %}
+    </div>
+</header>

@@ -10,8 +10,8 @@ from apps.providers.registry import ModelRegistry
 class GenerationWorkflowTests(TestCase):
     def setUp(self):
         ModelRegistry.seed_initial_catalog()
-        self.user = User.objects.create_user(email="creator@cleverloop.ai", username="creator", password="password123")
-        self.model = AIModel.objects.get(model_id="cleverloop-mock-video")
+        self.user = User.objects.create_user(email="creator@cleaverloop.ai", username="creator", password="password123")
+        self.model = AIModel.objects.get(model_id="cleaverloop-mock-video")
         self.provider = self.model.provider
 
     def test_successful_generation_workflow(self):
@@ -107,7 +107,7 @@ class GenerationWorkflowTests(TestCase):
         """Verify passing another user's character_id sets character to None."""
         from django.test import Client
         from apps.characters.models import Character
-        other_user = User.objects.create_user(email="other@cleverloop.ai", username="otheruser", password="password123")
+        other_user = User.objects.create_user(email="other@cleaverloop.ai", username="otheruser", password="password123")
         other_char = Character.objects.create(
             owner=other_user,
             name="Secret Avatar",
