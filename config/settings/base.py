@@ -241,10 +241,10 @@ SOCIALACCOUNT_PROVIDERS = {
     'apple': {
         'APP': {
             'client_id': env('APPLE_OAUTH_CLIENT_ID', default=''),
-            'secret': env('APPLE_OAUTH_SECRET_KEY', default=''),
+            'secret': env('APPLE_OAUTH_TEAM_ID', default=env('APPLE_OAUTH_SECRET_KEY', default='')),
             'key': env('APPLE_OAUTH_KEY_ID', default=''),
             'settings': {
-                'certificate_key': env('APPLE_OAUTH_CERTIFICATE_KEY', default=''),
+                'certificate_key': env('APPLE_OAUTH_CERTIFICATE_KEY', default=env('APPLE_OAUTH_SECRET_KEY', default='')),
             },
         },
         'SCOPE': ['email', 'name'],
