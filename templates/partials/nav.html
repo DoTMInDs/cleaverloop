@@ -64,13 +64,13 @@
             </div>
 
             <!-- User Menu -->
-            <div class="dropdown dropdown-end">
+            <div class="dropdown dropdown-end bg-accent/10 rounded-full hover:bg-accent/20 transition">
                 <label tabindex="0" class="btn btn-ghost btn-circle flex items-center justify-center avatar btn-sm">
                     <div class="w-8 rounded-full flex items-center justify-center text-white font-bold text-xs border border-white/10 bg-brand-600 hover:border-brand-500">
                         {{ user.email|slice:":1"|upper }}
                     </div>
                 </label>
-                <ul tabindex="0" class="mt-3 z-[1] p-2 shadow-2xl menu menu-sm dropdown-content bg-card rounded-2xl w-56 border border-white/10 backdrop-blur-xl">
+                <ul tabindex="0" class="mt-3 z-[1] p-2 shadow-2xl menu menu-sm dropdown-content bg-card rounded-2xl w-56 bg-accent/10 border border-white/10 backdrop-blur-xl">
                     <li class="menu-title px-4 py-2 border-b border-white/5">
                         <span class="text-xs text-slate-400 block truncate">{{ user.email }}</span>
                     </li>
@@ -89,4 +89,4 @@
             <a href="{% url 'accounts:register' %}" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white shadow-lg shadow-brand-500/30">Get Started</a>
         {% endif %}
     </div>
-</header>
+</header>

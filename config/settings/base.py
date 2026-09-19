@@ -46,6 +46,7 @@ THIRD_PARTY_APPS = [
     'allauth.socialaccount.providers.apple',
     "tailwind",
     "theme",
+    'storages',
 ]
 
 LOCAL_APPS = [
@@ -185,8 +186,41 @@ STORAGE_BACKEND = env('STORAGE_BACKEND', default='local')
 AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default='')
 AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default='')
 AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='')
-AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='auto')
+AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='us-east-1')
 AWS_S3_ENDPOINT_URL = env('AWS_S3_ENDPOINT_URL', default='')
+AWS_QUERYSTRING_AUTH = env.bool('AWS_QUERYSTRING_AUTH', default=False)
+
+if STORAGE_BACKEND == 's3' and AWS_STORAGE_BUCKET_NAME:
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+            "OPTIONS": {
+                "access_key": AWS_ACCESS_KEY_ID,
+                "secret_key": AWS_SECRET_ACCESS_KEY,
+                "bucket_name": AWS_STORAGE_BUCKET_NAME,
+                "region_name": AWS_S3_REGION_NAME if AWS_S3_REGION_NAME != 'auto' else None,
+                "endpoint_url": AWS_S3_ENDPOINT_URL if AWS_S3_ENDPOINT_URL else None,
+                "default_acl": None,
+                "querystring_auth": AWS_QUERYSTRING_AUTH,
+                "file_overwrite": False,
+            },
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+    if not AWS_QUERYSTRING_AUTH:
+        region_segment = f".{AWS_S3_REGION_NAME}" if AWS_S3_REGION_NAME and AWS_S3_REGION_NAME != 'auto' else ""
+        MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3{region_segment}.amazonaws.com/"
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 # AI Provider API Keys
 MOCK_PROVIDERS_ENABLED = env.bool('MOCK_PROVIDERS_ENABLED', default=True)
