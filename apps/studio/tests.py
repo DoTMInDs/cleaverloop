@@ -43,3 +43,17 @@ class HomeAndDashboardViewTests(TestCase):
         self.assertIn('Studio Dashboard', content)
         self.assertIn('Creative Projects', content)
         self.assertIn('AI Characters', content)
+
+    def test_local_offline_scripts_served(self):
+        """Verify that HTMX and Alpine.js are served locally from static files and not from unpkg CDN."""
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        
+        # Verify local vendor static script links exist
+        self.assertIn('/static/js/vendor/htmx.min.js', content)
+        self.assertIn('/static/js/vendor/alpine.min.js', content)
+        
+        # Verify unpkg CDN is no longer referenced
+        self.assertNotIn('unpkg.com/htmx', content)
+        self.assertNotIn('unpkg.com/alpinejs', content)

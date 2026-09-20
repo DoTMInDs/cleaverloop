@@ -42,19 +42,27 @@ class GenerationDetailView(LoginRequiredMixin, DetailView):
     def get_queryset(self):
         return Generation.objects.filter(user=self.request.user)
 
-def _render_error_card(message: str, is_credit_error: bool = False) -> str:
+from django.conf import settings
+
+def _render_error_card(message: str, is_credit_error: bool = False, is_staff_or_debug: bool = False) -> str:
     action_html = ""
     if is_credit_error:
-        action_html = """
-        <div class="mt-3 pt-3 border-t border-rose-500/20 flex flex-wrap items-center justify-between gap-2">
-            <span class="text-[11px] text-rose-300">Need more credits to continue creating?</span>
-            <div class="flex items-center gap-2">
-                <a href="/credits/wallet/" class="btn btn-xs btn-outline btn-error text-[10px]">View Wallet</a>
+        refill_button = ""
+        if is_staff_or_debug:
+            refill_button = """
                 <form action="/credits/quick-refill/" method="POST" class="inline" hx-post="/credits/quick-refill/" hx-target="#active-generation-target" hx-swap="innerHTML">
                     <button type="submit" class="btn btn-xs btn-primary bg-gradient-to-r from-brand-600 to-indigo-600 text-white border-none text-[10px]">
                         ⚡ Free Dev Refill (+1,000 Credits)
                     </button>
                 </form>
+            """
+        action_html = f"""
+        <div class="mt-3 pt-3 border-t border-rose-500/20 flex flex-wrap items-center justify-between gap-2">
+            <span class="text-[11px] text-rose-300">Need more credits to continue creating?</span>
+            <div class="flex items-center gap-2">
+                <a href="/billing/plans/" class="btn btn-xs btn-primary bg-brand-600 hover:bg-brand-500 text-white border-none text-[10px]">Upgrade Plan</a>
+                <a href="/credits/wallet/" class="btn btn-xs btn-outline btn-error text-[10px]">View Wallet</a>
+                {refill_button}
             </div>
         </div>
         """
@@ -78,17 +86,25 @@ def create_generation_view(request):
     Manual studio generation endpoint (HTMX / POST).
     Calculates cost, reserves credits with row lock, and dispatches Celery worker task.
     """
+    is_staff_or_debug = getattr(settings, 'DEBUG', False) or request.user.is_staff
     gen_type = request.POST.get('generation_type', 'image')
     prompt = request.POST.get('prompt', '').strip()[:2000]
     negative_prompt = request.POST.get('negative_prompt', '').strip()[:1000]
     model_choice = request.POST.get('model', 'automatic')
     aspect_ratio = request.POST.get('aspect_ratio', '16:9')
-    duration = int(request.POST.get('duration', 5)) if gen_type == 'video' else 0
     quality = request.POST.get('quality', 'standard')
     character_id = request.POST.get('character_id')
 
+    try:
+        duration_raw = request.POST.get('duration', '5')
+        duration = int(duration_raw) if gen_type == 'video' else 0
+        if duration < 1 and gen_type == 'video':
+            duration = 5
+    except (ValueError, TypeError):
+        duration = 5 if gen_type == 'video' else 0
+
     if not prompt:
-        return HttpResponse(_render_error_card("Please enter a prompt describing your vision in detail."), status=400)
+        return HttpResponse(_render_error_card("Please enter a prompt describing your vision in detail.", is_staff_or_debug=is_staff_or_debug), status=400)
 
     # Validate character ownership to prevent IDOR
     valid_character = None
@@ -102,11 +118,11 @@ def create_generation_view(request):
         ext = uploaded_file.name.split('.')[-1].lower() if '.' in uploaded_file.name else ''
         if ext not in ALLOWED_REF_EXTENSIONS:
             return HttpResponse(
-                _render_error_card(f"Unsupported file type (.{ext}). Allowed formats: {', '.join(sorted(ALLOWED_REF_EXTENSIONS)).upper()}."),
+                _render_error_card(f"Unsupported file type (.{ext}). Allowed formats: {', '.join(sorted(ALLOWED_REF_EXTENSIONS)).upper()}.", is_staff_or_debug=is_staff_or_debug),
                 status=400
             )
         if uploaded_file.size > MAX_REF_FILE_SIZE:
-            return HttpResponse(_render_error_card("Uploaded file exceeds 25MB limit."), status=400)
+            return HttpResponse(_render_error_card("Uploaded file exceeds 25MB limit.", is_staff_or_debug=is_staff_or_debug), status=400)
 
         ref_media = Media.objects.create(
             owner=request.user,
@@ -125,7 +141,13 @@ def create_generation_view(request):
             requires_image_ref=bool(ref_media)
         )
     except Exception as exc:
-        return HttpResponse(_render_error_card(f"Model Routing Error: {exc}"), status=400)
+        return HttpResponse(_render_error_card(f"Model Routing Error: {exc}", is_staff_or_debug=is_staff_or_debug), status=400)
+
+    # Clamp duration to model max_duration
+    if gen_type == 'video':
+        max_dur = getattr(selected_model, 'max_duration', 10)
+        if duration > max_dur:
+            duration = max_dur
 
     # Calculate credit cost
     credit_cost = selected_model.calculate_credit_cost(duration=duration)
@@ -156,7 +178,7 @@ def create_generation_view(request):
         generation.status = 'failed'
         generation.error_message = str(exc)
         generation.save(update_fields=['status', 'error_message'])
-        return HttpResponse(_render_error_card(str(exc), is_credit_error=True), status=400)
+        return HttpResponse(_render_error_card(str(exc), is_credit_error=True, is_staff_or_debug=is_staff_or_debug), status=400)
 
     # Dispatch Celery worker task
     dispatch_generation_task.delay(str(generation.id))

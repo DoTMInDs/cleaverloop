@@ -1,7 +1,8 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.views.generic import ListView, DetailView, CreateView
+from django.views.generic import ListView, DetailView, CreateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.urls import reverse_lazy, reverse
+from django.contrib import messages
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
@@ -58,7 +59,27 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['scenes'] = self.object.scenes.select_related('generated_media').prefetch_related('characters').all()
+        if self.object.status == 'rendering':
+            ctx['active_assembly_job'] = AssemblyJob.objects.filter(
+                project=self.object,
+                user=self.request.user,
+                status__in=('queued', 'rendering')
+            ).order_by('-created_at').first()
+        else:
+            ctx['active_assembly_job'] = None
         return ctx
+
+class ProjectDeleteView(LoginRequiredMixin, DeleteView):
+    model = Project
+    success_url = reverse_lazy('projects:list')
+
+    def get_queryset(self):
+        return Project.objects.filter(owner=self.request.user)
+
+    def delete(self, request, *args, **kwargs):
+        project = self.get_object()
+        messages.success(request, f"Project '{project.name}' was deleted.")
+        return super().delete(request, *args, **kwargs)
 
 @login_required
 @require_POST
@@ -128,3 +149,37 @@ def assemble_project_view(request, project_id):
 
     assemble_project_video_task.delay(str(job.id))
     return redirect('projects:detail', pk=project.pk)
+
+@login_required
+@require_POST
+def add_scene_view(request, project_id):
+    """Add a new scene to an existing storyboard project."""
+    project = get_object_or_404(Project, id=project_id, owner=request.user)
+    next_order = (project.scenes.order_by('-order').values_list('order', flat=True).first() or 0) + 1
+    title = request.POST.get('title', '').strip() or f"Scene {next_order}"
+    prompt = request.POST.get('prompt', '').strip() or f"Dynamic scene sequence {next_order} for {project.name}."
+    try:
+        duration = int(request.POST.get('duration', 5))
+    except (ValueError, TypeError):
+        duration = 5
+
+    Scene.objects.create(
+        project=project,
+        order=next_order,
+        title=title,
+        prompt=prompt,
+        duration=max(1, min(duration, 10))
+    )
+    messages.success(request, f"Added Scene {next_order} to {project.name}.")
+    return redirect('projects:detail', pk=project.pk)
+
+@login_required
+@require_POST
+def delete_scene_view(request, scene_id):
+    """Delete an individual scene from a project."""
+    scene = get_object_or_404(Scene, id=scene_id, project__owner=request.user)
+    project_pk = scene.project.pk
+    scene_order = scene.order
+    scene.delete()
+    messages.success(request, f"Scene {scene_order} deleted.")
+    return redirect('projects:detail', pk=project_pk)

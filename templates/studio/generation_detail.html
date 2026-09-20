@@ -55,10 +55,10 @@
                     <span class="text-emerald-400 font-semibold text-[11px]">Credits Restored ✓</span>
                 </div>
                 <p class="text-xs text-rose-200/90">{{ generation.error_message }}</p>
-                {% if generation.admin_error_detail %}
+                {% if user.is_staff and generation.admin_error_detail %}
                     <details class="mt-2 text-xs bg-black/40 rounded-lg p-2.5 border border-rose-500/20" open>
                         <summary class="cursor-pointer font-mono text-[11px] text-rose-300 font-semibold flex items-center gap-1.5">
-                            <span>🔍 Diagnostic Error Details (Technical Log)</span>
+                            <span>🔍 Diagnostic Error Details (Staff Technical Log)</span>
                         </summary>
                         <pre class="mt-2 text-[10px] font-mono text-rose-300/90 whitespace-pre-wrap overflow-x-auto bg-black/60 p-2.5 rounded border border-white/5 max-h-48">{{ generation.admin_error_detail }}</pre>
                     </details>

@@ -20,6 +20,19 @@ class AgentSafetyValidator:
                 f"Agent plan generated {len(plan.scenes)} scenes, which exceeds the limit of {max_scenes} scenes per request."
             )
 
+        # Recompute server-side cost across all scenes to prevent client-side budget tampering
+        calculated_credits = 0
+        from apps.providers.router import ModelRouter
+        for s in plan.scenes:
+            try:
+                m = ModelRouter.select_model(modality='video', user_preference=getattr(s, 'model_preference', 'automatic') or 'automatic', duration=s.duration)
+                calculated_credits += m.calculate_credit_cost(s.duration)
+            except Exception:
+                rate = getattr(settings, 'CREDIT_COST_VIDEO_PER_SEC', 50)
+                calculated_credits += 50 + (s.duration * rate)
+
+        plan.estimated_total_credits = max(plan.estimated_total_credits, calculated_credits)
+
         if plan.estimated_total_credits > max_credits:
             raise BudgetExceededError(
                 f"Agent plan estimated cost ({plan.estimated_total_credits} credits) exceeds maximum allowed safety cap of {max_credits} credits."

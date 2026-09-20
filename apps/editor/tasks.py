@@ -35,6 +35,7 @@ def assemble_project_video_task(self, job_id: str):
 
     scene_media = [s.generated_media for s in scenes]
 
+    output_file_path = None
     try:
         output_file_path = FFmpegService.assemble_scenes(
             scene_media_list=scene_media,
@@ -60,10 +61,6 @@ def assemble_project_video_task(self, job_id: str):
         project.status = 'completed'
         project.save(update_fields=['final_render', 'status'])
 
-        # Clean up temp file
-        if os.path.exists(output_file_path):
-            os.remove(output_file_path)
-
         logger.info(f"Assembly completed successfully for job {job_id}")
 
     except Exception as exc:
@@ -71,3 +68,10 @@ def assemble_project_video_task(self, job_id: str):
         job.status = 'failed'
         job.render_log = str(exc)
         job.save(update_fields=['status', 'render_log'])
+    finally:
+        # Guarantee cleanup of temporary file to prevent disk leaks
+        if output_file_path and os.path.exists(output_file_path):
+            try:
+                os.remove(output_file_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temp render file {output_file_path}: {e}")

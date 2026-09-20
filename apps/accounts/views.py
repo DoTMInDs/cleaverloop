@@ -13,6 +13,17 @@ class RegisterView(CreateView):
     template_name = 'accounts/register.html'
     success_url = reverse_lazy('studio:dashboard')
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        try:
+            from apps.billing.models import SubscriptionPlan
+            from django.conf import settings
+            free_plan = SubscriptionPlan.objects.filter(is_active=True, price_monthly=0).first()
+            ctx['starter_credits'] = free_plan.credits_per_month if free_plan else getattr(settings, 'DEFAULT_STARTER_CREDITS', 500)
+        except Exception:
+            ctx['starter_credits'] = 500
+        return ctx
+
     def form_valid(self, form):
         user = form.save()
         login(self.request, user, backend='django.contrib.auth.backends.ModelBackend')

@@ -29,11 +29,16 @@ def live_credit_badge(request):
 
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
+from django.http import HttpResponseForbidden
 
 @login_required
 @require_POST
 def quick_refill_credits_view(request):
     """Developer / User 1-click refill to prevent credit starvation during creative testing."""
+    if not (settings.DEBUG or request.user.is_staff):
+        return HttpResponseForbidden("<div class='p-3 text-rose-400 text-xs font-semibold'>Quick refill is disabled in production. Please purchase a subscription on the pricing page.</div>")
+
     amount = 1000
     CreditService.grant_credits(
         request.user,

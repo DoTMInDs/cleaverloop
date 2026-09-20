@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Billing & Subscription Portal — CleaverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8 pb-16">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-300 border border-brand-500/20 mb-1">
+                Account Billing
+            </div>
+            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Subscription & Wallet</h1>
+        </div>
+
+        <a href="{% url 'billing:plans' %}" class="btn btn-sm btn-primary bg-brand-600 hover:bg-brand-500 text-white text-xs border-none gap-1.5 shadow-lg shadow-brand-500/20">
+            <span>⚡</span>
+            <span>View All Plans</span>
+        </a>
+    </div>
+
+    <!-- Active Subscription Card -->
+    <div class="glass-panel rounded-3xl p-6 md:p-8 space-y-6 border border-white/10 relative overflow-hidden">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div class="space-y-2">
+                <span class="text-xs uppercase font-bold text-slate-400 block tracking-wider">Active Plan</span>
+                <div class="flex items-center gap-3">
+                    <h2 class="text-2xl md:text-3xl font-heading font-extrabold text-white">
+                        {% if subscription and subscription.plan %}
+                            {{ subscription.plan.name }}
+                        {% else %}
+                            Free Starter
+                        {% endif %}
+                    </h2>
+                    {% if subscription and subscription.status == 'active' %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Active
+                        </span>
+                    {% elif subscription and subscription.status == 'canceled' %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            Canceled
+                        </span>
+                    {% else %}
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-white/10 text-slate-300 border border-white/10">
+                            Default Free Tier
+                        </span>
+                    {% endif %}
+                </div>
+
+                <p class="text-xs text-slate-400">
+                    {% if subscription and subscription.plan %}
+                        ${{ subscription.plan.price_monthly|floatformat:0 }} / month • Grants {{ subscription.plan.credits_per_month }} credits every renewal.
+                    {% else %}
+                        Starter account with 500 bonus onboarding credits. Upgrade for high-volume video workflows.
+                    {% endif %}
+                </p>
+            </div>
+
+            <!-- Wallet Balance Display -->
+            <div class="rounded-2xl bg-black/40 border border-white/10 p-5 flex flex-col items-start md:items-end justify-center min-w-[200px]">
+                <span class="text-[11px] font-bold uppercase text-slate-400">Current Balance</span>
+                <div class="text-3xl font-extrabold text-amber-400 mt-0.5 font-mono">
+                    {{ wallet.balance|default:0 }}
+                </div>
+                <span class="text-[10px] text-slate-500">Credits available for generations</span>
+            </div>
+        </div>
+
+        <!-- Plan Actions -->
+        <div class="pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
+            <div class="text-xs text-slate-400">
+                {% if subscription and subscription.last_payment_reference %}
+                    <span class="font-mono text-[11px] text-slate-500">Last Ref: {{ subscription.last_payment_reference }}</span>
+                {% else %}
+                    <span>Payments secured via Paystack</span>
+                {% endif %}
+            </div>
+
+            <div class="flex items-center gap-3">
+                <a href="{% url 'billing:plans' %}" class="btn btn-xs btn-outline border-white/10 text-slate-300 hover:bg-white/5 text-xs">
+                    Switch Plan
+                </a>
+                {% if subscription and subscription.status == 'active' and subscription.plan.price_monthly > 0 %}
+                    <button type="button"
+                            onclick="document.getElementById('cancel-sub-modal').showModal()"
+                            class="btn btn-xs btn-outline border-rose-500/30 text-rose-300 hover:bg-rose-500/10 text-xs">
+                        Cancel Subscription
+                    </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Credit Ledger Transactions -->
+    <div class="glass-panel rounded-3xl p-6 space-y-4 border border-white/10">
+        <h3 class="text-lg font-heading font-bold text-white">Recent Credit History</h3>
+
+        <div class="overflow-x-auto">
+            <table class="table table-xs w-full text-left">
+                <thead>
+                    <tr class="text-[10px] uppercase text-slate-500 border-b border-white/5">
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Description</th>
+                        <th>Balance After</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5 text-xs text-slate-300">
+                    {% for tx in recent_transactions %}
+                        <tr class="hover:bg-white/[0.02]">
+                            <td class="text-slate-400 font-mono text-[11px]">{{ tx.created_at|date:"M d, Y H:i" }}</td>
+                            <td>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase
+                                             {% if tx.amount > 0 %}bg-emerald-500/10 text-emerald-300 border border-emerald-500/20
+                                             {% else %}bg-rose-500/10 text-rose-300 border border-rose-500/20{% endif %}">
+                                    {{ tx.get_transaction_type_display }}
+                                </span>
+                            </td>
+                            <td class="font-bold {% if tx.amount > 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
+                                {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }}
+                            </td>
+                            <td class="text-slate-300 max-w-xs truncate">{{ tx.description }}</td>
+                            <td class="font-mono text-slate-400">{{ tx.balance_after }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-6 text-slate-400 text-xs">
+                                No credit transactions recorded yet.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Cancel Subscription Confirmation -->
+<dialog id="cancel-sub-modal" class="modal">
+    <div class="modal-box bg-card border border-white/10 text-white rounded-3xl p-6 max-w-md space-y-4">
+        <h3 class="font-bold text-lg text-rose-400">Cancel Membership?</h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+            Are you sure you want to cancel your active subscription? You will still keep all your unspent wallet credits, but your monthly renewal quota and premium model access will discontinue.
+        </p>
+
+        <form method="POST" action="{% url 'billing:cancel' %}">
+            {% csrf_token %}
+            <div class="modal-action pt-2 flex items-center justify-end gap-2">
+                <button type="button" onclick="document.getElementById('cancel-sub-modal').close()" class="btn btn-ghost btn-sm text-xs">
+                    Keep Plan
+                </button>
+                <button type="submit" class="btn btn-error btn-sm text-white text-xs">
+                    Confirm Cancellation
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+{% endblock %}

@@ -44,13 +44,12 @@
         }
     </script>
 
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-    <!-- Alpine.js -->
-    <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+    <!-- Local HTMX & Alpine.js (Offline Capable) -->
+    <script src="{% static 'js/vendor/htmx.min.js' %}"></script>
+    <script defer src="{% static 'js/vendor/alpine.min.js' %}"></script>
 
     <!-- Custom Studio Styles -->
-    <link rel="stylesheet" href="/static/css/studio.css">
+    <link rel="stylesheet" href="{% static 'css/studio.css' %}">
 </head>
 <body class="bg-obsidian min-h-screen flex flex-col font-sans text-slate-100 antialiased selection:bg-brand-500 selection:text-white"
       hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>

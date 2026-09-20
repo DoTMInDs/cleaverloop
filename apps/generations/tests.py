@@ -1,11 +1,17 @@
-from django.test import TestCase
+from unittest.mock import patch
+from django.test import TestCase, Client
+from django.core.files.uploadedfile import SimpleUploadedFile
 from apps.accounts.models import User
+from apps.characters.models import Character
 from apps.credits.models import CreditWallet
 from apps.credits.services import CreditService
 from apps.generations.models import Generation
 from apps.generations.tasks import dispatch_generation_task
+from apps.providers.base import ProviderJobResult
 from apps.providers.models import AIProviderConfig, AIModel
 from apps.providers.registry import ModelRegistry
+from apps.providers.router import ModelRouter
+
 
 class GenerationWorkflowTests(TestCase):
     def setUp(self):
@@ -44,7 +50,8 @@ class GenerationWorkflowTests(TestCase):
         self.assertEqual(wallet.balance, initial_balance - cost)
         self.assertEqual(gen.credits_consumed, cost)
 
-    def test_failed_generation_refunds_credits(self):
+    @patch('apps.providers.router.ModelRouter.get_fallback_model', return_value=None)
+    def test_failed_generation_refunds_credits(self, mock_fallback):
         """Verify simulated failure immediately restores user credits."""
         wallet = CreditWallet.objects.get(user=self.user)
         initial_balance = wallet.balance
@@ -73,10 +80,20 @@ class GenerationWorkflowTests(TestCase):
         self.assertEqual(wallet.balance, initial_balance)  # Fully refunded!
         self.assertIn("restored to your wallet", gen.error_message)
 
-    def test_automatic_runtime_failover_when_primary_provider_fails(self):
+    @patch('apps.providers.router.ModelRouter.get_fallback_model')
+    @patch('apps.providers.adapters.google_veo.GoogleVeoProvider.generate_video')
+    def test_automatic_runtime_failover_when_primary_provider_fails(self, mock_veo, mock_get_fallback):
         """Verify dynamic failover when primary provider fails submission."""
+        mock_veo.return_value = ProviderJobResult(
+            external_job_id="",
+            status="failed",
+            error_message="Google Veo API error (429): Quota exceeded"
+        )
         google_model = AIModel.objects.filter(model_id="veo-3.1-fast-generate-preview").first()
         self.assertIsNotNone(google_model)
+
+        mock_fallback = AIModel.objects.get(model_id="cleaverloop-mock-video")
+        mock_get_fallback.return_value = mock_fallback
 
         gen = Generation.objects.create(
             user=self.user,
@@ -91,22 +108,19 @@ class GenerationWorkflowTests(TestCase):
         cost = google_model.calculate_credit_cost(duration=5)
         CreditService.reserve_credits(self.user, cost, gen)
 
-        # Dispatch generation: Google fails, triggering automatic failover
+        # Dispatch generation: Google fails, triggering automatic failover to mock_fallback
         dispatch_generation_task(str(gen.id))
 
         gen.refresh_from_db()
         # Verify that generation failed over to alternative model
         self.assertNotEqual(gen.model.id, google_model.id)
-        self.assertIn(gen.status, ("completed", "queued", "processing"))
-        if gen.status == "completed":
-            self.assertIsNotNone(gen.output_media)
-            self.assertTrue("failover" in gen.admin_error_detail.lower() or "fallback" in gen.admin_error_detail.lower())
-
+        self.assertEqual(gen.model.id, mock_fallback.id)
+        self.assertEqual(gen.status, "completed")
+        self.assertIsNotNone(gen.output_media)
+        self.assertTrue("failover" in gen.admin_error_detail.lower() or "fallback" in gen.admin_error_detail.lower())
 
     def test_character_idor_prevented(self):
         """Verify passing another user's character_id sets character to None."""
-        from django.test import Client
-        from apps.characters.models import Character
         other_user = User.objects.create_user(email="other@cleaverloop.ai", username="otheruser", password="password123")
         other_char = Character.objects.create(
             owner=other_user,
@@ -130,8 +144,6 @@ class GenerationWorkflowTests(TestCase):
 
     def test_invalid_file_extension_rejected(self):
         """Verify uploaded reference file with forbidden extension is rejected."""
-        from django.test import Client
-        from django.core.files.uploadedfile import SimpleUploadedFile
         client = Client()
         client.force_login(self.user)
 

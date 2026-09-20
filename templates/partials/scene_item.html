@@ -8,6 +8,12 @@
             {% if scene.camera_direction %}
                 <span class="text-xs font-medium text-cyan-400">• {{ scene.camera_direction }}</span>
             {% endif %}
+            <form action="{% url 'projects:delete_scene' scene.id %}" method="POST" class="inline ml-auto" onsubmit="return confirm('Remove Scene {{ scene.order }} from storyboard?');">
+                {% csrf_token %}
+                <button type="submit" class="text-slate-500 hover:text-rose-400 text-xs transition p-1" title="Delete Scene">
+                    ✕
+                </button>
+            </form>
         </div>
 
         <h3 class="text-base font-bold text-white mb-1">{{ scene.title }}</h3>

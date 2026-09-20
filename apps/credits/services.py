@@ -51,6 +51,41 @@ class CreditService:
 
     @classmethod
     @transaction.atomic
+    def deduct_credits(
+        cls,
+        user,
+        amount: int,
+        transaction_type: str = 'adjustment',
+        description: str = 'Administrative deduction',
+        allow_negative: bool = False
+    ) -> CreditTransaction:
+        """Deduct credits from user's wallet with row-level locking."""
+        if amount <= 0:
+            raise ValidationError("Deduct amount must be greater than zero.")
+
+        wallet = CreditWallet.objects.select_for_update().get_or_create(user=user)[0]
+        bal_before = wallet.balance
+        deducted = amount
+        if not allow_negative and wallet.balance < amount:
+            deducted = wallet.balance
+
+        wallet.balance -= deducted
+        bal_after = wallet.balance
+        wallet.save(update_fields=['balance', 'updated_at'])
+
+        tx = CreditTransaction.objects.create(
+            wallet=wallet,
+            amount=-deducted,
+            transaction_type=transaction_type,
+            balance_before=bal_before,
+            balance_after=bal_after,
+            description=description,
+        )
+        logger.info(f"Deducted {deducted} credits from {user.email}. New balance: {bal_after}")
+        return tx
+
+    @classmethod
+    @transaction.atomic
     def reserve_credits(cls, user, estimated_credits: int, generation) -> CreditTransaction:
         """
         Atomically reserve credits for a generation job.

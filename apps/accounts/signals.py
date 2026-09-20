@@ -9,7 +9,14 @@ def user_post_save_handler(sender, instance, created, **kwargs):
     """Ensure every user gets a CreditWallet and receives starter credits."""
     if created:
         wallet = CreditService.get_or_create_wallet(instance)
-        starter_credits = getattr(settings, 'DEFAULT_STARTER_CREDITS', 500)
+        # Retrieve starter credits from active Free Plan if configured by admin, or fallback to settings
+        try:
+            from apps.billing.models import SubscriptionPlan
+            free_plan = SubscriptionPlan.objects.filter(is_active=True, price_monthly=0).first()
+            starter_credits = free_plan.credits_per_month if free_plan else getattr(settings, 'DEFAULT_STARTER_CREDITS', 500)
+        except Exception:
+            starter_credits = getattr(settings, 'DEFAULT_STARTER_CREDITS', 500)
+
         if not instance.starter_credits_granted and starter_credits > 0:
             CreditService.grant_credits(
                 user=instance,

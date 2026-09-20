@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 
-{% block title %}Create Character — CleaverLoop AI{% endblock %}
+{% block title %}{% if object %}Edit {{ object.name }}{% else %}Create Character{% endif %} — CleaverLoop AI{% endblock %}
 
 {% block content %}
 <div class="max-w-xl mx-auto space-y-6">
     <div>
-        <h1 class="text-2xl font-heading font-extrabold text-white">Create Reusable Character</h1>
+        <h1 class="text-2xl font-heading font-extrabold text-white">{% if object %}Edit Character{% else %}Create Reusable Character{% endif %}</h1>
         <p class="text-xs text-slate-400 mt-1">Define appearance traits injected into prompts for character consistency.</p>
     </div>
 
@@ -15,6 +15,7 @@
         <div class="space-y-1.5">
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Character Name</label>
             <input type="text" name="name" required placeholder="e.g. Maya Chen"
+                   value="{{ form.name.value|default:'' }}"
                    class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
         </div>
 
@@ -22,13 +23,14 @@
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Appearance Description (Facial & Physical Traits)</label>
             <textarea name="appearance_description" rows="3" required
                       placeholder="e.g. 28-year-old Asian woman, sharp jawline, warm hazel eyes, sleek raven shoulder-length hair, athletic build"
-                      class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500 resize-none"></textarea>
+                      class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500 resize-none">{{ form.appearance_description.value|default:'' }}</textarea>
         </div>
 
         <div class="space-y-1.5">
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Clothing & Wardrobe Style</label>
             <input type="text" name="clothing_description"
                    placeholder="e.g. Cyberpunk dark leather bomber jacket with teal neon inner lining"
+                   value="{{ form.clothing_description.value|default:'' }}"
                    class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
         </div>
 
@@ -36,19 +38,26 @@
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Personality / Expression</label>
             <input type="text" name="personality"
                    placeholder="e.g. Confident, focused, slight smirk, intense gaze"
+                   value="{{ form.personality.value|default:'' }}"
                    class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
         </div>
 
         <div class="space-y-1.5">
             <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Character Avatar / Face Reference</label>
+            {% if object and object.avatar %}
+                <div class="flex items-center gap-3 mb-2">
+                    <img src="{{ object.avatar.url }}" alt="{{ object.name }}" class="w-12 h-12 rounded-xl object-cover border border-white/10">
+                    <span class="text-xs text-slate-400">Current avatar (upload new image to replace)</span>
+                </div>
+            {% endif %}
             <input type="file" name="avatar" accept="image/*"
                    class="file-input file-input-bordered file-input-sm w-full bg-surface border-white/10 text-xs text-slate-300">
         </div>
 
         <div class="pt-4 border-t border-white/10 flex items-center justify-end gap-3">
-            <a href="{% url 'characters:list' %}" class="btn btn-ghost btn-sm text-xs">Cancel</a>
+            <a href="{% if object %}{% url 'characters:detail' object.pk %}{% else %}{% url 'characters:list' %}{% endif %}" class="btn btn-ghost btn-sm text-xs">Cancel</a>
             <button type="submit" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white px-6">
-                Save Character
+                {% if object %}Update Character{% else %}Save Character{% endif %}
             </button>
         </div>
     </form>

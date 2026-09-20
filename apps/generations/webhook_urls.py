@@ -22,13 +22,31 @@ def universal_provider_webhook(request, provider_slug):
     except Exception:
         return HttpResponse("Invalid JSON", status=400)
 
+    import os
+    import hmac
+    from apps.providers.models import AIProviderConfig
+
+    provider = AIProviderConfig.objects.filter(slug=provider_slug, is_enabled=True).first()
+    if not provider:
+        logger.warning(f"Webhook received for unknown or disabled provider: {provider_slug}")
+        return HttpResponse("Provider not recognized", status=404)
+
+    # If webhook secret is configured for this provider, verify signature or token
+    if provider.webhook_secret_env_var:
+        secret = os.environ.get(provider.webhook_secret_env_var, '')
+        if secret:
+            token = request.headers.get('X-Webhook-Secret') or request.headers.get('Authorization', '').replace('Bearer ', '').strip() or request.GET.get('token')
+            if not token or not hmac.compare_digest(token, secret):
+                logger.warning(f"Unauthorized webhook attempt for provider: {provider_slug}")
+                return HttpResponse("Unauthorized webhook signature", status=401)
+
     external_job_id = payload.get("id") or payload.get("task_id") or payload.get("name")
     if not external_job_id:
         return HttpResponse("Missing external task identifier", status=400)
 
-    generation = Generation.objects.filter(external_job_id=external_job_id).first()
+    generation = Generation.objects.filter(external_job_id=external_job_id, provider=provider).first()
     if not generation:
-        logger.warning(f"Webhook received for unknown external job: {external_job_id}")
+        logger.warning(f"Webhook received for unknown external job: {external_job_id} on provider {provider_slug}")
         return JsonResponse({"status": "ignored", "reason": "job not found"}, status=200)
 
     if generation.status in ('completed', 'failed', 'refunded'):

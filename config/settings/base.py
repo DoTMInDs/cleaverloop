@@ -15,6 +15,10 @@ env = environ.Env(
     CREDIT_COST_VIDEO_PER_SEC=(int, 50),
     MAX_AGENT_CREDITS_PER_REQUEST=(int, 2500),
     MAX_SCENES_PER_REQUEST=(int, 6),
+    PAYMENT_PROVIDER=(str, 'mock'),
+    PAYSTACK_PUBLIC_KEY=(str, ''),
+    PAYSTACK_SECRET_KEY=(str, ''),
+    PAYSTACK_CURRENCY=(str, 'USD'),
 )
 
 # Read .env file if it exists
@@ -146,7 +150,6 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files
 MEDIA_URL = '/media/'
@@ -241,6 +244,12 @@ OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 FLUX_API_KEY = env('FLUX_API_KEY', default='')
 MINIMAX_API_KEY = env('MINIMAX_API_KEY', default='')
 FAL_KEY = env('FAL_KEY', default='')
+
+# Payment & Billing Configuration (Paystack)
+PAYMENT_PROVIDER = env('PAYMENT_PROVIDER', default='mock')
+PAYSTACK_PUBLIC_KEY = env('PAYSTACK_PUBLIC_KEY', default='')
+PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY', default='')
+PAYSTACK_CURRENCY = env('PAYSTACK_CURRENCY', default='USD')
 
 # Platform Economics Configuration
 DEFAULT_STARTER_CREDITS = env('DEFAULT_STARTER_CREDITS', default=500)

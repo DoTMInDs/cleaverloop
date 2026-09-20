@@ -21,7 +21,12 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         if not sociallogin.email_addresses:
             return
 
-        email = sociallogin.email_addresses[0].email.lower()
+        email_address = sociallogin.email_addresses[0]
+        # Only auto-link if the OAuth provider has verified this email address
+        if not getattr(email_address, 'verified', False):
+            return
+
+        email = email_address.email.lower()
         try:
             existing_user = User.objects.get(email__iexact=email)
             sociallogin.connect(request, existing_user)

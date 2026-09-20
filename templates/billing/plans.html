@@ -1,61 +1,408 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Membership Plans — CleaverLoop AI{% endblock %}
+{% block title %}Membership & Credit Plans — CleaverLoop AI{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto space-y-10">
-    <div class="text-center space-y-2 max-w-xl mx-auto">
+<div class="max-w-7xl mx-auto space-y-12 pb-20">
+    <!-- Header & Toggle -->
+    <div class="text-center space-y-4 max-w-2xl mx-auto pt-4">
         <h1 class="text-3xl md:text-5xl font-heading font-extrabold text-white tracking-tight">
-            Flexible Credit Plans
+            Flexible Plans for Modern Creators
         </h1>
         <p class="text-xs md:text-sm text-slate-400">
-            Scale your generative video and image workflows with dedicated monthly credit allocations and priority model access.
+            Scale your generative video and image workflows with dedicated monthly credits, priority queues, and full commercial model access.
         </p>
+
+        <!-- Monthly / Annual Toggle -->
+        <div class="inline-flex items-center gap-3 p-1.5 rounded-full bg-surface border border-white/10 mt-3"
+             x-data="{ annual: false }"
+             @toggle-annual.window="annual = !annual">
+            <button type="button"
+                    @click="annual = false"
+                    :class="!annual ? 'bg-white/10 text-white font-bold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-4 py-1.5 rounded-full text-xs transition duration-200">
+                Monthly
+            </button>
+            <button type="button"
+                    @click="annual = true"
+                    :class="annual ? 'bg-brand-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'"
+                    class="px-4 py-1.5 rounded-full text-xs transition duration-200 flex items-center gap-2">
+                <span>Annual</span>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-pink-500 text-white tracking-wide shadow">
+                    UP TO 30% OFF
+                </span>
+            </button>
+        </div>
+
+        <!-- Free Tier Callout Banner -->
+        <div class="glass-panel rounded-2xl p-3 max-w-xl mx-auto border border-emerald-500/30 bg-emerald-950/20 text-emerald-200 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+                <span class="text-base">🎁</span>
+                <span><strong>Free Onboarding:</strong> New accounts get <strong>500 Starter Credits</strong> immediately upon signup.</span>
+            </div>
+            {% if not user.is_authenticated %}
+                <a href="{% url 'account_signup' %}" class="btn btn-xs btn-outline border-emerald-400 text-emerald-300 hover:bg-emerald-500/20">
+                    Sign Up Free
+                </a>
+            {% else %}
+                <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold text-[11px]">
+                    Wallet: {{ wallet.balance|default:0 }} credits
+                </span>
+            {% endif %}
+        </div>
     </div>
 
-    <!-- Plans Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {% for plan in plans %}
-            <div class="glass-panel rounded-3xl p-6 md:p-8 flex flex-col justify-between relative {% if plan.can_access_premium_models %}border-brand-500/40 shadow-2xl shadow-brand-500/10{% endif %}">
-                {% if plan.can_access_premium_models %}
-                    <span class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-brand-600 text-white tracking-wider shadow-lg">
-                        Most Popular
-                    </span>
+    <!-- 3 Core Pricing Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch pt-2">
+        {% for plan in paid_plans %}
+            {% with is_creator=plan.slug|slice:":7"|stringformat:"s" %}
+            <div class="rounded-3xl p-7 flex flex-col justify-between relative transition duration-300 backdrop-blur-xl
+                        {% if plan.slug == 'creator' %}
+                            bg-gradient-to-b from-[#1c130d]/90 to-[#0e0d14]/95 border-2 border-orange-500/80 shadow-2xl shadow-orange-500/20 ring-1 ring-orange-400/40 md:-translate-y-2
+                        {% elif plan.slug == 'ultra' %}
+                            bg-surface/80 border border-brand-500/30 shadow-xl shadow-brand-500/10 hover:border-brand-500/60
+                        {% else %}
+                            bg-surface/80 border border-white/10 shadow-lg hover:border-white/20
+                        {% endif %}">
+
+                <!-- Badge -->
+                {% if plan.slug == 'creator' %}
+                    <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-orange-500 to-amber-500 text-black tracking-widest shadow-lg shadow-orange-500/40 flex items-center gap-1">
+                        <span>🔥</span>
+                        <span>MOST POPULAR</span>
+                    </div>
+                {% elif plan.slug == 'ultra' %}
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 tracking-wider">
+                        BEST VALUE
+                    </div>
                 {% endif %}
 
-                <div>
-                    <h3 class="text-lg font-bold text-white">{{ plan.name }}</h3>
-                    <div class="mt-4 flex items-baseline gap-1">
-                        <span class="text-3xl md:text-4xl font-extrabold text-white">${{ plan.price_monthly|floatformat:0 }}</span>
-                        <span class="text-xs text-slate-400">/ month</span>
+                <!-- Card Header -->
+                <div class="space-y-5">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xl font-heading font-extrabold text-white">{{ plan.name }}</h3>
+                            {% if plan.slug == 'creator' %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                                    20% OFF
+                                </span>
+                            {% elif plan.slug == 'ultra' %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                                    23% OFF
+                                </span>
+                            {% endif %}
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">{{ plan.tagline|default:"Explore high-quality AI media creation" }}</p>
                     </div>
-                    <p class="text-xs text-amber-400 font-bold mt-2">{{ plan.credits_per_month }} Monthly Credits</p>
 
-                    <div class="divider my-4 border-white/5"></div>
+                    <!-- Monthly Credit Box -->
+                    <div class="rounded-2xl p-4 space-y-2 border
+                                {% if plan.slug == 'creator' %}
+                                    bg-black/40 border-orange-500/30 text-slate-200
+                                {% else %}
+                                    bg-black/30 border-white/5 text-slate-300
+                                {% endif %}">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm {% if plan.slug == 'creator' %}text-orange-400{% else %}text-brand-400{% endif %}">✦</span>
+                            <span class="text-sm font-bold text-white">{{ plan.credits_per_month|floatformat:0 }} credits/mo.</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400 space-y-0.5">
+                            {% if plan.slug == 'starter' %}
+                                <div>≈ 60 GPT Image 2 images</div>
+                                <div>≈ 12 Veo 3.1 videos</div>
+                            {% elif plan.slug == 'creator' %}
+                                <div>≈ 200 GPT Image 2 images</div>
+                                <div>≈ 40 Veo 3.1 videos</div>
+                            {% elif plan.slug == 'ultra' %}
+                                <div>≈ 500 GPT Image 2 images</div>
+                                <div>≈ 100 Veo 3.1 videos</div>
+                            {% else %}
+                                <div>Dedicated multi-model credit allowance</div>
+                            {% endif %}
+                        </div>
+                        <div class="pt-1 text-[10px] font-bold text-slate-400 border-t border-white/5 flex items-center gap-1.5">
+                            <span class="text-emerald-400">✓</span>
+                            <span>Fixed amount of {{ plan.credits_per_month|floatformat:0 }} credits/mo</span>
+                        </div>
+                    </div>
 
-                    <ul class="space-y-2.5 text-xs text-slate-300">
-                        {% for feat in plan.features %}
-                            <li class="flex items-center gap-2">
+                    <!-- Price -->
+                    <div class="pt-1">
+                        <div class="flex items-baseline gap-1.5">
+                            <span class="text-4xl font-extrabold text-white tracking-tight">
+                                ${{ plan.price_monthly|floatformat:0 }}
+                            </span>
+                            <span class="text-xs text-slate-400 font-medium">/ month</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400 mt-0.5">
+                            {% if plan.slug == 'creator' %}
+                                <span class="text-orange-400 font-semibold">Save $108</span> compared to individual packs
+                            {% elif plan.slug == 'ultra' %}
+                                <span class="text-emerald-400 font-semibold">Save $180</span> compared to individual packs
+                            {% else %}
+                                Pay as you go with no long-term lock-in
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- CTA Action Button -> Paystack Checkout -->
+                    <div class="pt-2">
+                        <form method="POST" action="{% url 'billing:checkout' plan.id %}">
+                            {% csrf_token %}
+                            {% if plan.slug == 'creator' %}
+                                <button type="submit"
+                                        class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
+                                               bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300
+                                               shadow-lg shadow-orange-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0">
+                                    Get Creator
+                                </button>
+                            {% elif plan.slug == 'ultra' %}
+                                <button type="submit"
+                                        class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
+                                               bg-white hover:bg-slate-100 shadow-lg shadow-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
+                                    Get Ultra
+                                </button>
+                            {% else %}
+                                <button type="submit"
+                                        class="w-full py-3 px-4 rounded-xl font-heading font-bold text-xs text-white uppercase tracking-wider
+                                               bg-white/10 hover:bg-white/20 border border-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
+                                    Get Starter
+                                </button>
+                            {% endif %}
+                        </form>
+                    </div>
+
+                    <!-- Feature Checklist -->
+                    <div class="pt-2">
+                        <ul class="space-y-2.5 text-xs text-slate-300">
+                            {% for feat in plan.features %}
+                                <li class="flex items-start gap-2">
+                                    <span class="text-emerald-400 font-bold mt-0.5">✓</span>
+                                    <span>{{ feat }}</span>
+                                </li>
+                            {% endfor %}
+                            {% if plan.slug == 'starter' %}
+                                <li class="flex items-start gap-2 text-slate-500">
+                                    <span class="font-bold mt-0.5">✕</span>
+                                    <span>Access to all premium models</span>
+                                </li>
+                                <li class="flex items-start gap-2 text-slate-500">
+                                    <span class="font-bold mt-0.5">✕</span>
+                                    <span>Early access to new trends</span>
+                                </li>
+                            {% elif plan.slug == 'creator' %}
+                                <li class="flex items-start gap-2 text-slate-500">
+                                    <span class="font-bold mt-0.5">✕</span>
+                                    <span>Lowest cost per credit</span>
+                                </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+
+                    <!-- Subsections: Unlimited & Free / Model Access -->
+                    <div class="space-y-3 pt-3 border-t border-white/5 text-[11px]">
+                        <!-- Unlimited & Free Models -->
+                        <div class="rounded-xl p-3 bg-black/20 border border-white/5 space-y-1.5">
+                            <div class="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center justify-between">
+                                <span>♾ UNLIMITED & FREE</span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>Veo 3.1</span>
+                                {% if plan.slug == 'starter' %}
+                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Paid access only</span>
+                                {% else %}
+                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 font-mono font-bold uppercase">Unlimited</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>Nano Banana Pro</span>
+                                {% if plan.slug == 'starter' %}
+                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Paid access only</span>
+                                {% else %}
+                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 font-mono font-bold uppercase">Unlimited</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Seedance & Kling Access -->
+                        <div class="rounded-xl p-3 bg-black/20 border border-white/5 space-y-1.5">
+                            <div class="text-[10px] font-extrabold uppercase tracking-wider text-pink-400">
+                                <span>⚡ SEEDANCE & KLING</span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>Seedance 2.5</span>
+                                {% if plan.slug == 'starter' %}
+                                    <span class="text-[9px] text-slate-500 uppercase font-mono">No Access</span>
+                                {% else %}
+                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-pink-500/20 text-pink-300 font-mono font-bold uppercase">Full Access</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>Kling 2.6 Motion</span>
+                                {% if plan.slug == 'starter' %}
+                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Standard only</span>
+                                {% else %}
+                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-pink-500/20 text-pink-300 font-mono font-bold uppercase">Full Access</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Model Access Summary -->
+                        <div class="rounded-xl p-3 bg-black/20 border border-white/5 space-y-1.5">
+                            <div class="text-[10px] font-extrabold uppercase tracking-wider text-brand-400">
+                                <span>🎨 MODEL ACCESS</span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>All image models</span>
                                 <span class="text-emerald-400 font-bold">✓</span>
-                                <span>{{ feat }}</span>
-                            </li>
-                        {% endfor %}
-                    </ul>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>Video model catalog</span>
+                                <span class="font-mono text-[10px] {% if plan.has_all_models_access %}text-emerald-400 font-bold{% else %}text-slate-400{% endif %}">
+                                    {{ plan.video_models_access }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="mt-8 pt-4 border-t border-white/5">
-                    {% if plan.price_monthly == 0 %}
-                        <button disabled class="btn btn-outline border-white/10 btn-sm w-full text-xs text-slate-400 cursor-default">
-                            Default Plan
-                        </button>
-                    {% else %}
-                        <button class="btn btn-primary btn-sm w-full bg-brand-600 hover:bg-brand-500 border-none text-white shadow-lg shadow-brand-500/30 text-xs font-bold">
-                            Upgrade to {{ plan.name }}
-                        </button>
-                    {% endif %}
+                <!-- Footer safe badge -->
+                <div class="mt-6 pt-4 border-t border-white/5 text-center text-[10px] text-slate-500 flex items-center justify-center gap-1.5">
+                    <span>🔒</span>
+                    <span>Secured with Paystack • Cancel anytime</span>
                 </div>
             </div>
+            {% endwith %}
         {% endfor %}
+    </div>
+
+    <!-- "Compare every plan" Detailed Feature Matrix -->
+    <div class="pt-16 space-y-6">
+        <div class="text-center space-y-1.5 max-w-xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-heading font-extrabold text-white">
+                Compare every plan
+            </h2>
+            <p class="text-xs md:text-sm text-slate-400">
+                See exactly what you unlock as you level up your creative workflow.
+            </p>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-4 md:p-8 overflow-x-auto border border-white/10 shadow-2xl">
+            <table class="table table-sm md:table-md w-full text-left text-xs md:text-sm">
+                <thead>
+                    <tr class="border-b border-white/10 text-slate-400 font-heading">
+                        <th class="py-4 font-bold text-white text-sm w-1/3">Feature / Capability</th>
+                        <th class="py-4 text-center font-bold text-slate-200">Starter</th>
+                        <th class="py-4 text-center font-extrabold text-orange-400 bg-orange-500/10 rounded-t-2xl">
+                            <span class="block text-[9px] uppercase tracking-widest text-orange-400">MOST POPULAR</span>
+                            <span>Creator</span>
+                        </th>
+                        <th class="py-4 text-center font-bold text-slate-200">Ultra</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5 text-slate-300">
+                    <!-- Unlimited & free Veo 3.1 + Fast models -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Unlimited & free Veo 3.1 + Fast generations</td>
+                        <td class="text-center text-slate-500 text-xs">Paid access only</td>
+                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                    </tr>
+
+                    <!-- Parallel Generations -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Parallel generations</td>
+                        <td class="text-center font-mono text-xs">2 videos • 2 images</td>
+                        <td class="text-center font-mono text-xs text-orange-300 font-bold bg-orange-500/10">3 videos • 4 images</td>
+                        <td class="text-center font-mono text-xs text-emerald-300 font-bold">8 videos • 8 images</td>
+                    </tr>
+
+                    <!-- Video Models -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Video models</td>
+                        <td class="text-center text-xs text-slate-400">Standard only</td>
+                        <td class="text-center text-xs font-bold text-white bg-orange-500/10">All models</td>
+                        <td class="text-center text-xs font-bold text-white">All models</td>
+                    </tr>
+
+                    <!-- Premium Models -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Premium models (Seedance 2.5, Kling 2.6, Wan 2.1)</td>
+                        <td class="text-center text-slate-500">✕</td>
+                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                    </tr>
+
+                    <!-- Resolution & Duration -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Every resolution & duration (1080p / 4K)</td>
+                        <td class="text-center text-slate-500">✕</td>
+                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                    </tr>
+
+                    <!-- All Image Models -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">All image models (GPT Image, Flux, Recast)</td>
+                        <td class="text-center text-emerald-400 font-bold">✓</td>
+                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                    </tr>
+
+                    <!-- Character Builder -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Character builder</td>
+                        <td class="text-center text-xs">Up to 5</td>
+                        <td class="text-center text-xs font-bold text-orange-300 bg-orange-500/10">Up to 15</td>
+                        <td class="text-center text-xs font-bold text-emerald-300">Unlimited</td>
+                    </tr>
+
+                    <!-- Studio & Apps -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Studio & Creative Apps</td>
+                        <td class="text-center text-xs text-slate-400">Selected apps</td>
+                        <td class="text-center text-xs font-bold text-white bg-orange-500/10">All apps</td>
+                        <td class="text-center text-xs font-bold text-white">All apps</td>
+                    </tr>
+
+                    <!-- Early Access to New Trends -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Early access to new trends & releases</td>
+                        <td class="text-center text-slate-500">✕</td>
+                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                    </tr>
+
+                    <!-- Early Access to Advanced AI Features -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Early access to advanced AI features</td>
+                        <td class="text-center text-slate-500">✕</td>
+                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                    </tr>
+
+                    <!-- Lowest Cost Per Credit -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Lowest cost per credit</td>
+                        <td class="text-center text-slate-500">✕</td>
+                        <td class="text-center text-slate-500 bg-orange-500/10">✕</td>
+                        <td class="text-center">
+                            <span class="text-xs font-bold text-amber-300">30% cheaper</span>
+                            <span class="block text-[9px] font-black uppercase text-orange-400">BEST VALUE</span>
+                        </td>
+                    </tr>
+
+                    <!-- Priority Support -->
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Priority 24/7 support</td>
+                        <td class="text-center text-slate-500">✕</td>
+                        <td class="text-center text-slate-500 bg-orange-500/10">✕</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}

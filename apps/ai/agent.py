@@ -53,10 +53,10 @@ class SuperAgent:
                 text = text.strip()
                 data = json.loads(text)
                 plan = StoryboardPlan(**data)
-                # Compute duration and credits
+                # Compute duration and credits dynamically from models
                 total_sec = sum(s.duration for s in plan.scenes)
                 plan.estimated_total_duration = total_sec
-                plan.estimated_total_credits = len(plan.scenes) * 50 + (total_sec * 50)
+                plan.estimated_total_credits = cls._compute_plan_credits(plan.scenes)
                 return plan
             raise RuntimeError(f"Gemini error: {resp.text[:200]}")
 
@@ -101,7 +101,7 @@ class SuperAgent:
         ]
 
         total_sec = sum(s.duration for s in scenes)
-        total_credits = len(scenes) * 50 + (total_sec * 50)
+        total_credits = cls._compute_plan_credits(scenes)
 
         return StoryboardPlan(
             project_title=f"AI Story: {title}",
@@ -111,3 +111,17 @@ class SuperAgent:
             estimated_total_duration=total_sec,
             estimated_total_credits=total_credits
         )
+
+    @classmethod
+    def _compute_plan_credits(cls, scenes) -> int:
+        """Calculate estimated credits across all scenes using active catalog rates."""
+        from apps.providers.router import ModelRouter
+        total = 0
+        for s in scenes:
+            try:
+                m = ModelRouter.select_model(modality='video', user_preference=getattr(s, 'model_preference', 'automatic') or 'automatic', duration=s.duration)
+                total += m.calculate_credit_cost(s.duration)
+            except Exception:
+                rate = getattr(settings, 'CREDIT_COST_VIDEO_PER_SEC', 50)
+                total += 50 + (s.duration * rate)
+        return total

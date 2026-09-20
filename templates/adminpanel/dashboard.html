@@ -13,9 +13,17 @@
             <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Platform Health & Model Controls</h1>
         </div>
 
-        <button onclick="document.getElementById('credit-adjust-modal').showModal()" class="btn btn-sm btn-outline border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs gap-1.5">
-            🪙 Adjust User Credits
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+            <button onclick="document.getElementById('starter-credits-modal').showModal()" class="btn btn-sm btn-outline border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10 text-xs gap-1.5">
+                🎁 Signup Bonus ({% if free_plan %}{{ free_plan.credits_per_month }}{% else %}500{% endif %} Credits)
+            </button>
+            <button onclick="document.getElementById('credit-adjust-modal').showModal()" class="btn btn-sm btn-outline border-amber-500/30 text-amber-300 hover:bg-amber-500/10 text-xs gap-1.5">
+                🪙 Adjust User Credits
+            </button>
+            <button onclick="openCreatePlanModal()" class="btn btn-sm btn-primary bg-brand-600 hover:bg-brand-500 text-white text-xs gap-1.5 shadow-lg shadow-brand-500/20">
+                ➕ New Pricing Plan
+            </button>
+        </div>
     </div>
 
     <!-- Health Stats -->
@@ -131,6 +139,104 @@
                 </div>
             {% endfor %}
         </div>
+    <!-- Membership Tiers & Credit Plans Management (Dynamic Figures) -->
+    <div class="glass-panel rounded-3xl p-6 space-y-6">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+                <h2 class="text-lg font-heading font-bold text-white flex items-center gap-2">
+                    <span>💳 Membership Tiers & Credit Packages</span>
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">
+                    Configure prices, monthly credit allocations, and feature lists displayed dynamically on 
+                    <a href="{% url 'billing:plans' %}" target="_blank" class="text-brand-400 hover:underline inline-flex items-center gap-1 font-semibold">
+                        /billing/plans/ ↗
+                    </a>
+                </p>
+            </div>
+            <button onclick="openCreatePlanModal()" class="btn btn-xs btn-primary bg-brand-600 hover:bg-brand-500 text-white text-xs gap-1 border-none">
+                ➕ Add New Tier
+            </button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table table-xs w-full text-left">
+                <thead>
+                    <tr class="text-[10px] uppercase text-slate-500 border-b border-white/5">
+                        <th>Plan Name</th>
+                        <th>Slug</th>
+                        <th>Price / Month</th>
+                        <th>Monthly Credits</th>
+                        <th>Parallel Jobs</th>
+                        <th>Premium Models</th>
+                        <th>Features</th>
+                        <th>Status</th>
+                        <th class="text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white/5 text-xs text-slate-300">
+                    {% for p in plans %}
+                        <tr class="hover:bg-white/[0.02]">
+                            <td class="font-semibold text-white">
+                                {{ p.name }}
+                                {% if p.price_monthly == 0 %}
+                                    <span class="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 uppercase">Free Starter</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-slate-400 font-mono text-[11px]">{{ p.slug }}</td>
+                            <td class="font-bold text-white">${{ p.price_monthly|floatformat:0 }} <span class="text-[10px] text-slate-500 font-normal">/mo</span></td>
+                            <td class="text-amber-400 font-bold">{{ p.credits_per_month }}</td>
+                            <td>{{ p.max_parallel_generations }}</td>
+                            <td>
+                                {% if p.can_access_premium_models %}
+                                    <span class="px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300 border border-brand-500/30 text-[10px] font-bold">Yes (Most Popular)</span>
+                                {% else %}
+                                    <span class="text-slate-500 text-[10px]">Standard</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-slate-400 text-[11px] max-w-xs truncate" title="{{ p.features|join:', ' }}">
+                                <span class="font-semibold text-slate-300">{{ p.features|length }}</span> features listed
+                            </td>
+                            <td>
+                                {% if p.is_active %}
+                                    <span class="text-emerald-400 text-xs font-semibold">Active</span>
+                                {% else %}
+                                    <span class="text-slate-500 text-xs font-semibold">Disabled</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-right space-x-1 whitespace-nowrap">
+                                <!-- Hidden feature text source for modal -->
+                                <textarea id="plan-features-src-{{ p.id }}" class="hidden">{{ p.features|join:"&#10;" }}</textarea>
+                                <button type="button"
+                                        onclick="openEditPlan(this)"
+                                        data-id="{{ p.id }}"
+                                        data-name="{{ p.name }}"
+                                        data-slug="{{ p.slug }}"
+                                        data-price="{{ p.price_monthly|floatformat:0 }}"
+                                        data-credits="{{ p.credits_per_month }}"
+                                        data-parallel="{{ p.max_parallel_generations }}"
+                                        data-premium="{{ p.can_access_premium_models|yesno:'1,0' }}"
+                                        data-active="{{ p.is_active|yesno:'1,0' }}"
+                                        class="btn btn-xs btn-outline border-white/10 text-slate-300 hover:bg-white/5 text-[10px]">
+                                    ✏️ Edit
+                                </button>
+                                <form action="{% url 'adminpanel:toggle_plan' p.id %}" method="POST" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-xs {% if p.is_active %}btn-error btn-outline{% else %}btn-success btn-outline{% endif %} text-[10px]">
+                                        {% if p.is_active %}Disable{% else %}Enable{% endif %}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-6 text-slate-400 text-xs">
+                                No pricing plans registered yet. Click "Add New Tier" to initialize one.
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Recent Diagnostic Failures Table (Admin Only) -->
@@ -201,4 +307,139 @@
         </form>
     </div>
 </dialog>
+
+<!-- Modal: New User Starter Credits Configuration -->
+<dialog id="starter-credits-modal" class="modal">
+    <div class="modal-box bg-card border border-white/10 text-white rounded-3xl p-6 max-w-md">
+        <h3 class="font-bold text-lg flex items-center gap-2">
+            <span>🎁 New User Signup Starter Credits</span>
+        </h3>
+        <p class="text-xs text-slate-400 mt-1">
+            Configure how many free credits new users immediately receive when they create an account. This automatically synchronizes with the Free Starter plan allowance.
+        </p>
+
+        <form action="{% url 'adminpanel:update_starter_credits' %}" method="POST" class="space-y-4 mt-4">
+            {% csrf_token %}
+            <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">Starter Bonus Amount (Credits)</label>
+                <input type="number" name="starter_credits" required min="0" step="50"
+                       value="{% if free_plan %}{{ free_plan.credits_per_month }}{% else %}500{% endif %}"
+                       placeholder="500"
+                       class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none focus:border-brand-500">
+                <p class="text-[11px] text-slate-500">Default is 500 credits. Grants are immutably ledgered in double-entry wallet history.</p>
+            </div>
+
+            <div class="modal-action pt-2">
+                <button type="button" onclick="document.getElementById('starter-credits-modal').close()" class="btn btn-ghost btn-sm text-xs">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white text-xs">Save Starter Amount</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<!-- Modal: Add / Edit Pricing Plan -->
+<dialog id="plan-modal" class="modal">
+    <div class="modal-box bg-card border border-white/10 text-white rounded-3xl p-6 max-w-lg">
+        <h3 id="plan-modal-title" class="font-bold text-lg">Create New Pricing Plan</h3>
+        <p class="text-xs text-slate-400 mt-1">
+            Figures and checklist items entered here immediately update the live public pricing page.
+        </p>
+
+        <form action="{% url 'adminpanel:save_plan' %}" method="POST" class="space-y-4 mt-4">
+            {% csrf_token %}
+            <input type="hidden" name="plan_id" id="plan-id-input" value="">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-300">Plan Name</label>
+                    <input type="text" name="name" id="plan-name-input" required placeholder="e.g. Creator Pro"
+                           class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none focus:border-brand-500">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-300">Slug (URL identifier)</label>
+                    <input type="text" name="slug" id="plan-slug-input" placeholder="e.g. creator-pro (optional)"
+                           class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none focus:border-brand-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-300">Price ($/mo)</label>
+                    <input type="number" step="0.01" name="price_monthly" id="plan-price-input" required placeholder="29.00"
+                           class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none focus:border-brand-500">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-300">Monthly Credits</label>
+                    <input type="number" name="credits_per_month" id="plan-credits-input" required placeholder="4000"
+                           class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none focus:border-brand-500">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-slate-300">Parallel Jobs</label>
+                    <input type="number" name="max_parallel_generations" id="plan-parallel-input" required placeholder="2"
+                           class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none focus:border-brand-500">
+                </div>
+            </div>
+
+            <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-300">Plan Feature Checklist (One bullet point per line)</label>
+                <textarea name="features_raw" id="plan-features-input" rows="4" placeholder="4,000 Credits / month&#10;Access to Google Veo 3.1 & Kling&#10;1080p Full HD Video&#10;Priority Queue Processing"
+                          class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none focus:border-brand-500 font-mono"></textarea>
+                <p class="text-[11px] text-slate-500">Each line will become a checked bullet point (✓) on the public plan card.</p>
+            </div>
+
+            <div class="flex items-center gap-6 pt-1">
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                    <input type="checkbox" name="can_access_premium_models" id="plan-premium-input" class="checkbox checkbox-sm checkbox-primary">
+                    <span>Show "Most Popular" Badge & Glow</span>
+                </label>
+
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300">
+                    <input type="checkbox" name="is_active" id="plan-active-input" checked class="checkbox checkbox-sm checkbox-success">
+                    <span>Active (Visible to Users)</span>
+                </label>
+            </div>
+
+            <div class="modal-action pt-3">
+                <button type="button" onclick="document.getElementById('plan-modal').close()" class="btn btn-ghost btn-sm text-xs">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white text-xs">Save Plan</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+<script>
+function openCreatePlanModal() {
+    document.getElementById('plan-modal-title').textContent = 'Create New Pricing Plan';
+    document.getElementById('plan-id-input').value = '';
+    document.getElementById('plan-name-input').value = '';
+    document.getElementById('plan-slug-input').value = '';
+    document.getElementById('plan-price-input').value = '29.00';
+    document.getElementById('plan-credits-input').value = '4000';
+    document.getElementById('plan-parallel-input').value = '2';
+    document.getElementById('plan-premium-input').checked = false;
+    document.getElementById('plan-active-input').checked = true;
+    document.getElementById('plan-features-input').value = '4,000 Credits / month\nAccess to Standard & Pro Models\n1080p Video Generation\nPriority Queue Processing';
+    document.getElementById('plan-modal').showModal();
+}
+
+function openEditPlan(btn) {
+    const d = btn.dataset;
+    document.getElementById('plan-modal-title').textContent = 'Edit Plan: ' + d.name;
+    document.getElementById('plan-id-input').value = d.id;
+    document.getElementById('plan-name-input').value = d.name;
+    document.getElementById('plan-slug-input').value = d.slug;
+    document.getElementById('plan-price-input').value = d.price;
+    document.getElementById('plan-credits-input').value = d.credits;
+    document.getElementById('plan-parallel-input').value = d.parallel;
+    document.getElementById('plan-premium-input').checked = (d.premium === '1');
+    document.getElementById('plan-active-input').checked = (d.active === '1');
+    
+    const src = document.getElementById('plan-features-src-' + d.id);
+    document.getElementById('plan-features-input').value = src ? src.value : '';
+    document.getElementById('plan-modal').showModal();
+}
+</script>
 {% endblock %}
