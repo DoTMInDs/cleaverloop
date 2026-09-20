@@ -131,9 +131,18 @@ class ModelRouter:
         if live_fallbacks.exists():
             return live_fallbacks.order_by('-priority').first()
 
-        # If mock provider is enabled and fallback is allowed, fall back to mock
+        # If mock provider is enabled and fallback is allowed, fall back to mock safety net
         if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True) and getattr(settings, 'ALLOW_MOCK_FALLBACK', True):
-            return candidates.filter(provider__slug='mock').order_by('-priority').first()
+            mock_candidate = candidates.filter(provider__slug='mock').order_by('-priority').first()
+            if mock_candidate:
+                return mock_candidate
+            if 'mock' not in slugs_to_exclude:
+                return AIModel.objects.filter(
+                    modality=failed_model.modality,
+                    provider__slug='mock',
+                    is_enabled=True,
+                    provider__is_enabled=True
+                ).first()
 
         return None
 

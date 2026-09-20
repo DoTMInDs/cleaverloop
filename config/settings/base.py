@@ -81,6 +81,7 @@ if DEBUG:
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -183,6 +184,34 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 mins hard limit
 # Force Redis protocol 2 (RESP2) for universal compatibility with all Redis versions
 CELERY_BROKER_TRANSPORT_OPTIONS = {'protocol': 2}
 CELERY_RESULT_BACKEND_TRANSPORT_OPTIONS = {'protocol': 2}
+
+# Caches configuration (Distributed Redis with test isolation)
+import sys
+REDIS_CACHE_URL = env('REDIS_CACHE_URL', default=env('REDIS_URL', default='redis://127.0.0.1:6379/1'))
+
+if 'test' in sys.argv or env.bool('USE_LOCMEM_CACHE', default=False):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'test-cleaverloop-cache',
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_CACHE_URL,
+            'OPTIONS': {
+                'protocol': 2,  # Force RESP2 for universal Redis compatibility (including Windows & older Redis instances)
+            },
+            'TIMEOUT': 300,
+            'KEY_PREFIX': 'cleaverloop',
+        }
+    }
+
+# Cached database sessions (Sub-millisecond Redis session reads with reliable DB write-through)
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+
 
 # Object Storage Backend Settings
 STORAGE_BACKEND = env('STORAGE_BACKEND', default='local')

@@ -10,27 +10,42 @@ from apps.ai.safety import AgentSafetyValidator
 from apps.credits.services import CreditService
 from apps.projects.models import Project, Scene
 from apps.generations.models import Generation
+from apps.characters.models import Character
 from apps.providers.router import ModelRouter
 from apps.generations.tasks import dispatch_generation_task
 
 @login_required
 def super_agent_page_view(request):
-    """Super Agent natural language generation interface."""
+    """Super Agent natural language generation interface with character roster."""
     wallet = CreditService.get_or_create_wallet(request.user)
-    return render(request, 'studio/super_agent.html', {'wallet': wallet})
+    characters = Character.objects.filter(owner=request.user).order_by('-updated_at')
+    recent_projects = Project.objects.filter(owner=request.user).prefetch_related('scenes').order_by('-created_at')[:4]
+    return render(request, 'studio/super_agent.html', {
+        'wallet': wallet,
+        'characters': characters,
+        'recent_projects': recent_projects
+    })
 
 @login_required
 @require_POST
 def plan_agent_brief_view(request):
-    """Decomposes a user prompt into a structured plan for review."""
+    """Decomposes a user prompt into a structured plan for review with consistent character cast."""
     prompt = request.POST.get('prompt', '').strip()
     aspect_ratio = request.POST.get('aspect_ratio', '16:9')
+    character_id = request.POST.get('character_id', '').strip()
 
     if not prompt:
         return HttpResponse("<div class='text-rose-400 p-3'>Please provide a description of what you want to create.</div>", status=400)
 
+    character = None
+    if character_id:
+        try:
+            character = Character.objects.filter(id=character_id, owner=request.user).first()
+        except Exception:
+            character = None
+
     try:
-        plan = SuperAgent.decompose_idea(prompt=prompt, target_aspect_ratio=aspect_ratio)
+        plan = SuperAgent.decompose_idea(prompt=prompt, target_aspect_ratio=aspect_ratio, character=character)
         wallet = CreditService.get_or_create_wallet(request.user)
         AgentSafetyValidator.validate_plan(plan, wallet)
     except Exception as exc:
@@ -42,7 +57,7 @@ def plan_agent_brief_view(request):
 @login_required
 @require_POST
 def execute_agent_plan_view(request):
-    """Executes an approved plan: validates safety constraints, creates Project/Scenes/Generations atomically, and queues Celery workers."""
+    """Executes an approved plan: validates safety constraints, creates Project/Scenes/Generations atomically with characters, and queues Celery workers."""
     plan_json = request.POST.get('plan_data', '')
     if not plan_json:
         return HttpResponse("Missing plan data.", status=400)
@@ -55,6 +70,14 @@ def execute_agent_plan_view(request):
         # 2. Re-validate budget, scene limits, and wallet balance
         wallet = CreditService.get_or_create_wallet(request.user)
         AgentSafetyValidator.validate_plan(plan, wallet)
+
+        # Resolve selected character if attached
+        attached_character = None
+        if plan.selected_character_id:
+            try:
+                attached_character = Character.objects.filter(id=plan.selected_character_id, owner=request.user).first()
+            except Exception:
+                attached_character = None
 
         # 3. Atomically create all records and reserve credits
         dispatched_gen_ids = []
@@ -80,6 +103,9 @@ def execute_agent_plan_view(request):
                     status='queued'
                 )
 
+                if attached_character:
+                    scene.characters.add(attached_character)
+
                 # Auto-route and reserve
                 model = ModelRouter.select_model(
                     modality='video',
@@ -93,6 +119,7 @@ def execute_agent_plan_view(request):
                     user=request.user,
                     project=project,
                     scene=scene,
+                    character=attached_character,
                     generation_type='video',
                     provider=model.provider,
                     model=model,

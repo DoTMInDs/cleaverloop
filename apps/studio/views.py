@@ -68,10 +68,12 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
-        ctx['wallet'] = CreditService.get_or_create_wallet(user)
-        ctx['recent_generations'] = Generation.objects.filter(user=user).select_related('output_media', 'model')[:8]
-        ctx['projects'] = Project.objects.filter(owner=user)[:6]
-        ctx['characters'] = Character.objects.filter(owner=user)[:4]
+        ctx['wallet'] = getattr(self.request, '_cached_wallet', None) or getattr(user, 'wallet', None) or CreditService.get_or_create_wallet(user)
+        ctx['recent_generations'] = Generation.objects.filter(user=user).select_related('output_media', 'model', 'provider')[:8]
+        ctx['projects'] = list(Project.objects.filter(owner=user)[:6])
+        ctx['projects_count'] = Project.objects.filter(owner=user).count()
+        ctx['characters'] = list(Character.objects.filter(owner=user)[:4])
+        ctx['characters_count'] = Character.objects.filter(owner=user).count()
         return ctx
 
 class CreateStudioView(LoginRequiredMixin, TemplateView):
@@ -80,9 +82,72 @@ class CreateStudioView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
-        ctx['wallet'] = CreditService.get_or_create_wallet(user)
+        ctx['wallet'] = getattr(self.request, '_cached_wallet', None) or getattr(user, 'wallet', None) or CreditService.get_or_create_wallet(user)
         ctx['image_models'] = AIModel.objects.filter(modality='image', is_enabled=True, provider__is_enabled=True).order_by('-priority')
         ctx['video_models'] = AIModel.objects.filter(modality='video', is_enabled=True, provider__is_enabled=True).order_by('-priority')
         ctx['characters'] = Character.objects.filter(owner=user)
         ctx['projects'] = Project.objects.filter(owner=user)
+        ctx['recent_generations'] = Generation.objects.filter(user=user).select_related('output_media', 'model', 'provider')[:4]
+        ctx['trending_presets'] = [
+            {
+                'id': 'vintage_cartoon',
+                'title': 'Vintage 1930s Cartoon',
+                'icon': '🎞️',
+                'tag': 'Rubber Hose',
+                'type': 'video',
+                'aspect': '16:9',
+                'duration': 5,
+                'prompt': 'Rubber hose vintage 1930s monochrome animation of a cheerful character whistling and tap dancing down a cobbled street, bouncy squash and stretch physics, authentic film grain, classic cartoon score aesthetic.',
+            },
+            {
+                'id': 'cyberpunk_skeleton',
+                'title': 'Neon Hologram Skeleton',
+                'icon': '⚡',
+                'tag': 'Viral VFX',
+                'type': 'video',
+                'aspect': '9:16',
+                'duration': 5,
+                'prompt': 'Glowing electric cyan and neon amber holographic skeleton performing an energetic viral dance in a dark futuristic Tokyo alley, wet rain puddle reflections, cinematic 8k photorealistic.',
+            },
+            {
+                'id': 'claymation_cozy',
+                'title': 'Cozy Stop-Motion Clay',
+                'icon': '🧸',
+                'tag': 'Tactile Stop-Mo',
+                'type': 'video',
+                'aspect': '16:9',
+                'duration': 5,
+                'prompt': 'Tactile claymation miniature couple sitting on cozy sofa inside a warm apartment with rain pattering on the window, tactile fingerprint textures, warm 35mm stop-motion lighting.',
+            },
+            {
+                'id': 'fruit_island',
+                'title': 'Fruit Island Drama',
+                'icon': '🌴',
+                'tag': '3D Animation',
+                'type': 'video',
+                'aspect': '9:16',
+                'duration': 5,
+                'prompt': 'Animated anthropomorphic pineapple wearing sunglasses arguing dramatically with a blushing cute strawberry on a sunny tropical beach, reality TV confessional camera, Pixar 3D render.',
+            },
+            {
+                'id': 'unhinged_cartoon',
+                'title': 'Unhinged Cartoon Motion',
+                'icon': '💥',
+                'tag': 'Social Viral',
+                'type': 'video',
+                'aspect': '1:1',
+                'duration': 5,
+                'prompt': 'Hyperactive wacky 90s animated creature with swirling eyes popping out of a chrome toaster with dynamic comic sparks, exaggerated squash and stretch, vivid saturated colors.',
+            },
+            {
+                'id': 'cinematic_portrait',
+                'title': 'Cinematic Neon Portrait',
+                'icon': '📸',
+                'tag': 'Photoreal Image',
+                'type': 'image',
+                'aspect': '1:1',
+                'duration': 0,
+                'prompt': 'Close-up cinematic editorial portrait of an intrepid explorer in a neon-lit cyberpunk market, raindrops on jacket, shallow depth of field, anamorphic bokeh, 8k masterpiece.',
+            },
+        ]
         return ctx

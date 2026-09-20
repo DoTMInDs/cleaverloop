@@ -74,7 +74,7 @@
                 <span class="p-2 rounded-xl bg-brand-500/10 text-brand-400">📁</span>
             </div>
             <div>
-                <div class="text-3xl font-extrabold text-white tracking-tight">{% if user.is_authenticated %}{{ projects.count }}{% else %}Unlimited{% endif %}</div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{% if user.is_authenticated %}{{ projects_count|default:projects.count }}{% else %}Unlimited{% endif %}</div>
                 <div class="text-xs text-slate-400 mt-1">Multi-scene storyboard projects</div>
             </div>
             <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
@@ -94,7 +94,7 @@
                 <span class="p-2 rounded-xl bg-cyan-500/10 text-cyan-400">👥</span>
             </div>
             <div>
-                <div class="text-3xl font-extrabold text-white tracking-tight">{% if user.is_authenticated %}{{ characters.count }}{% else %}Consistent{% endif %}</div>
+                <div class="text-3xl font-extrabold text-white tracking-tight">{% if user.is_authenticated %}{{ characters_count|default:characters.count }}{% else %}Consistent{% endif %}</div>
                 <div class="text-xs text-slate-400 mt-1">Consistent characters with visual traits</div>
             </div>
             <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
@@ -122,14 +122,14 @@
                         <div class="aspect-video bg-surface relative flex items-center justify-center overflow-hidden">
                             {% if gen.output_media %}
                                 {% if gen.generation_type == 'video' %}
-                                    <video class="w-full h-full object-cover" poster="{{ gen.output_media.thumbnail_url }}" preload="metadata">
+                                    <video class="w-full h-full object-cover" poster="{{ gen.output_media.thumbnail_url }}" preload="none">
                                         <source src="{{ gen.output_media.url }}" type="video/mp4">
                                     </video>
                                     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
                                         <span class="w-10 h-10 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-lg">▶</span>
                                     </div>
                                 {% else %}
-                                    <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                                    <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" loading="lazy" decoding="async" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
                                 {% endif %}
                             {% else %}
                                 <div class="absolute inset-0 skeleton-shimmer opacity-40"></div>

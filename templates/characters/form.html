@@ -1,65 +1,490 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}{% if object %}Edit {{ object.name }}{% else %}Create Character{% endif %} — CleaverLoop AI{% endblock %}
+{% block title %}{% if object %}Edit {{ object.name }}{% else %}Forge AI Character{% endif %} — CleaverLoop AI (Flashloop Edition){% endblock %}
 
 {% block content %}
-<div class="max-w-xl mx-auto space-y-6">
-    <div>
-        <h1 class="text-2xl font-heading font-extrabold text-white">{% if object %}Edit Character{% else %}Create Reusable Character{% endif %}</h1>
-        <p class="text-xs text-slate-400 mt-1">Define appearance traits injected into prompts for character consistency.</p>
+<div class="max-w-6xl mx-auto space-y-8 relative" x-data="{
+    charName: '{{ form.name.value|default:''|escapejs }}',
+    appearance: '{{ form.appearance_description.value|default:''|escapejs }}',
+    clothing: '{{ form.clothing_description.value|default:''|escapejs }}',
+    personality: '{{ form.personality.value|default:''|escapejs }}',
+    description: '{{ form.description.value|default:''|escapejs }}',
+    avatarPreview: '{% if object and object.avatar %}{{ object.avatar.url }}{% endif %}',
+    generatedAvatarUrl: '',
+    
+    // AI Magic Forge state
+    magicPrompt: '',
+    stylePreset: 'cinematic',
+    isSynthesizing: false,
+    aiSuccessNotice: false,
+    errorMessage: '',
+
+    archetypes: [
+        {
+            title: '⚡ Cyberpunk Operative',
+            prompt: 'A cyberpunk infiltrator who navigates the neon shadows of Neo-Tokyo with cybernetic enhancements and a glowing ocular interface.'
+        },
+        {
+            title: '🔍 Hardboiled Noir Detective',
+            prompt: 'A gritty 1940s noir detective in a heavy trenchcoat investigating shadowy conspiracies with an analytical mind.'
+        },
+        {
+            title: '✨ Neon Street Dancer',
+            prompt: 'A charismatic urban dancer in holographic streetwear with electric purple hair and radiant stage energy.'
+        },
+        {
+            title: '🚀 Deep Space Commander',
+            prompt: 'A visionary starship commander leading deep space expeditions in a gold-trimmed naval composite uniform.'
+        }
+    ],
+
+    applyArchetype(a) {
+        this.magicPrompt = a.prompt;
+        this.synthesizeWithAI();
+    },
+
+    appendTrait(trait, field) {
+        if (field === 'appearance') {
+            this.appearance = this.appearance ? (this.appearance.trim().replace(/[,.]+$/, '') + ', ' + trait) : trait;
+        } else if (field === 'clothing') {
+            this.clothing = this.clothing ? (this.clothing.trim().replace(/[,.]+$/, '') + ', ' + trait) : trait;
+        }
+    },
+
+    handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.avatarPreview = e.target.result;
+                this.generatedAvatarUrl = ''; // Clear generated if manual file uploaded
+            };
+            reader.readAsDataURL(file);
+        }
+    },
+
+    async synthesizeWithAI() {
+        if (!this.magicPrompt.trim()) return;
+        this.isSynthesizing = true;
+        this.errorMessage = '';
+        this.aiSuccessNotice = false;
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const formData = new FormData();
+        formData.append('brief', this.magicPrompt);
+        formData.append('style_preset', this.stylePreset);
+
+        try {
+            const res = await fetch('{% url 'characters:generate_ai' %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                body: formData
+            });
+
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Failed to synthesize character');
+            }
+
+            const data = await res.json();
+            this.charName = data.name;
+            this.appearance = data.appearance_description;
+            this.clothing = data.clothing_description;
+            this.personality = data.personality;
+            this.description = data.description;
+            if (data.avatar_url) {
+                this.avatarPreview = data.avatar_url;
+                this.generatedAvatarUrl = data.avatar_url;
+            }
+            this.aiSuccessNotice = true;
+            setTimeout(() => { this.aiSuccessNotice = false; }, 4500);
+        } catch (err) {
+            this.errorMessage = err.message;
+        } finally {
+            this.isSynthesizing = false;
+        }
+    }
+}">
+
+    <!-- ===================================================
+         FLASHLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE
+         =================================================== -->
+    <div class="relative pt-2 pb-6 overflow-hidden text-center select-none">
+        <!-- Ambient Flashloop Arch Lighting Background -->
+        <div class="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center opacity-70">
+            <svg class="w-full max-w-5xl h-48 sm:h-64" viewBox="0 0 1200 320" fill="none" preserveAspectRatio="none">
+                <defs>
+                    <radialGradient id="fl-char-glow" cx="50%" cy="0%" r="90%">
+                        <stop offset="0%" stop-color="#fb923c" stop-opacity="0.35" />
+                        <stop offset="50%" stop-color="#ea580c" stop-opacity="0.12" />
+                        <stop offset="100%" stop-color="#111315" stop-opacity="0" />
+                    </radialGradient>
+                    <linearGradient id="fl-char-beam" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#f97316" stop-opacity="0.6" />
+                        <stop offset="100%" stop-color="#f97316" stop-opacity="0" />
+                    </linearGradient>
+                </defs>
+                <path d="M 100 320 Q 600 20 1100 320" stroke="url(#fl-char-beam)" stroke-width="2" stroke-linecap="round" fill="none" />
+                <path d="M 0 320 Q 600 -30 1200 320" fill="url(#fl-char-glow)" opacity="0.8" />
+            </svg>
+        </div>
+
+        <!-- Flashloop Skewed Pill Badge -->
+        <div class="inline-flex items-center justify-center mb-4">
+            <div class="fl-badge-skew px-3.5 py-1 text-xs font-heading font-extrabold uppercase tracking-wider text-white shadow-lg shadow-orange-500/25 flex items-center gap-1.5">
+                <span>⚡</span>
+                <span class="fl-badge-unskew inline-block">Autonomous Character Forge • Zero Identity Drift</span>
+            </div>
+        </div>
+
+        <!-- Main Heading -->
+        <h1 class="text-3xl sm:text-5xl font-heading font-black tracking-tight text-white max-w-4xl mx-auto leading-tight">
+            {% if object %}Edit Character: <span class="bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400">{{ object.name }}</span>{% else %}Synthesize <span class="bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400">AI Characters</span> with Autonomous DNA{% endif %}
+        </h1>
+
+        <!-- Subtitle -->
+        <p class="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto mt-3 leading-relaxed">
+            Enter a single concept prompt. CleaverLoop's AI reasoner creates full facial geometry, wardrobe, demeanor, and automatically generates an AI avatar portrait with zero prompt drift across models.
+        </p>
+
+        <!-- Live Intelligence Feature Ribbon -->
+        <div class="mt-6 flex items-center justify-center overflow-hidden py-2 border-y border-white/[0.05] bg-black/40">
+            <div class="flex items-center gap-6 text-[11px] text-slate-400 font-mono flex-wrap justify-center px-4">
+                <div class="flex items-center gap-1.5 text-orange-400">
+                    <span class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+                    <span>✨ Autonomous DNA Reasoning</span>
+                </div>
+                <span>•</span>
+                <div class="flex items-center gap-1.5 text-amber-400">
+                    <span>🖼️ Instant AI Avatar Portrait</span>
+                </div>
+                <span>•</span>
+                <div class="flex items-center gap-1.5 text-cyan-400">
+                    <span>🎬 Multi-Scene Video Casting</span>
+                </div>
+                <span>•</span>
+                <div class="flex items-center gap-1.5 text-emerald-400">
+                    <span>🔒 Zero Prompt Drift</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <form method="POST" enctype="multipart/form-data" class="glass-panel rounded-3xl p-6 md:p-8 space-y-5">
-        {% csrf_token %}
-
-        <div class="space-y-1.5">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Character Name</label>
-            <input type="text" name="name" required placeholder="e.g. Maya Chen"
-                   value="{{ form.name.value|default:'' }}"
-                   class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
-        </div>
-
-        <div class="space-y-1.5">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Appearance Description (Facial & Physical Traits)</label>
-            <textarea name="appearance_description" rows="3" required
-                      placeholder="e.g. 28-year-old Asian woman, sharp jawline, warm hazel eyes, sleek raven shoulder-length hair, athletic build"
-                      class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500 resize-none">{{ form.appearance_description.value|default:'' }}</textarea>
-        </div>
-
-        <div class="space-y-1.5">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Clothing & Wardrobe Style</label>
-            <input type="text" name="clothing_description"
-                   placeholder="e.g. Cyberpunk dark leather bomber jacket with teal neon inner lining"
-                   value="{{ form.clothing_description.value|default:'' }}"
-                   class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
-        </div>
-
-        <div class="space-y-1.5">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Personality / Expression</label>
-            <input type="text" name="personality"
-                   placeholder="e.g. Confident, focused, slight smirk, intense gaze"
-                   value="{{ form.personality.value|default:'' }}"
-                   class="w-full rounded-xl bg-surface border border-white/10 text-sm text-white px-4 py-2.5 outline-none focus:border-brand-500">
-        </div>
-
-        <div class="space-y-1.5">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Character Avatar / Face Reference</label>
-            {% if object and object.avatar %}
-                <div class="flex items-center gap-3 mb-2">
-                    <img src="{{ object.avatar.url }}" alt="{{ object.name }}" class="w-12 h-12 rounded-xl object-cover border border-white/10">
-                    <span class="text-xs text-slate-400">Current avatar (upload new image to replace)</span>
+    <!-- ===================================================
+         AI MAGIC CHARACTER FORGE PROMPT BAR
+         =================================================== -->
+    <div class="fl-composer-card rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl relative border-orange-500/40">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500/25 to-amber-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 text-sm font-bold shadow-sm">
+                    ✨
+                </span>
+                <div>
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span>AI Magic Character Generator</span>
+                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30 uppercase tracking-wider">1-Click Synthesis</span>
+                    </h2>
+                    <p class="text-[11px] text-slate-400">Describe your character idea in simple natural words</p>
                 </div>
-            {% endif %}
-            <input type="file" name="avatar" accept="image/*"
-                   class="file-input file-input-bordered file-input-sm w-full bg-surface border-white/10 text-xs text-slate-300">
+            </div>
+
+            <!-- Quick Preset Archetypes (Pill Buttons) -->
+            <div class="hidden md:flex items-center gap-2 text-xs">
+                <span class="text-[10px] text-slate-500 font-mono">Quick Sparks:</span>
+                <template x-for="a in archetypes" :key="a.title">
+                    <button type="button"
+                            @click="applyArchetype(a)"
+                            class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.08] hover:border-orange-500/40 text-[11px] text-slate-300 hover:text-orange-300 transition"
+                            x-text="a.title">
+                    </button>
+                </template>
+            </div>
         </div>
 
-        <div class="pt-4 border-t border-white/10 flex items-center justify-end gap-3">
-            <a href="{% if object %}{% url 'characters:detail' object.pk %}{% else %}{% url 'characters:list' %}{% endif %}" class="btn btn-ghost btn-sm text-xs">Cancel</a>
-            <button type="submit" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white px-6">
-                {% if object %}Update Character{% else %}Save Character{% endif %}
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <div class="relative flex-1">
+                <input type="text"
+                       x-model="magicPrompt"
+                       @keydown.enter.prevent="synthesizeWithAI()"
+                       placeholder="e.g. A cyberpunk street samurai with silver hair, glowing blue katana, and matte carbon-fiber trenchcoat..."
+                       class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.1] focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 text-sm text-white px-4 py-3.5 outline-none transition placeholder-slate-500">
+            </div>
+
+            <!-- Style Selector -->
+            <select x-model="stylePreset"
+                    class="rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3 py-3.5 outline-none focus:border-orange-500/50">
+                <option value="cinematic">Cinematic 8K Photoreal</option>
+                <option value="anime">Modern Anime / Manga</option>
+                <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
+                <option value="fantasy">Dark High Fantasy</option>
+                <option value="pixar_3d">Stylized 3D Animation</option>
+                <option value="vintage_cartoon">1930s Rubber-Hose</option>
+            </select>
+
+            <!-- Generate Button -->
+            <button type="button"
+                    @click="synthesizeWithAI()"
+                    :disabled="isSynthesizing || !magicPrompt.trim()"
+                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                <template x-if="isSynthesizing">
+                    <span class="loading loading-spinner loading-xs"></span>
+                </template>
+                <template x-if="!isSynthesizing">
+                    <span>✨</span>
+                </template>
+                <span x-text="isSynthesizing ? 'Synthesizing DNA...' : 'Generate Character & Avatar'"></span>
             </button>
         </div>
-    </form>
+
+        <!-- Notification / Error Banners -->
+        <div x-show="aiSuccessNotice" x-transition class="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 font-mono">
+            <span>✅</span>
+            <span>Character DNA and AI Avatar Portrait synthesized successfully! Review traits below and save.</span>
+        </div>
+        <div x-show="errorMessage" x-transition class="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+            <span>⚠️</span>
+            <span x-text="errorMessage"></span>
+        </div>
+    </div>
+
+    <!-- ===================================================
+         2-COLUMN STUDIO LAYOUT: FORM & LIVE IDENTITY DOSSIER
+         =================================================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- Left Column: Character DNA Creator Form (7 cols) -->
+        <div class="lg:col-span-7 space-y-6">
+            <form method="POST" enctype="multipart/form-data" class="fl-composer-card rounded-3xl p-5 sm:p-7 space-y-6 relative shadow-2xl">
+                {% csrf_token %}
+                <input type="hidden" name="generated_avatar_url" :value="generatedAvatarUrl">
+
+                <!-- Card Header -->
+                <div class="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 text-sm font-bold shadow-sm">
+                            🧬
+                        </span>
+                        <div>
+                            <h2 class="text-sm font-bold text-white">Character Identity Blueprint</h2>
+                            <p class="text-[11px] text-slate-400">Fine-tune traits or keep AI-synthesized values</p>
+                        </div>
+                    </div>
+                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono">
+                        Identity Forge v2.0
+                    </span>
+                </div>
+
+                <!-- Field 1: Character Name -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                            <span>👤 Character Name</span>
+                            <span class="text-orange-400">*</span>
+                        </label>
+                        <span class="text-[10px] text-slate-500 font-mono">Visible in Storyboards</span>
+                    </div>
+                    <input type="text"
+                           name="name"
+                           required
+                           x-model="charName"
+                           placeholder="e.g. Maya Lin, Kaelen Vance, Detective Barnaby"
+                           class="w-full rounded-2xl bg-[#0f1113] border border-white/[0.08] focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 text-sm text-white px-4 py-3 outline-none transition-all duration-200">
+                </div>
+
+                <!-- Field 2: Facial & Physical Appearance -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                            <span>✨ Facial & Anatomical Appearance</span>
+                            <span class="text-orange-400">*</span>
+                        </label>
+                        <span class="text-[10px] text-orange-400 font-mono">Core Consistency Anchor</span>
+                    </div>
+                    
+                    <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] focus-within:border-orange-500/50 focus-within:ring-1 focus-within:ring-orange-500/30 transition-all duration-200 p-3 space-y-2">
+                        <textarea name="appearance_description"
+                                  rows="3"
+                                  required
+                                  x-model="appearance"
+                                  placeholder="e.g. 26-year-old woman, sharp cheekbones, deep green eyes, shoulder-length wavy brunette hair, athletic build, radiant cinematic lighting"
+                                  class="w-full bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-1 resize-none leading-relaxed"></textarea>
+
+                        <!-- Quick Trait Injector Chips -->
+                        <div class="pt-2 border-t border-white/[0.04] flex flex-wrap items-center gap-1.5 text-[10px]">
+                            <span class="text-slate-500 font-mono mr-1">Quick Traits:</span>
+                            <button type="button" @click="appendTrait('sharp jawline', 'appearance')" class="px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/[0.06] transition">+ Sharp Jawline</button>
+                            <button type="button" @click="appendTrait('hazel piercing eyes', 'appearance')" class="px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/[0.06] transition">+ Hazel Eyes</button>
+                            <button type="button" @click="appendTrait('sleek undercut hair', 'appearance')" class="px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/[0.06] transition">+ Undercut</button>
+                            <button type="button" @click="appendTrait('cybernetic ocular implant', 'appearance')" class="px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/[0.06] transition">+ Cyber Implant</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Field 3: Signature Clothing & Wardrobe Style -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                            <span>👗 Signature Clothing & Wardrobe</span>
+                        </label>
+                        <span class="text-[10px] text-slate-500 font-mono">Style Persistence</span>
+                    </div>
+                    <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] focus-within:border-orange-500/50 focus-within:ring-1 focus-within:ring-orange-500/30 transition-all duration-200 p-3 space-y-2">
+                        <input type="text"
+                               name="clothing_description"
+                               x-model="clothing"
+                               placeholder="e.g. Matte-black leather jacket with neon orange interior, fitted tactical jeans, combat boots"
+                               class="w-full bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-1">
+                        
+                        <div class="pt-2 border-t border-white/[0.04] flex flex-wrap items-center gap-1.5 text-[10px]">
+                            <span class="text-slate-500 font-mono mr-1">Quick Styles:</span>
+                            <button type="button" @click="appendTrait('cyberpunk leather jacket', 'clothing')" class="px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/[0.06] transition">+ Cyberpunk Jacket</button>
+                            <button type="button" @click="appendTrait('tailored charcoal blazer', 'clothing')" class="px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/[0.06] transition">+ Charcoal Blazer</button>
+                            <button type="button" @click="appendTrait('holographic windbreaker', 'clothing')" class="px-2 py-0.5 rounded-md bg-white/[0.04] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/[0.06] transition">+ Holographic Windbreaker</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Field 4: Personality & Expression -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                        <span>🎙️ Personality & Expression Demeanor</span>
+                    </label>
+                    <input type="text"
+                           name="personality"
+                           x-model="personality"
+                           placeholder="e.g. Confident, charismatic, slight smirk, intense focused gaze"
+                           class="w-full rounded-2xl bg-[#0f1113] border border-white/[0.08] focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 text-sm text-white px-4 py-3 outline-none transition-all duration-200">
+                </div>
+
+                <!-- Field 5: Character Avatar / Reference Image -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold uppercase tracking-wider text-slate-300">
+                            <span>🖼️ Character Avatar Portrait</span>
+                        </label>
+                        <span class="text-[10px] text-slate-500 font-mono" x-text="generatedAvatarUrl ? '✨ AI Generated Portrait Attached' : 'Custom Upload'"></span>
+                    </div>
+                    
+                    <div class="p-4 rounded-2xl bg-[#0a0c0e] border border-white/[0.08] flex flex-col sm:flex-row items-center gap-4">
+                        <div class="w-16 h-16 rounded-2xl bg-[#141618] border border-white/10 overflow-hidden flex items-center justify-center shrink-0 relative group">
+                            <template x-if="avatarPreview">
+                                <img :src="avatarPreview" alt="Avatar Preview" class="w-full h-full object-cover">
+                            </template>
+                            <template x-if="!avatarPreview">
+                                <span class="text-2xl text-slate-500">👤</span>
+                            </template>
+                        </div>
+                        <div class="flex-1 space-y-1.5 w-full">
+                            <input type="file"
+                                   name="avatar"
+                                   accept="image/*"
+                                   @change="handleFileSelect"
+                                   class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-orange-500/20 file:text-orange-400 hover:file:bg-orange-500/30 cursor-pointer">
+                            <p class="text-[10px] text-slate-500">Auto-generated via AI or upload custom photo to replace.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="pt-5 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <a href="{% if object %}{% url 'characters:detail' object.pk %}{% else %}{% url 'characters:list' %}{% endif %}" class="text-xs text-slate-400 hover:text-white transition">
+                        Cancel & Return
+                    </a>
+                    
+                    <button type="submit"
+                            class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
+                        <span>✨</span>
+                        <span>{% if object %}Update Character Profile{% else %}Save Character to Roster{% endif %}</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Right Column: Live Identity Dossier & Prompt Injection Matrix (5 cols) -->
+        <div class="lg:col-span-5 space-y-5 sticky top-24">
+            
+            <!-- Live Identity Preview Card -->
+            <div class="fl-composer-card rounded-3xl p-5 sm:p-6 space-y-5 shadow-2xl relative overflow-hidden">
+                <div class="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-orange-400 animate-ping"></span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-orange-400 font-mono">Live Character Dossier</span>
+                    </div>
+                    <span class="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-[10px] text-emerald-400 font-mono">
+                        Active
+                    </span>
+                </div>
+
+                <!-- Avatar Hero -->
+                <div class="flex items-start gap-4">
+                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#1b1e22] to-[#0c0d0f] border-2 border-orange-500/40 p-1 shrink-0 shadow-lg relative overflow-hidden flex items-center justify-center">
+                        <template x-if="avatarPreview">
+                            <img :src="avatarPreview" class="w-full h-full object-cover rounded-xl">
+                        </template>
+                        <template x-if="!avatarPreview">
+                            <span class="text-3xl text-orange-400">👤</span>
+                        </template>
+                    </div>
+
+                    <div class="space-y-1.5 min-w-0 flex-1">
+                        <h3 class="text-lg font-extrabold text-white truncate" x-text="charName || 'Unnamed Character'"></h3>
+                        <div class="flex flex-wrap gap-1.5">
+                            <span class="px-2 py-0.5 rounded bg-orange-500/20 border border-orange-500/30 text-orange-300 text-[10px] font-bold uppercase tracking-wider">
+                                Lead Cast
+                            </span>
+                            <span class="px-2 py-0.5 rounded bg-white/[0.06] text-slate-300 text-[10px] font-mono" x-text="personality ? personality.split(',')[0] : 'Hero Protagonist'"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DNA Traits Grid -->
+                <div class="space-y-2.5 text-xs">
+                    <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] space-y-1">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Physical Identity:</span>
+                        <p class="text-slate-200 text-[11px] leading-relaxed" x-text="appearance || 'No appearance traits defined yet. Use the Magic Forge above to generate.'"></p>
+                    </div>
+
+                    <template x-if="clothing">
+                        <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] space-y-1">
+                            <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Wardrobe Cue:</span>
+                            <p class="text-slate-300 text-[11px] leading-relaxed" x-text="clothing"></p>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Simulated Generation Prompt Cue -->
+                <div class="p-4 rounded-2xl bg-black/60 border border-orange-500/25 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-orange-300 font-mono flex items-center gap-1">
+                            <span>⚡</span>
+                            <span>Directorial Prompt Injection</span>
+                        </span>
+                        <span class="text-[9px] text-slate-500 font-mono">Auto-Injected</span>
+                    </div>
+                    <div class="p-2.5 rounded-lg bg-[#0e1012] border border-white/[0.06] text-[11px] font-mono text-slate-300 leading-relaxed break-words">
+                        <span>Featuring <strong class="text-orange-400" x-text="charName || '[Character Name]'"></strong> (<span x-text="appearance || '[appearance traits]'"></span><span x-text="clothing ? ', Wearing: ' + clothing : ''"></span>).</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500 leading-normal">
+                        This token string is automatically prepended to every video shot, image render, and storyboard scene where this character is selected.
+                    </p>
+                </div>
+
+                <!-- Model Compatibility Matrix -->
+                <div class="pt-3 border-t border-white/[0.06] flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Engine Compatibility:</span>
+                    <div class="flex items-center gap-2 font-mono text-[10px] text-orange-300">
+                        <span>Veo 3.1</span>
+                        <span>•</span>
+                        <span>Kling</span>
+                        <span>•</span>
+                        <span>Flux 1.1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

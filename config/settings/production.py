@@ -21,11 +21,14 @@ SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
-# WhiteNoise production storage
+# WhiteNoise production storage and high-performance immutable asset caching
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 STORAGES['staticfiles'] = {
     'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
 }
+WHITENOISE_MAX_AGE = 31536000  # 1 year immutable cache headers for hashed static assets
+WHITENOISE_KEEP_ONLY_ADVANCED_COMPRESSION = False
+
 
 # Runtime security validations
 import sys

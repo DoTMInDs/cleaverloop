@@ -1,48 +1,106 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}{{ character.name }} — CleaverLoop AI{% endblock %}
+{% block title %}{{ character.name }} — AI Character Dossier — CleaverLoop AI{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-6">
-    <div class="glass-panel-glow rounded-3xl p-6 md:p-8 flex flex-col sm:flex-row items-start gap-6">
-        <div class="w-28 h-28 rounded-2xl bg-surface border border-white/10 overflow-hidden flex items-center justify-center text-4xl flex-shrink-0">
-            {% if character.avatar %}
-                <img src="{{ character.avatar.url }}" alt="{{ character.name }}" class="w-full h-full object-cover">
-            {% else %}
-                👤
-            {% endif %}
-        </div>
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- Breadcrumb & Back -->
+    <div class="flex items-center justify-between text-xs">
+        <a href="{% url 'characters:list' %}" class="text-slate-400 hover:text-white transition flex items-center gap-1.5">
+            <span>←</span>
+            <span>Back to Character Roster</span>
+        </a>
+        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono">
+            🔒 Identity Consistency Active
+        </span>
+    </div>
 
-        <div class="flex-1 space-y-3">
-            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">{{ character.name }}</h1>
-            
-            <div class="space-y-1">
-                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Appearance Cues</span>
-                <p class="text-xs text-slate-200 leading-relaxed bg-surface/40 p-3 rounded-xl border border-white/5">
-                    {{ character.appearance_description }}
-                </p>
+    <!-- Character Dossier Card -->
+    <div class="fl-composer-card rounded-3xl p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden">
+        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent"></div>
+
+        <div class="flex flex-col sm:flex-row items-start gap-6">
+            <!-- Avatar Hero Frame -->
+            <div class="w-28 h-28 sm:w-36 sm:h-36 rounded-2xl bg-gradient-to-br from-[#1b1e22] to-[#0c0d0f] border-2 border-orange-500/40 p-1 shrink-0 shadow-xl overflow-hidden flex items-center justify-center">
+                {% if character.avatar %}
+                    <img src="{{ character.avatar.url }}" alt="{{ character.name }}" class="w-full h-full object-cover rounded-xl">
+                {% else %}
+                    <span class="text-4xl text-orange-400">👤</span>
+                {% endif %}
             </div>
 
-            {% if character.clothing_description %}
-                <div class="space-y-1">
-                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Wardrobe</span>
-                    <p class="text-xs text-slate-300">{{ character.clothing_description }}</p>
+            <!-- Details -->
+            <div class="flex-1 space-y-4 min-w-0">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2 mb-1">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30 uppercase tracking-wide">
+                            Reusable AI Cast
+                        </span>
+                        {% if character.personality %}
+                            <span class="px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] text-[10px] text-slate-300 font-mono">
+                                {{ character.personality }}
+                            </span>
+                        {% endif %}
+                    </div>
+                    <h1 class="text-2xl sm:text-3xl font-heading font-black text-white tracking-tight">{{ character.name }}</h1>
+                    {% if character.description %}
+                        <p class="text-xs text-slate-400 mt-1 leading-relaxed">{{ character.description }}</p>
+                    {% endif %}
                 </div>
-            {% endif %}
 
-            <div class="pt-3 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
-                <div class="flex items-center gap-2">
-                    <a href="{% url 'studio:create' %}?character_id={{ character.id }}" class="btn btn-primary btn-sm bg-brand-600 hover:bg-brand-500 border-none text-white">
-                        Generate with this Character
-                    </a>
-                    <a href="{% url 'characters:edit' character.pk %}" class="btn btn-outline btn-sm text-xs text-white hover:bg-white/10">
-                        ✏️ Edit
-                    </a>
-                    <a href="{% url 'characters:delete' character.pk %}" class="btn btn-ghost btn-sm text-xs text-rose-400 hover:bg-rose-500/10">
-                        🗑️ Delete
+                <!-- Appearance Blueprint -->
+                <div class="space-y-1.5">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <span class="text-orange-400">✨</span>
+                        <span>Facial & Anatomical Trait Blueprint</span>
+                    </span>
+                    <div class="p-3.5 rounded-xl bg-[#0b0d0f] border border-white/[0.06] text-xs text-slate-200 leading-relaxed font-mono">
+                        {{ character.appearance_description }}
+                    </div>
+                </div>
+
+                <!-- Wardrobe Style -->
+                {% if character.clothing_description %}
+                    <div class="space-y-1.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <span class="text-amber-400">👗</span>
+                            <span>Signature Wardrobe</span>
+                        </span>
+                        <div class="p-3 rounded-xl bg-[#0b0d0f] border border-white/[0.06] text-xs text-slate-300">
+                            {{ character.clothing_description }}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <!-- Prompt Cue Injection Preview -->
+                <div class="space-y-1.5">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <span class="text-cyan-400">⚡</span>
+                        <span>Directorial Prompt Injection String</span>
+                    </span>
+                    <div class="p-3 rounded-xl bg-black/50 border border-orange-500/20 text-xs text-slate-300 font-mono break-words">
+                        {{ character.build_prompt_cue }}
+                    </div>
+                </div>
+
+                <!-- Action Toolbar -->
+                <div class="pt-4 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2.5">
+                        <a href="{% url 'studio:create' %}?character_id={{ character.id }}" class="fl-gradient-orange-btn fl-glow-orange text-white border-none rounded-xl px-5 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] flex items-center gap-1.5">
+                            <span>✨</span>
+                            <span>Generate with this Character</span>
+                        </a>
+                        <a href="{% url 'characters:edit' character.pk %}" class="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/10 border border-white/10 text-xs font-semibold text-white transition flex items-center gap-1">
+                            <span>✏️</span>
+                            <span>Edit</span>
+                        </a>
+                    </div>
+                    
+                    <a href="{% url 'characters:delete' character.pk %}" class="text-xs text-rose-400 hover:text-rose-300 hover:underline transition">
+                        Delete Character
                     </a>
                 </div>
-                <a href="{% url 'characters:list' %}" class="btn btn-ghost btn-sm text-xs text-slate-400">Back to Roster</a>
             </div>
         </div>
     </div>

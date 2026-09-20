@@ -165,3 +165,71 @@ html, body, * {
 .animate-scanline {
   animation: scanline 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* ===================================================
+   FLASHLOOP AI (flashloop.app) DESIGN SYSTEM TOKENS
+   =================================================== */
+
+.fl-gradient-orange {
+  background-image: radial-gradient(39.71% 136.54% at 51.64% 117.31%, #FB923C 0%, #EA580C 100%);
+}
+
+.fl-gradient-orange-btn {
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 60%, #c2410c 100%);
+}
+
+.fl-gradient-orange-btn:hover {
+  background: linear-gradient(135deg, #fb923c 0%, #f97316 60%, #ea580c 100%);
+}
+
+.fl-badge-skew {
+  transform: skewX(-12deg);
+}
+
+.fl-badge-unskew {
+  transform: skewX(12deg);
+}
+
+.fl-glow-orange {
+  box-shadow: 0 0 25px -4px rgba(251, 146, 60, 0.35);
+}
+
+.fl-glow-orange-lg {
+  box-shadow: 0 0 45px -8px rgba(234, 88, 12, 0.45);
+}
+
+.fl-composer-card {
+  background: #141618;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.7);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.fl-composer-card:focus-within {
+  border-color: rgba(251, 146, 60, 0.4);
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.8), 0 0 35px -5px rgba(251, 146, 60, 0.15);
+}
+
+/* Model Marquee Track */
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.model-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 30s linear infinite;
+}
+
+.model-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* Flashloop arched perspective scene */
+.fl-grid-pattern {
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+

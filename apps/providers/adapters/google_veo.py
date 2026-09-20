@@ -23,7 +23,7 @@ class GoogleVeoProvider(BaseAIProvider):
         self.api_key = getattr(settings, 'GOOGLE_AI_API_KEY', '')
 
     def generate_image(self, model_id: str, request: GenerationRequest) -> ProviderJobResult:
-        """Submit Imagen 3 or Nano Banana generation."""
+        """Submit Imagen 3 or Gemini image generation."""
         if not self.api_key:
             return ProviderJobResult(
                 external_job_id="",
@@ -32,33 +32,87 @@ class GoogleVeoProvider(BaseAIProvider):
                 retryable=False
             )
         try:
-            # Google Gemini Imagen endpoint
-            endpoint = f"{self.BASE_URL}/models/{model_id}:predict?key={self.api_key}"
-            payload = {
-                "instances": [{"prompt": request.prompt}],
-                "parameters": {
-                    "sampleCount": 1,
-                    "aspectRatio": request.aspect_ratio,
-                    "outputMimeType": "image/jpeg"
-                }
-            }
+            target_model = model_id
+            if target_model in ["imagen-3.0-generate-002", "imagen-3.0", "google-imagen"]:
+                target_model = "gemini-2.5-flash-image"
+
             with httpx.Client(timeout=30.0) as client:
+                # 1. Try Gemini AI Studio generateContent endpoint
+                endpoint = f"{self.BASE_URL}/models/{target_model}:generateContent?key={self.api_key}"
+                payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {"text": request.prompt}
+                            ]
+                        }
+                    ]
+                }
                 resp = client.post(endpoint, json=payload)
                 if resp.status_code == 200:
                     data = resp.json()
-                    # Google returns base64 predictions
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        for part in parts:
+                            inline_data = part.get("inlineData", {})
+                            b64_data = inline_data.get("data")
+                            if b64_data:
+                                import base64
+                                from django.core.files.base import ContentFile
+                                from django.core.files.storage import default_storage
+                                img_bytes = base64.b64decode(b64_data)
+                                mime = inline_data.get("mimeType", "image/jpeg")
+                                ext = "png" if "png" in mime else "jpg"
+                                filename = f"google_outputs/{request.correlation_id[:12]}.{ext}"
+                                saved_path = default_storage.save(filename, ContentFile(img_bytes))
+                                output_url = default_storage.url(saved_path)
+
+                                return ProviderJobResult(
+                                    external_job_id=f"gemini-img-{request.correlation_id[:8]}",
+                                    status="completed",
+                                    output_media_url=output_url,
+                                    thumbnail_url=output_url,
+                                    raw_response={"data_base64_length": len(b64_data), "saved_path": saved_path}
+                                )
+
+                # 2. Try legacy Imagen predict endpoint
+                predict_endpoint = f"{self.BASE_URL}/models/{model_id}:predict?key={self.api_key}"
+                predict_payload = {
+                    "instances": [{"prompt": request.prompt}],
+                    "parameters": {
+                        "sampleCount": 1,
+                        "aspectRatio": request.aspect_ratio,
+                        "outputMimeType": "image/jpeg"
+                    }
+                }
+                resp_predict = client.post(predict_endpoint, json=predict_payload)
+                if resp_predict.status_code == 200:
+                    data = resp_predict.json()
                     predictions = data.get("predictions", [])
                     if predictions and "bytesBase64Encoded" in predictions[0]:
+                        import base64
+                        from django.core.files.base import ContentFile
+                        from django.core.files.storage import default_storage
                         b64_data = predictions[0]["bytesBase64Encoded"]
+                        img_bytes = base64.b64decode(b64_data)
+                        filename = f"google_outputs/{request.correlation_id[:12]}.jpg"
+                        saved_path = default_storage.save(filename, ContentFile(img_bytes))
+                        output_url = default_storage.url(saved_path)
+
                         return ProviderJobResult(
                             external_job_id=f"veo-img-{request.correlation_id[:8]}",
                             status="completed",
-                            raw_response={"data_base64_length": len(b64_data)}
+                            output_media_url=output_url,
+                            thumbnail_url=output_url,
+                            raw_response={"data_base64_length": len(b64_data), "saved_path": saved_path}
                         )
+
+                err_msg = resp.text[:200] if resp.status_code != 200 else resp_predict.text[:200]
                 return ProviderJobResult(
                     external_job_id="",
                     status="failed",
-                    error_message=f"Google API error: {resp.status_code} - {resp.text[:200]}"
+                    error_message=f"Google API error: {resp.status_code} - {err_msg}"
                 )
         except Exception as exc:
             logger.error(f"Google Imagen generation failed: {exc}")

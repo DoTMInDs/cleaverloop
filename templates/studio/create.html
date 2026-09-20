@@ -1,56 +1,250 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Create Studio — CleaverLoop AI{% endblock %}
+{% block title %}Create Studio — CleaverLoop AI (Flashloop Edition){% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-8" x-data="{
+<div class="max-w-6xl mx-auto space-y-8 relative" x-data="{
     generationType: '{{ request.GET.type|default:"video" }}',
     aspectRatio: '16:9',
     duration: 5,
+    modelDropdownOpen: false,
     selectedModel: 'automatic',
+    selectedModelName: 'Automatic Smart Routing',
+    selectedModelBadge: 'Smart Auto',
+    selectedModelIcon: '✨',
+    selectedModelDesc: 'Auto-selects optimal engine with failover protection',
+    promptText: '',
+    negativePrompt: '',
+    showNegative: false,
     hasReference: false,
-    estimatedCredits: 100,
+    referencePreview: null,
+    quality: 'standard',
+    characterDropdownOpen: false,
+    characterId: '{{ request.GET.character_id|default:"" }}',
+    selectedCharacterName: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}No Character (Standalone Scene){% endif %}',
+    selectedCharacterAvatar: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" and c.avatar %}{{ c.avatar.url }}{% endif %}{% endfor %}{% endif %}',
+    selectedCharacterTagline: 'Standalone Scene',
+    estimatedCredits: 300,
+    isEnhancing: false,
+    
+    selectCharacter(id, name, avatar, tagline) {
+        this.characterId = id;
+        this.selectedCharacterName = name;
+        this.selectedCharacterAvatar = avatar || '';
+        this.selectedCharacterTagline = tagline || '';
+        this.characterDropdownOpen = false;
+    },
+    
     calculateCredits() {
         if (this.generationType === 'image') {
             this.estimatedCredits = 50;
         } else {
             this.estimatedCredits = 50 + (this.duration * 50);
         }
+    },
+
+    selectModel(id, name, badge, icon, desc) {
+        this.selectedModel = id;
+        this.selectedModelName = name;
+        this.selectedModelBadge = badge;
+        this.selectedModelIcon = icon;
+        this.selectedModelDesc = desc || '';
+        this.modelDropdownOpen = false;
+    },
+
+    setGenerationType(type) {
+        this.generationType = type;
+        this.calculateCredits();
+        if (!['automatic', 'best_quality', 'fastest', 'budget'].includes(this.selectedModel)) {
+            this.selectModel('automatic', 'Automatic Smart Routing', 'Smart Auto', '✨', 'Auto-selects optimal engine with failover protection');
+        }
+    },
+
+    applyPreset(preset) {
+        this.promptText = preset.prompt;
+        this.generationType = preset.type;
+        this.aspectRatio = preset.aspect;
+        this.duration = preset.duration;
+        this.calculateCredits();
+        $nextTick(() => {
+            const el = document.getElementById('fl-prompt-textarea');
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    },
+
+    remakeFromGen(prompt, type, aspect, duration, modelId) {
+        this.promptText = prompt;
+        this.generationType = type || 'video';
+        this.aspectRatio = aspect || '16:9';
+        this.duration = duration || 5;
+        this.calculateCredits();
+        $nextTick(() => {
+            const el = document.getElementById('fl-prompt-textarea');
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    },
+
+    enhancePrompt() {
+        if (!this.promptText.trim()) {
+            this.promptText = 'Cinematic drone shot gliding through futuristic cyber city, wet neon reflections, 4k ultra-detailed';
+        }
+        this.isEnhancing = true;
+        setTimeout(() => {
+            const enhancements = [
+                ', cinematic 35mm lens, atmospheric volumetric haze, photorealistic ray tracing, hyper-detailed textures, 8k resolution, dramatic color grading',
+                ', ultra-high fidelity, masterwork lighting, Unreal Engine 5 render aesthetic, soft diffused shadows, high dynamic range, crisp depth of field',
+                ', dynamic camera motion, natural film grain, anamorphic flare, studio quality production, trending on ArtStation, award-winning cinematography'
+            ];
+            const pick = enhancements[Math.floor(Math.random() * enhancements.length)];
+            if (!this.promptText.includes('cinematic') && !this.promptText.includes('8k')) {
+                this.promptText = this.promptText.trim() + pick;
+            }
+            this.isEnhancing = false;
+        }, 350);
+    },
+
+    handleFileChange(e) {
+        const file = e.target.files[0];
+        if (file) {
+            this.hasReference = true;
+            this.referencePreview = URL.createObjectURL(file);
+        } else {
+            this.hasReference = false;
+            this.referencePreview = null;
+        }
+    },
+
+    clearReference() {
+        this.hasReference = false;
+        this.referencePreview = null;
+        const input = document.getElementById('fl-ref-input');
+        if (input) input.value = '';
     }
 }" x-init="calculateCredits()">
 
-    <!-- Studio Header -->
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Creation Studio</h1>
-            <p class="text-xs md:text-sm text-slate-400 mt-1">Direct multi-model generative synthesis with smart auto-routing.</p>
+    <!-- ===================================================
+         FLASHLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE
+         =================================================== -->
+    <div class="relative pt-4 pb-6 overflow-hidden text-center select-none">
+        <!-- Ambient Flashloop Arch Lighting Background -->
+        <div class="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center opacity-70">
+            <svg class="w-full max-w-5xl h-48 sm:h-64" viewBox="0 0 1200 320" fill="none" preserveAspectRatio="none">
+                <defs>
+                    <radialGradient id="fl-arch-glow" cx="50%" cy="0%" r="90%">
+                        <stop offset="0%" stop-color="#fb923c" stop-opacity="0.35" />
+                        <stop offset="50%" stop-color="#ea580c" stop-opacity="0.12" />
+                        <stop offset="100%" stop-color="#111315" stop-opacity="0" />
+                    </radialGradient>
+                    <linearGradient id="fl-beam" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#f97316" stop-opacity="0.6" />
+                        <stop offset="100%" stop-color="#f97316" stop-opacity="0" />
+                    </linearGradient>
+                </defs>
+                <!-- Concentric Arches -->
+                <path d="M 100 320 Q 600 -40 1100 320" stroke="url(#fl-beam)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.4" />
+                <path d="M 250 320 Q 600 40 950 320" stroke="url(#fl-beam)" stroke-width="2" opacity="0.6" />
+                <path d="M 380 320 Q 600 120 820 320" stroke="#fb923c" stroke-width="2.5" opacity="0.8" />
+                <ellipse cx="600" cy="120" rx="400" ry="180" fill="url(#fl-arch-glow)" />
+            </svg>
         </div>
-        
-        <div class="flex items-center gap-2 p-1 bg-surface rounded-2xl border border-white/10">
-            <button type="button"
-                    @click="generationType = 'video'; calculateCredits()"
-                    :class="generationType === 'video' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'"
-                    class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
-                <span>🎬</span> Video
-            </button>
-            <button type="button"
-                    @click="generationType = 'image'; calculateCredits()"
-                    :class="generationType === 'image' ? 'bg-brand-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'"
-                    class="px-4 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
-                <span>🎨</span> Image
-            </button>
+
+        <!-- Super Agent Badge -->
+        <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-wider mb-3 shadow-lg shadow-orange-500/10">
+            <span class="w-2 h-2 rounded-full bg-orange-400 animate-ping"></span>
+            <span>Flashloop Multi-Model Studio</span>
+            <span class="fl-badge-skew rounded-[4px] px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-white shadow"
+                  style="background-image: radial-gradient(39.71% 136.54% at 51.64% 117.31%, #FB923C 0%, #EA580C 100%)">
+                <span class="fl-badge-unskew inline-block">Super Agent 2.0</span>
+            </span>
+        </div>
+
+        <!-- Heading with Signature Flashloop Skew Highlight -->
+        <h1 class="text-3xl sm:text-5xl md:text-6xl font-heading font-black uppercase tracking-tight text-white leading-[1.08]">
+            Turn Ideas Into<br>
+            <span class="inline-block fl-badge-skew rounded-xl sm:rounded-2xl px-4 sm:px-6 py-1 text-white shadow-2xl fl-glow-orange-lg mt-1"
+                  style="background-image: radial-gradient(39.71% 136.54% at 51.64% 117.31%, #FB923C 0%, #EA580C 100%)">
+                <span class="fl-badge-unskew inline-block">Stories Worth Watching</span>
+            </span>
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-400 max-w-xl mx-auto mt-3.5 leading-relaxed">
+            Direct high-intent AI generation. Ask the Super Agent, it coordinates models, refines prompts, maintains character identity, and renders cinematic frames.
+        </p>
+
+        <!-- Model Ribbon / Marquee Ticker -->
+        <div class="mt-7 pt-4 border-t border-white/[0.06] overflow-hidden relative max-w-4xl mx-auto [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
+            <div class="model-marquee-track items-center gap-8 text-xs font-medium text-slate-400">
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span class="font-bold">Google Veo 3.1</span>
+                    <span class="text-[10px] text-orange-400 font-mono">Cinematic 1080p</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                    <span class="font-bold">Kling 3.0 Ultra</span>
+                    <span class="text-[10px] text-cyan-400 font-mono">Physics Engine</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span class="font-bold">Seedance 2.5 Pro</span>
+                    <span class="text-[10px] text-amber-400 font-mono">Fast Diffusion</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+                    <span class="font-bold">FLUX.1 Ultra</span>
+                    <span class="text-[10px] text-purple-400 font-mono">Photoreal</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                    <span class="font-bold">Alibaba Wan 2.1</span>
+                    <span class="text-[10px] text-rose-400 font-mono">Cinematic</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-indigo-400"></span>
+                    <span class="font-bold">MiniMax Video-01</span>
+                    <span class="text-[10px] text-indigo-400 font-mono">Viral Motion</span>
+                </div>
+
+                <!-- Duplicate for seamless infinite loop -->
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span class="font-bold">Google Veo 3.1</span>
+                    <span class="text-[10px] text-orange-400 font-mono">Cinematic 1080p</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                    <span class="font-bold">Kling 3.0 Ultra</span>
+                    <span class="text-[10px] text-cyan-400 font-mono">Physics Engine</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+                    <span class="font-bold">Seedance 2.5 Pro</span>
+                    <span class="text-[10px] text-amber-400 font-mono">Fast Diffusion</span>
+                </div>
+                <div class="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white whitespace-nowrap">
+                    <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+                    <span class="font-bold">FLUX.1 Ultra</span>
+                    <span class="text-[10px] text-purple-400 font-mono">Photoreal</span>
+                </div>
+            </div>
         </div>
     </div>
 
     {% if user.is_superuser %}
-    <!-- Real Commercial AI Status Banner (Superuser Only) -->
-    <div class="glass-panel rounded-2xl p-4 border border-brand-500/20 bg-brand-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+    <!-- Commercial Cloud API Deposit Banner (Superuser Only) -->
+    <div class="rounded-2xl p-4 border border-orange-500/20 bg-orange-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
         <div class="flex items-center gap-2.5 text-slate-300">
-            <span class="text-base">💡</span>
-            <span>To generate <strong>real cinematic 1080p AI video</strong>, deposit $5–$10 on <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noopener noreferrer" class="text-brand-400 font-bold underline hover:text-brand-300">Fal.ai</a> (unlocks Alibaba Wan 2.1 & Luma Ray 2) or link Google Cloud billing.</span>
+            <span class="text-base">⚡</span>
+            <span>Superuser Notice: To generate real cinematic video with zero rate limits, deposit $5–$10 on <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noopener noreferrer" class="text-orange-400 font-bold underline hover:text-orange-300">Fal.ai</a> (Wan 2.1) or link Google Cloud billing for Veo 3.1.</span>
         </div>
-        <a href="{% url 'adminpanel:dashboard' %}" class="btn btn-xs btn-outline border-white/10 text-[10px] text-slate-300 hover:text-white whitespace-nowrap">
-            View Live API Balances ↗
+        <a href="{% url 'adminpanel:dashboard' %}" class="btn btn-xs border-white/10 text-[10px] text-slate-300 hover:text-white whitespace-nowrap bg-black/40">
+            API Balances ↗
         </a>
     </div>
     {% endif %}
@@ -63,175 +257,706 @@
     <!-- Active Generation Output Container (HTMX Target) -->
     <div id="active-generation-target" class="empty:hidden"></div>
 
-    <!-- Generator Control Form -->
+    <!-- ===================================================
+         CLEAVERLOOP UNIFIED HERO COMPOSER (fl-composer-card)
+         =================================================== -->
     <form hx-post="{% url 'generations:create' %}"
           hx-target="#active-generation-target"
           hx-swap="innerHTML"
-          hx-indicator="#gen-skeleton-loader, #gen-spinner"
+          hx-indicator="#gen-skeleton-loader, #fl-gen-spinner"
           enctype="multipart/form-data"
-          class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-6">
+          class="fl-composer-card rounded-3xl p-5 sm:p-7 space-y-5 relative">
         {% csrf_token %}
         <input type="hidden" name="generation_type" :value="generationType">
 
-        <!-- Prompt Textarea -->
-        <div class="space-y-2">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">Prompt Idea</label>
-            <textarea name="prompt"
+        <!-- Top Row: Mode Switcher Tabs + Inspiration Header -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/[0.06]">
+            <!-- Segmented Mode Switcher -->
+            <div class="inline-flex p-1 rounded-2xl bg-[#0e1012] border border-white/[0.08]">
+                <button type="button"
+                        @click="setGenerationType('video')"
+                        :class="generationType === 'video' ? 'fl-gradient-orange-btn text-white font-bold shadow-lg fl-glow-orange' : 'text-slate-400 hover:text-white'"
+                        class="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2">
+                    <span>🎬</span>
+                    <span>AI Video</span>
+                    <span class="text-[10px] opacity-75 font-mono">5s/10s/15s</span>
+                </button>
+                <button type="button"
+                        @click="setGenerationType('image')"
+                        :class="generationType === 'image' ? 'fl-gradient-orange-btn text-white font-bold shadow-lg fl-glow-orange' : 'text-slate-400 hover:text-white'"
+                        class="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2">
+                    <span>🎨</span>
+                    <span>AI Image</span>
+                    <span class="text-[10px] opacity-75 font-mono">4K HD</span>
+                </button>
+            </div>
+
+            <!-- Quick Stats & Hint -->
+            <div class="flex items-center gap-3 text-xs text-slate-400">
+                <span class="hidden sm:inline-flex items-center gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                    <span>Auto-Failover Protection Active</span>
+                </span>
+                <span class="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] font-mono text-slate-300">
+                    ESC to clear
+                </span>
+            </div>
+        </div>
+
+        <!-- Trending Style Presets (One-Click Inspiration Carousel) -->
+        <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                <span class="flex items-center gap-1.5">
+                    <span>🔥 Trending Styles & Presets:</span>
+                    <span class="text-orange-400 font-normal">(click to auto-fill)</span>
+                </span>
+            </div>
+            <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 pt-0.5">
+                {% for preset in trending_presets %}
+                    <button type="button"
+                            @click="applyPreset({{ preset|safe }})"
+                            class="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.08] hover:border-orange-500/40 text-xs text-slate-300 hover:text-white transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap group shrink-0">
+                        <span>{{ preset.icon }}</span>
+                        <span class="font-medium group-hover:text-orange-300">{{ preset.title }}</span>
+                        <span class="text-[10px] px-1.5 py-0.2 rounded bg-white/[0.06] text-slate-400 font-mono">{{ preset.tag }}</span>
+                    </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Central Prompt Input Box -->
+        <div class="relative rounded-2xl bg-[#0f1113] border border-white/[0.08] focus-within:border-orange-500/50 focus-within:ring-1 focus-within:ring-orange-500/30 transition-all duration-200 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <span>Prompt Specification</span>
+                </label>
+
+                <!-- Super Agent Magic Expander Button -->
+                <button type="button"
+                        @click="enhancePrompt()"
+                        :disabled="isEnhancing"
+                        class="px-2.5 py-1 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                    <span x-show="!isEnhancing">✨ Enhance with Super Agent</span>
+                    <span x-show="isEnhancing" class="flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Synthesizing...</span>
+                    </span>
+                </button>
+            </div>
+
+            <!-- Main Prompt Textarea -->
+            <textarea id="fl-prompt-textarea"
+                      name="prompt"
                       rows="3"
                       required
-                      placeholder="Describe your vision in vivid detail... (e.g. Cinematic wide tracking shot of a glowing neon cyber vehicle gliding through Tokyo rain at midnight, reflections on wet asphalt, 4k ultra-realistic)"
-                      class="w-full rounded-2xl bg-surface/80 border border-white/10 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-sm text-white placeholder-slate-500 p-4 transition outline-none resize-none"></textarea>
-        </div>
+                      x-model="promptText"
+                      placeholder="Describe your vision in rich visual detail... e.g. Cinematic wide tracking shot of a glowing neon cyber vehicle gliding through rainy Tokyo at midnight, wet reflections, authentic film grain, 4k ultra-realistic"
+                      class="w-full bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-0 resize-none leading-relaxed"></textarea>
 
-        <!-- Negative Prompt (Collapsible) -->
-        <div x-data="{ open: false }" class="space-y-2">
-            <button type="button" @click="open = !open" class="text-xs text-slate-400 hover:text-brand-300 flex items-center gap-1 transition">
-                <span x-text="open ? '▾' : '▸'"></span> Negative Prompt (Optional)
-            </button>
-            <div x-show="open" x-cloak class="mt-2">
+            <!-- Textarea Footer: Char count & Negative Prompt Trigger -->
+            <div class="flex items-center justify-between pt-2 border-t border-white/[0.04] text-xs text-slate-400">
+                <div class="flex items-center gap-3">
+                    <button type="button"
+                            @click="showNegative = !showNegative"
+                            class="hover:text-orange-400 flex items-center gap-1 text-[11px] font-medium transition">
+                        <span x-text="showNegative ? '▾' : '▸'"></span>
+                        <span>Negative Prompt (Exclude artifacts)</span>
+                    </button>
+                </div>
+                <div class="text-[11px] font-mono text-slate-500">
+                    <span x-text="promptText.length"></span>/2000
+                </div>
+            </div>
+
+            <!-- Collapsible Negative Prompt Field -->
+            <div x-show="showNegative" x-cloak class="pt-2 border-t border-white/[0.04] space-y-2">
                 <input type="text"
                        name="negative_prompt"
-                       placeholder="e.g. blurry, distorted, grainy, low quality, artifacts"
-                       class="w-full rounded-xl bg-surface/50 border border-white/10 text-xs text-white placeholder-slate-500 px-4 py-2.5 outline-none focus:border-brand-500">
-            </div>
-        </div>
-
-        <!-- Grid of Controls -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
-            <!-- Model Picker -->
-            <div class="space-y-1.5">
-                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Model Selection</label>
-                <!-- Video Models Selector -->
-                <select name="model"
-                        x-show="generationType === 'video'"
-                        :disabled="generationType !== 'video'"
-                        x-model="selectedModel"
-                        class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
-                    <option value="automatic">✨ Automatic Smart Routing</option>
-                    <option value="best_quality">⭐ Best Cinematic Quality</option>
-                    <option value="fastest">⚡ Fastest Generation</option>
-                    <option value="budget">🏷️ Budget Economical</option>
-                    <optgroup label="Cinematic Video Models">
-                        {% for m in video_models %}
-                            <option value="{{ m.model_id }}">{{ m.display_name }}</option>
-                        {% endfor %}
-                    </optgroup>
-                </select>
-
-                <!-- Image Models Selector -->
-                <select name="model"
-                        x-show="generationType === 'image'"
-                        :disabled="generationType !== 'image'"
-                        x-model="selectedModel"
-                        class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500"
-                        x-cloak>
-                    <option value="automatic">✨ Automatic Smart Routing</option>
-                    <option value="best_quality">⭐ Best Photorealistic Quality</option>
-                    <option value="fastest">⚡ Fastest Generation</option>
-                    <option value="budget">🏷️ Budget Economical</option>
-                    <optgroup label="Generative Image Models">
-                        {% for m in image_models %}
-                            <option value="{{ m.model_id }}">{{ m.display_name }}</option>
-                        {% endfor %}
-                    </optgroup>
-                </select>
-            </div>
-
-            <!-- Aspect Ratio -->
-            <div class="space-y-1.5">
-                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Aspect Ratio</label>
-                <select name="aspect_ratio" x-model="aspectRatio" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
-                    <option value="16:9">16:9 (Landscape / YouTube)</option>
-                    <option value="9:16">9:16 (Portrait / Reels & TikTok)</option>
-                    <option value="1:1">1:1 (Square / Feed)</option>
-                    <option value="4:3">4:3 (Classic TV)</option>
-                    <option value="21:9">21:9 (Cinematic Widescreen)</option>
-                </select>
-            </div>
-
-            <!-- Duration (Video Only) -->
-            <div x-show="generationType === 'video'" class="space-y-1.5">
-                <div class="flex items-center justify-between">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Duration</label>
-                    <span class="text-xs font-bold text-cyan-400" x-text="duration + 's'"></span>
+                       x-model="negativePrompt"
+                       placeholder="e.g. blurry, distorted anatomy, grainy, low resolution, bad hands, cartoonish artifacts, watermark"
+                       class="w-full rounded-xl bg-black/40 border border-white/[0.08] text-xs text-white placeholder-slate-500 px-3.5 py-2 outline-none focus:border-orange-500/50">
+                <div class="flex flex-wrap items-center gap-1.5 text-[10px] text-slate-400">
+                    <span>Quick filters:</span>
+                    <button type="button" @click="negativePrompt += (negativePrompt ? ', ' : '') + 'blurry, low quality'" class="px-2 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] text-slate-300">+ blurry</button>
+                    <button type="button" @click="negativePrompt += (negativePrompt ? ', ' : '') + 'distorted faces, mutated hands'" class="px-2 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] text-slate-300">+ distorted anatomy</button>
+                    <button type="button" @click="negativePrompt += (negativePrompt ? ', ' : '') + 'watermark, text, subtitles'" class="px-2 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] text-slate-300">+ watermark</button>
                 </div>
-                <input type="range"
-                       name="duration"
-                       min="3"
-                       max="15"
-                       step="1"
-                       x-model="duration"
-                       @input="calculateCredits()"
-                       class="range range-xs range-primary mt-2">
-            </div>
-
-            <!-- Quality Preset -->
-            <div class="space-y-1.5">
-                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Render Quality</label>
-                <select name="quality" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
-                    <option value="standard">Standard (High Definition)</option>
-                    <option value="hd">Ultra HD 4K (Premium)</option>
-                </select>
             </div>
         </div>
 
-        <!-- Optional Character & Reference Upload -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-white/5">
-            <!-- Reusable Character Attachment -->
-            <div class="space-y-1.5">
+        <!-- Optional Asset Reference & AI Character Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <!-- Consistent Character Selector (Custom Flashloop Popover) -->
+            <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] p-3.5 space-y-2 relative"
+                 @click.outside="characterDropdownOpen = false">
+                <input type="hidden" name="character_id" :value="characterId">
+                
                 <div class="flex items-center justify-between">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Featured Character</label>
-                    <a href="{% url 'characters:create' %}" target="_blank" class="text-[11px] text-brand-400 hover:text-brand-300 font-semibold transition flex items-center gap-1">
-                        <span>+</span> Create Character
+                    <label class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <span class="text-orange-400">👥</span>
+                        <span>AI Character</span>
+                    </label>
+                    <a href="{% url 'characters:create' %}" target="_blank" class="text-[11px] text-orange-400 hover:text-orange-300 font-semibold transition flex items-center gap-0.5">
+                        <span>+ New Character</span>
+                        <span class="text-[9px]">↗</span>
                     </a>
                 </div>
-                <select name="character_id" class="w-full rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2.5 outline-none focus:border-brand-500">
-                    <option value="">No Character (Standalone Scene)</option>
+
+                <!-- Custom Trigger Button with Live Avatar & Name -->
+                <button type="button"
+                        @click="characterDropdownOpen = !characterDropdownOpen"
+                        :class="characterDropdownOpen ? 'border-orange-500/70 ring-1 ring-orange-500/30 bg-[#16181c]' : 'border-white/[0.08] bg-black/50 hover:border-white/20'"
+                        class="w-full rounded-xl border text-xs text-white px-3 py-2 outline-none transition-all duration-200 flex items-center justify-between gap-2.5">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <!-- Avatar Frame Preview -->
+                        <div class="w-6 h-6 rounded-lg bg-[#1a1d22] border border-white/10 overflow-hidden shrink-0 flex items-center justify-center text-xs shadow-sm">
+                            <template x-if="selectedCharacterAvatar">
+                                <img :src="selectedCharacterAvatar" :alt="selectedCharacterName" class="w-full h-full object-cover">
+                            </template>
+                            <template x-if="!selectedCharacterAvatar && characterId">
+                                <span class="text-orange-400 font-bold">👤</span>
+                            </template>
+                            <template x-if="!characterId">
+                                <span class="text-slate-500 text-[10px]">🌐</span>
+                            </template>
+                        </div>
+
+                        <!-- Name & Active Tagline -->
+                        <div class="text-left min-w-0">
+                            <div class="font-bold text-white text-xs truncate" x-text="selectedCharacterName"></div>
+                        </div>
+                    </div>
+
+                    <!-- Animated Chevron Icon -->
+                    <svg class="w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200"
+                         :class="characterDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+
+                <!-- Custom Popover Menu with Avatar Images and Names -->
+                <div x-show="characterDropdownOpen"
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
+                     x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                     x-transition:leave="transition ease-in duration-100"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     class="absolute left-3.5 right-3.5 top-full mt-1.5 rounded-2xl bg-[#0d0f12]/95 backdrop-blur-xl border border-white/[0.12] shadow-2xl p-2 space-y-1 z-50 max-h-64 overflow-y-auto">
+                    
+                    <!-- Option: No Character -->
+                    <button type="button"
+                            @click="selectCharacter('', 'No Character (Standalone Scene)', '', 'Standalone Scene')"
+                            :class="characterId === '' ? 'bg-orange-500/15 border-orange-500/40 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.04]'"
+                            class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 group">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="w-8 h-8 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center text-slate-400 text-sm shrink-0">
+                                🌐
+                            </div>
+                            <div class="min-w-0">
+                                <div class="text-xs font-bold text-white group-hover:text-orange-300 transition">No Character (Standalone Scene)</div>
+                                <div class="text-[10px] text-slate-400 truncate">Standard scene without facial consistency lock</div>
+                            </div>
+                        </div>
+                        <span x-show="characterId === ''" class="text-orange-400 text-xs font-bold shrink-0">✓</span>
+                    </button>
+
+                    <div class="border-t border-white/[0.06] my-1"></div>
+
+                    <!-- User Saved Characters Roster -->
                     {% for c in characters %}
-                        <option value="{{ c.id }}">{{ c.name }}</option>
+                        <button type="button"
+                                @click="selectCharacter('{{ c.id }}', '{{ c.name|escapejs }}', '{% if c.avatar %}{{ c.avatar.url }}{% endif %}', '{{ c.appearance_description|truncatechars:40|escapejs }}')"
+                                :class="characterId === '{{ c.id }}' ? 'bg-orange-500/15 border-orange-500/40 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.04]'"
+                                class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 group">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <!-- Real Character Avatar Image or Fallback -->
+                                <div class="w-8 h-8 rounded-lg bg-[#1a1d22] border border-orange-500/30 overflow-hidden flex items-center justify-center text-xs shrink-0 shadow-sm">
+                                    {% if c.avatar %}
+                                        <img src="{{ c.avatar.url }}" alt="{{ c.name }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <span class="text-orange-400 font-bold">👤</span>
+                                    {% endif %}
+                                </div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="text-xs font-bold text-white group-hover:text-orange-300 transition truncate">{{ c.name }}</div>
+                                    <div class="text-[10px] text-slate-400 truncate">{{ c.appearance_description|default:c.description|default:"Consistent Identity" }}</div>
+                                </div>
+                            </div>
+                            <span x-show="characterId === '{{ c.id }}'" class="text-orange-400 text-xs font-bold shrink-0">✓</span>
+                        </button>
                     {% empty %}
-                        <option value="" disabled>No characters created yet (click + Create Character above)</option>
+                        <div class="p-3 text-center space-y-1">
+                            <p class="text-[11px] text-slate-400">No characters forged yet.</p>
+                            <a href="{% url 'characters:create' %}" target="_blank" class="text-xs text-orange-400 font-bold hover:underline inline-block">+ Forge First Character</a>
+                        </div>
                     {% endfor %}
-                </select>
+                </div>
             </div>
 
-            <!-- Reference Image Upload -->
-            <div class="space-y-1.5">
-                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Reference Image (Image-to-Video)</label>
-                <input type="file"
-                       name="reference_file"
-                       accept="image/png,image/jpeg,image/webp"
-                       @change="hasReference = true"
-                       class="file-input file-input-bordered file-input-sm w-full bg-surface border-white/10 text-xs text-slate-300">
+            <!-- Image-to-Video Reference Upload -->
+            <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] p-3.5 space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <span>🖼️ Image Reference (Image-to-Video)</span>
+                    </label>
+                    <span class="text-[10px] text-slate-500">Max 25MB</span>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <label class="flex-1 cursor-pointer">
+                        <input id="fl-ref-input"
+                               type="file"
+                               name="reference_file"
+                               accept="image/png,image/jpeg,image/webp"
+                               @change="handleFileChange($event)"
+                               class="hidden">
+                        <div class="w-full rounded-xl bg-black/50 border border-dashed border-white/15 hover:border-orange-500/50 px-3 py-2 text-xs text-slate-300 hover:text-white flex items-center justify-center gap-2 transition">
+                            <span class="text-orange-400">📁</span>
+                            <span x-text="hasReference ? 'Change Reference Asset' : 'Drop or Browse Reference Image'"></span>
+                        </div>
+                    </label>
+
+                    <!-- Thumbnail chip preview -->
+                    <template x-if="hasReference && referencePreview">
+                        <div class="relative w-10 h-10 rounded-lg overflow-hidden border border-orange-500/40 shrink-0">
+                            <img :src="referencePreview" alt="Reference" class="w-full h-full object-cover">
+                            <button type="button" @click="clearReference()" class="absolute inset-0 bg-black/60 text-white flex items-center justify-center opacity-0 hover:opacity-100 transition text-xs">
+                                ✕
+                            </button>
+                        </div>
+                    </template>
+                </div>
             </div>
         </div>
 
-        <!-- Submit Bar with Real-Time Credit Calculator -->
-        <div class="pt-4 border-t border-white/10 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-semibold text-amber-300 flex items-center gap-1.5">
-                    <span>🪙 Estimated:</span>
-                    <span class="font-extrabold" x-text="estimatedCredits"></span>
-                    <span>Credits</span>
+        <!-- ===================================================
+             INTEGRATED BOTTOM TOOL DOCK
+             =================================================== -->
+        <div class="rounded-2xl bg-[#0a0c0e] border border-white/[0.08] p-4 sm:p-5 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- 1. AI Model Selector (Custom Flashloop Obsidian Dropdown) -->
+                <div class="space-y-1.5 relative" @click.outside="modelDropdownOpen = false">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                        <span>AI Model Engine</span>
+                        <span class="text-[10px] text-orange-400/90 font-mono" x-text="generationType === 'video' ? 'Video Hub' : 'Image Hub'"></span>
+                    </label>
+
+                    <!-- Hidden Inputs for seamless HTMX/Django Form Submission -->
+                    <input type="hidden" name="model" :value="selectedModel">
+                    <input type="hidden" name="model_preference" :value="selectedModel">
+
+                    <!-- Custom Dropdown Trigger Button -->
+                    <button type="button"
+                            @click="modelDropdownOpen = !modelDropdownOpen"
+                            class="w-full rounded-xl bg-[#121417] hover:bg-[#181b1f] border border-white/[0.08] hover:border-orange-500/50 p-2.5 transition-all duration-200 flex items-center justify-between gap-2.5 text-left group focus:outline-none focus:ring-1 focus:ring-orange-500/50 shadow-inner">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <span class="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-sm group-hover:scale-105 transition shrink-0"
+                                  x-text="selectedModelIcon"></span>
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-white block truncate group-hover:text-orange-300 transition"
+                                      x-text="selectedModelName"></span>
+                                <span class="text-[10px] text-slate-400 block truncate"
+                                      x-text="selectedModelDesc || 'Intelligent model execution'"></span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-orange-500/15 text-orange-400 border border-orange-500/25"
+                                  x-text="selectedModelBadge"></span>
+                            <svg class="w-4 h-4 text-slate-400 group-hover:text-orange-400 transition-transform duration-200"
+                                 :class="modelDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
+                    </button>
+
+                    <!-- Custom Dropdown Popover Menu -->
+                    <div x-show="modelDropdownOpen"
+                         x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                         x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+                         class="absolute left-0 bottom-full mb-2 w-full min-w-[280px] sm:min-w-[340px] z-50 rounded-2xl bg-[#0f1114]/98 backdrop-blur-2xl border border-white/12 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.95),0_0_25px_rgba(249,115,22,0.2)] p-2 space-y-2 max-h-80 overflow-y-auto no-scrollbar">
+
+                        <!-- Section 1: Intelligent Smart Presets -->
+                        <div class="space-y-1">
+                            <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                <span>⚡ Smart Routing</span>
+                                <span class="text-[9px] text-orange-400 font-mono">Recommended</span>
+                            </div>
+
+                            <!-- Automatic -->
+                            <button type="button"
+                                    @click="selectModel('automatic', 'Automatic Smart Routing', 'Smart Auto', '✨', 'Auto-selects optimal engine with failover protection')"
+                                    :class="selectedModel === 'automatic' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
+                                    class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="w-6 h-6 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center text-xs shrink-0">✨</span>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-semibold truncate group-hover:text-orange-300">Automatic Smart Routing</div>
+                                        <div class="text-[10px] text-slate-400">Intelligent failover & load balance</div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono shrink-0">Optimal</span>
+                            </button>
+
+                            <!-- Best Quality -->
+                            <button type="button"
+                                    @click="selectModel('best_quality', generationType === 'video' ? 'Best Cinematic Quality' : 'Best Photoreal Quality', 'Ultra 4K', '⭐', 'Prioritizes maximum visual fidelity & photorealism')"
+                                    :class="selectedModel === 'best_quality' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
+                                    class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="w-6 h-6 rounded-md bg-purple-500/20 text-purple-300 flex items-center justify-center text-xs shrink-0">⭐</span>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-semibold truncate group-hover:text-orange-300" x-text="generationType === 'video' ? 'Best Cinematic Quality' : 'Best Photoreal Quality'"></div>
+                                        <div class="text-[10px] text-slate-400">Ultra high dynamic range & resolution</div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 font-mono shrink-0">Top Tier</span>
+                            </button>
+
+                            <!-- Fastest -->
+                            <button type="button"
+                                    @click="selectModel('fastest', 'Fastest Generation', 'Ultra Fast', '⚡', 'Prioritizes low-latency generation pipelines')"
+                                    :class="selectedModel === 'fastest' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
+                                    class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="w-6 h-6 rounded-md bg-cyan-500/20 text-cyan-300 flex items-center justify-center text-xs shrink-0">⚡</span>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-semibold truncate group-hover:text-orange-300">Fastest Generation</div>
+                                        <div class="text-[10px] text-slate-400">Ultra-fast turnaround time</div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-mono shrink-0">Fast</span>
+                            </button>
+
+                            <!-- Budget -->
+                            <button type="button"
+                                    @click="selectModel('budget', 'Budget Economical', 'Lowest Cost', '🏷️', 'Optimizes for minimum credit consumption')"
+                                    :class="selectedModel === 'budget' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
+                                    class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="w-6 h-6 rounded-md bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-xs shrink-0">🏷️</span>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-semibold truncate group-hover:text-orange-300">Budget Economical</div>
+                                        <div class="text-[10px] text-slate-400">Conserves user credit balance</div>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono shrink-0">Eco</span>
+                            </button>
+                        </div>
+
+                        <!-- Section 2: Specific AI Engines (Video) -->
+                        <div x-show="generationType === 'video'" class="space-y-1 pt-2 border-t border-white/[0.06]">
+                            <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                <span>🎬 Dedicated Video Engines</span>
+                            </div>
+
+                            {% for m in video_models %}
+                                <button type="button"
+                                        @click="selectModel('{{ m.model_id }}', '{{ m.display_name }}', '{{ m.provider.slug|upper }}', '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "kling" %}⚡{% elif m.provider.slug == "minimax" %}🪐{% elif m.provider.slug == "seedance" %}🎬{% elif m.provider.slug == "mock" %}🧪{% else %}🎥{% endif %}', '{{ m.provider.name }} • {% if m.supports_audio %}Audio FX • {% endif %}{{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s')"
+                                        :class="selectedModel === '{{ m.model_id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
+                                        class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <span class="w-6 h-6 rounded-md bg-white/[0.06] border border-white/10 text-white flex items-center justify-center text-xs shrink-0">
+                                            {% if m.provider.slug == 'google' %}🌐{% elif m.provider.slug == 'kling' %}⚡{% elif m.provider.slug == 'minimax' %}🪐{% elif m.provider.slug == 'seedance' %}🎬{% elif m.provider.slug == 'mock' %}🧪{% else %}🎥{% endif %}
+                                        </span>
+                                        <div class="min-w-0">
+                                            <div class="text-xs font-semibold truncate group-hover:text-orange-300">{{ m.display_name }}</div>
+                                            <div class="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                                <span>{{ m.provider.name }}</span>
+                                                {% if m.is_premium %}<span class="text-[9px] text-amber-400">★ Premium</span>{% endif %}
+                                                {% if m.supports_audio %}<span class="text-[9px] text-cyan-400">♪ Audio</span>{% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-300 font-mono shrink-0">
+                                        {{ m.credit_cost_fixed }}+{{ m.credit_cost_per_second }}/s
+                                    </span>
+                                </button>
+                            {% endfor %}
+                        </div>
+
+                        <!-- Section 2: Specific AI Engines (Image) -->
+                        <div x-show="generationType === 'image'" x-cloak class="space-y-1 pt-2 border-t border-white/[0.06]">
+                            <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                <span>🎨 Dedicated Image Engines</span>
+                            </div>
+
+                            {% for m in image_models %}
+                                <button type="button"
+                                        @click="selectModel('{{ m.model_id }}', '{{ m.display_name }}', '{{ m.provider.slug|upper }}', '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "openai" %}🤖{% elif m.provider.slug == "flux" or m.provider.slug == "fal" %}🔮{% elif m.provider.slug == "mock" %}🧪{% else %}🎨{% endif %}', '{{ m.provider.name }} • {{ m.credit_cost_fixed }} credits')"
+                                        :class="selectedModel === '{{ m.model_id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
+                                        class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <span class="w-6 h-6 rounded-md bg-white/[0.06] border border-white/10 text-white flex items-center justify-center text-xs shrink-0">
+                                            {% if m.provider.slug == 'google' %}🌐{% elif m.provider.slug == 'openai' %}🤖{% elif m.provider.slug == 'flux' or m.provider.slug == 'fal' %}🔮{% elif m.provider.slug == 'mock' %}🧪{% else %}🎨{% endif %}
+                                        </span>
+                                        <div class="min-w-0">
+                                            <div class="text-xs font-semibold truncate group-hover:text-orange-300">{{ m.display_name }}</div>
+                                            <div class="text-[10px] text-slate-400">{{ m.provider.name }}</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-300 font-mono shrink-0">
+                                        {{ m.credit_cost_fixed }} cr
+                                    </span>
+                                </button>
+                            {% endfor %}
+                        </div>
+                    </div>
                 </div>
 
-                <div class="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <span>💳 Available:</span>
-                    <span class="font-extrabold text-white" id="create-page-wallet-balance">{{ wallet.balance }}</span>
-                    <span>Credits</span>
+                <!-- 2. Graphic Aspect Ratio Selector Chips -->
+                <div class="space-y-1.5 sm:col-span-2">
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Aspect Ratio</label>
+                    <input type="hidden" name="aspect_ratio" :value="aspectRatio">
+                    <div class="grid grid-cols-4 gap-2">
+                        <!-- 16:9 -->
+                        <button type="button"
+                                @click="aspectRatio = '16:9'"
+                                :class="aspectRatio === '16:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                            <span class="w-5 h-3 border border-current rounded-xs inline-block"></span>
+                            <span class="text-[11px]">16:9</span>
+                            <span class="text-[9px] opacity-60">Landscape</span>
+                        </button>
+
+                        <!-- 9:16 -->
+                        <button type="button"
+                                @click="aspectRatio = '9:16'"
+                                :class="aspectRatio === '9:16' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                            <span class="w-3 h-5 border border-current rounded-xs inline-block"></span>
+                            <span class="text-[11px]">9:16</span>
+                            <span class="text-[9px] opacity-60">Reels/TikTok</span>
+                        </button>
+
+                        <!-- 1:1 -->
+                        <button type="button"
+                                @click="aspectRatio = '1:1'"
+                                :class="aspectRatio === '1:1' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                            <span class="w-3.5 h-3.5 border border-current rounded-xs inline-block"></span>
+                            <span class="text-[11px]">1:1</span>
+                            <span class="text-[9px] opacity-60">Square</span>
+                        </button>
+
+                        <!-- 21:9 -->
+                        <button type="button"
+                                @click="aspectRatio = '21:9'"
+                                :class="aspectRatio === '21:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                            <span class="w-6 h-2.5 border border-current rounded-xs inline-block"></span>
+                            <span class="text-[11px]">21:9</span>
+                            <span class="text-[9px] opacity-60">Cinema</span>
+                        </button>
+                    </div>
                 </div>
 
-                <span class="text-[11px] text-slate-400">Refunded instantly if provider fails</span>
+                <!-- 3. Duration Selector (Video) or Quality (Image) -->
+                <div class="space-y-1.5">
+                    <div x-show="generationType === 'video'">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Duration</label>
+                            <span class="text-xs font-bold text-orange-400" x-text="duration + ' Seconds'"></span>
+                        </div>
+                        <input type="hidden" name="duration" :value="duration">
+                        <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
+                            <button type="button"
+                                    @click="duration = 5; calculateCredits()"
+                                    :class="duration === 5 ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="py-2.5 px-1 rounded-xl border text-center transition text-xs">
+                                5s Standard
+                            </button>
+                            <button type="button"
+                                    @click="duration = 10; calculateCredits()"
+                                    :class="duration === 10 ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="py-2.5 px-1 rounded-xl border text-center transition text-xs">
+                                10s Extended
+                            </button>
+                            <button type="button"
+                                    @click="duration = 15; calculateCredits()"
+                                    :class="duration === 15 ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="py-2.5 px-1 rounded-xl border text-center transition text-xs">
+                                15s Cinematic
+                            </button>
+                        </div>
+                    </div>
+
+                    <div x-show="generationType === 'image'" x-cloak>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Image Quality</label>
+                        <select name="quality" class="w-full rounded-xl bg-[#141618] border border-white/[0.08] text-xs text-white px-3 py-2.5 outline-none focus:border-orange-500/50">
+                            <option value="standard">Standard 1080p</option>
+                            <option value="hd">Ultra 4K HD</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
-            <div class="flex items-center gap-3 w-full sm:w-auto">
-                <button type="submit" class="btn btn-primary bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white border-none shadow-xl shadow-brand-500/30 px-8 font-bold w-full sm:w-auto">
-                    <span id="gen-spinner" class="htmx-indicator loading loading-spinner loading-xs mr-1"></span>
-                    Generate Content
+            <!-- Submit Bar with Live Credit Breakdown and Radiant Orange CTA -->
+            <div class="pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4">
+                <!-- Live Credit Counters -->
+                <div class="flex flex-wrap items-center gap-2.5 text-xs">
+                    <div class="px-3.5 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold flex items-center gap-1.5 shadow-sm">
+                        <span>🪙</span>
+                        <span>Estimated:</span>
+                        <span class="text-white font-extrabold" x-text="estimatedCredits"></span>
+                        <span>Credits</span>
+                    </div>
+
+                    <div class="px-3.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-300 font-medium flex items-center gap-1.5">
+                        <span>💳</span>
+                        <span>Wallet:</span>
+                        <span class="font-bold text-white" id="create-page-wallet-balance">{{ wallet.balance }}</span>
+                        <span>Credits</span>
+                    </div>
+
+                    <span class="text-[11px] text-slate-500 hidden md:inline">Auto-refund on failure</span>
+                </div>
+
+                <!-- Radiant Glowing Cleaverloop CTA Button -->
+                <button type="submit"
+                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
+                    <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
+                    <span>✨</span>
+                    <span x-text="generationType === 'video' ? 'Generate Video' : 'Generate Image'"></span>
+                    <span class="opacity-70 text-xs font-mono">•</span>
+                    <span class="text-xs font-mono opacity-90" x-text="estimatedCredits + ' cr'"></span>
                 </button>
             </div>
         </div>
     </form>
+
+    <!-- ===================================================
+         RECENT USER GENERATIONS FEED (Flashloop Showcase Grid)
+         =================================================== -->
+    {% if recent_generations %}
+    <div class="space-y-4 pt-6 border-t border-white/[0.08]">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-orange-400 animate-pulse"></span>
+                <h3 class="text-base font-heading font-bold text-white flex items-center gap-2">
+                    <span>Recent Studio Outputs</span>
+                    <span class="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[10px] text-orange-400 font-mono">{{ recent_generations|length }} creations</span>
+                </h3>
+            </div>
+            <a href="{% url 'generations:history' %}" class="text-xs font-semibold text-orange-400 hover:text-orange-300 flex items-center gap-1 group transition">
+                <span>Explore Full Library</span>
+                <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+            {% for gen in recent_generations %}
+                <div class="rounded-2xl bg-[#0e1013] border border-white/[0.08] hover:border-orange-500/50 transition-all duration-300 overflow-hidden flex flex-col justify-between group shadow-xl hover:shadow-[0_12px_35px_-5px_rgba(249,115,22,0.18)] hover:-translate-y-1 relative">
+                    
+                    <!-- Media Canvas Area -->
+                    <div class="aspect-[16/10] bg-black/90 relative overflow-hidden flex items-center justify-center">
+                        {% if gen.output_media %}
+                            {% if gen.generation_type == 'video' %}
+                                <video controls preload="none" class="w-full h-full object-cover" poster="{{ gen.output_media.thumbnail_url }}">
+                                    <source src="{{ gen.output_media.url }}" type="video/mp4">
+                                </video>
+                            {% else %}
+                                <img src="{{ gen.output_media.url }}"
+                                     alt="{{ gen.prompt }}"
+                                     loading="lazy"
+                                     decoding="async"
+                                     class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                            {% endif %}
+                        {% elif gen.status == 'failed' %}
+                            <!-- Styled Failed State -->
+                            <div class="absolute inset-0 bg-gradient-to-b from-rose-950/40 via-black/80 to-black flex flex-col items-center justify-center gap-1.5 p-4 text-center">
+                                <span class="text-xl">⚠️</span>
+                                <span class="text-xs font-bold text-rose-300">Generation Failed</span>
+                                <span class="text-[10px] text-emerald-400 font-semibold">Credits Restored ✓</span>
+                            </div>
+                        {% else %}
+                            <!-- Shimmering Diffusion Active State -->
+                            <div class="absolute inset-0 bg-gradient-to-b from-orange-500/10 to-black/90 flex flex-col items-center justify-center gap-2 p-4 text-center">
+                                <div class="w-7 h-7 rounded-full border-2 border-orange-500/30 border-t-orange-400 animate-spin flex items-center justify-center">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
+                                </div>
+                                <span class="text-xs font-bold text-orange-300 font-mono">Rendering...</span>
+                                <span class="text-[9px] text-slate-500">Diffusion active</span>
+                            </div>
+                        {% endif %}
+
+                        <!-- Top-Left Floating Modality Tag -->
+                        <span class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-md text-white border border-white/10 flex items-center gap-1 shadow-md">
+                            {% if gen.generation_type == 'video' %}
+                                <span>🎬</span>
+                                <span>{{ gen.duration }}s</span>
+                            {% else %}
+                                <span>🎨</span>
+                                <span>{{ gen.aspect_ratio }}</span>
+                            {% endif %}
+                        </span>
+
+                        <!-- Top-Right Quick Remake Button -->
+                        <button type="button"
+                                @click="remakeFromGen('{{ gen.prompt|escapejs }}', '{{ gen.generation_type }}', '{{ gen.aspect_ratio }}', {{ gen.duration|default:5 }}, '{{ gen.model.model_id }}')"
+                                title="Reuse prompt in Composer"
+                                class="absolute top-2.5 right-2.5 px-2 py-1 rounded-lg bg-black/70 hover:bg-orange-500/90 backdrop-blur-md text-slate-300 hover:text-white border border-white/10 hover:border-orange-500 text-[10px] font-bold transition flex items-center gap-1 opacity-0 group-hover:opacity-100 shadow-md">
+                            <span>✨</span>
+                            <span>Remake</span>
+                        </button>
+                    </div>
+
+                    <!-- Card Body & Metadata -->
+                    <div class="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
+                        <div>
+                            <p class="text-xs font-medium text-slate-200 group-hover:text-white transition line-clamp-2 leading-relaxed" title="{{ gen.prompt }}">
+                                {{ gen.prompt }}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2 pt-2 border-t border-white/[0.04]">
+                            <div class="flex items-center justify-between text-[10px] text-slate-400">
+                                <span class="text-orange-400 font-mono font-semibold flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
+                                    <span>{{ gen.model.display_name|truncatechars:18 }}</span>
+                                </span>
+                                <span class="text-slate-500 font-mono">{{ gen.created_at|timesince }} ago</span>
+                            </div>
+
+                            <!-- Footer Actions -->
+                            <div class="flex items-center justify-between gap-2 pt-1">
+                                <button type="button"
+                                        @click="remakeFromGen('{{ gen.prompt|escapejs }}', '{{ gen.generation_type }}', '{{ gen.aspect_ratio }}', {{ gen.duration|default:5 }}, '{{ gen.model.model_id }}')"
+                                        class="text-[11px] font-semibold text-slate-400 hover:text-orange-400 flex items-center gap-1 transition">
+                                    <span>↺</span>
+                                    <span>Use Prompt</span>
+                                </button>
+
+                                <div class="flex items-center gap-2 text-[11px]">
+                                    {% if gen.output_media %}
+                                        <a href="{{ gen.output_media.url }}" download class="text-orange-400 hover:text-orange-300 font-bold flex items-center gap-0.5">
+                                            <span>↓</span>
+                                            <span>Download</span>
+                                        </a>
+                                    {% endif %}
+                                    <a href="{% url 'generations:detail' gen.id %}" class="text-slate-500 hover:text-white transition">
+                                        View ↗
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <script>
@@ -246,4 +971,3 @@
     });
 </script>
 {% endblock %}
-

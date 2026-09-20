@@ -189,7 +189,11 @@ def create_generation_view(request):
 @login_required
 def generation_status_partial(request, generation_id):
     """HTMX polling endpoint returning live status and media preview when finished."""
-    generation = get_object_or_404(Generation, id=generation_id, user=request.user)
+    generation = get_object_or_404(
+        Generation.objects.select_related('output_media', 'model', 'provider'),
+        id=generation_id,
+        user=request.user
+    )
     return render(request, 'partials/generation_status.html', {'generation': generation})
 
 @login_required

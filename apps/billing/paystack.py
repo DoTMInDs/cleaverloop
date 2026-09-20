@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 import time
 
+from django.core.cache import cache
+
 class CurrencyService:
     """Service to manage dynamic currency conversions between USD and local settlement currencies."""
     _cached_rate = None
@@ -20,7 +22,7 @@ class CurrencyService:
     def get_usd_to_ghs_rate(cls) -> float:
         """
         Get USD to GHS exchange rate.
-        Checks settings.USD_TO_GHS_RATE first. If 'auto' or unset, queries live rates with 1hr caching.
+        Checks settings.USD_TO_GHS_RATE first. If 'auto' or unset, queries live rates with 1hr shared Redis caching.
         """
         configured_rate = getattr(settings, 'USD_TO_GHS_RATE', 'auto')
         if configured_rate != 'auto':
@@ -29,8 +31,13 @@ class CurrencyService:
             except (ValueError, TypeError):
                 pass
 
+        # Check shared distributed cache first
+        cached_rate = cache.get('cleaverloop_usd_to_ghs_rate')
+        if cached_rate is not None:
+            cls._cached_rate = cached_rate
+            return cached_rate
+
         now = time.time()
-        # Cache live rate in memory for 1 hour (3600 seconds)
         if cls._cached_rate and (now - cls._last_fetched) < 3600:
             return cls._cached_rate
 
@@ -42,13 +49,16 @@ class CurrencyService:
                 if rate and float(rate) > 0:
                     cls._cached_rate = round(float(rate), 2)
                     cls._last_fetched = now
+                    cache.set('cleaverloop_usd_to_ghs_rate', cls._cached_rate, timeout=3600)
                     logger.info(f"Updated live USD to GHS exchange rate: 1 USD = {cls._cached_rate} GHS")
                     return cls._cached_rate
         except Exception as e:
             logger.warning(f"Failed to fetch live exchange rate: {e}")
 
         # Fallback default if offline
-        return cls._cached_rate or 11.58
+        fallback = cls._cached_rate or 11.58
+        cache.set('cleaverloop_usd_to_ghs_rate', fallback, timeout=600)
+        return fallback
 
     @classmethod
     def convert_usd_to_ghs(cls, usd_amount: float) -> tuple[float, float]:

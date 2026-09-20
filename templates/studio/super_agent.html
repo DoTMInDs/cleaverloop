@@ -1,57 +1,383 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Super Agent Story Studio — CleaverLoop AI{% endblock %}
+{% block title %}Super Agent Story Studio — CleaverLoop AI (Flashloop Edition){% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-8">
-    <!-- Header -->
-    <div class="space-y-2 text-center max-w-2xl mx-auto">
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold">
-            <span>✨</span> Autonomous AI Storyboard Director
+<div class="max-w-6xl mx-auto space-y-8 relative" x-data="{
+    promptText: '',
+    aspectRatio: '16:9',
+    characterId: '',
+    isSynthesizing: false,
+    
+    presets: [
+        {
+            title: '⚡ 30s Cyberpunk EV Commercial',
+            tag: 'Commercial',
+            aspect: '16:9',
+            prompt: 'Create a 30-second high-energy cinematic commercial for an autonomous electric supercar called Apex-7. Show the vehicle gliding through a rainy futuristic neo-Tokyo at midnight, rain droplets beading on aerodynamic carbon fiber, holographic heads-up displays engaging, and the car accelerating into a glowing neon tunnel.'
+        },
+        {
+            title: '🧸 15s Claymation Detective Mystery',
+            tag: 'Stop-Motion',
+            aspect: '16:9',
+            prompt: 'Create a cozy 15-second claymation stop-motion detective scene. A miniature clay inspector with a magnifying glass investigates a tiny crime scene in a warm dimly lit study, discovering a glowing golden key hidden under a vintage book, looking up in shock as a shadow appears at the door.'
+        },
+        {
+            title: '📱 15s Viral Neon Dance Reel',
+            tag: 'Social VFX',
+            aspect: '9:16',
+            prompt: 'Create a high-retention 15-second viral vertical video for TikTok/Reels featuring a glowing cyan and electric orange holographic skeleton performing dynamic dance choreography in an abandoned cyberpunk subway station with volumetric lasers and strobe lighting.'
+        },
+        {
+            title: '🎞️ 1930s Rubber Hose Cartoon Chase',
+            tag: 'Animation',
+            aspect: '16:9',
+            prompt: 'Create a classic 1930s black-and-white rubber hose animation short. A cheerful cartoon character is baking in a vintage kitchen when mischievous anthropomorphic pastries come to life and start a chaotic, bouncy slapstick chase around the kitchen.'
+        }
+    ],
+
+    applyPreset(p) {
+        this.promptText = p.prompt;
+        this.aspectRatio = p.aspect;
+        $nextTick(() => {
+            const el = document.getElementById('agent-prompt-textarea');
+            if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        });
+    }
+}">
+
+    <!-- ===================================================
+         FLASHLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE
+         =================================================== -->
+    <div class="relative pt-2 pb-6 overflow-hidden text-center select-none">
+        <!-- Ambient Flashloop Arch Lighting Background -->
+        <div class="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center opacity-70">
+            <svg class="w-full max-w-5xl h-48 sm:h-64" viewBox="0 0 1200 320" fill="none" preserveAspectRatio="none">
+                <defs>
+                    <radialGradient id="fl-agent-glow" cx="50%" cy="0%" r="90%">
+                        <stop offset="0%" stop-color="#fb923c" stop-opacity="0.35" />
+                        <stop offset="50%" stop-color="#ea580c" stop-opacity="0.12" />
+                        <stop offset="100%" stop-color="#111315" stop-opacity="0" />
+                    </radialGradient>
+                    <linearGradient id="fl-agent-beam" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#f97316" stop-opacity="0.6" />
+                        <stop offset="100%" stop-color="#f97316" stop-opacity="0" />
+                    </linearGradient>
+                </defs>
+                <path d="M 100 320 Q 600 20 1100 320" stroke="url(#fl-agent-beam)" stroke-width="2" stroke-linecap="round" fill="none" />
+                <path d="M 0 320 Q 600 -30 1200 320" fill="url(#fl-agent-glow)" opacity="0.8" />
+            </svg>
         </div>
-        <h1 class="text-3xl md:text-5xl font-heading font-black text-white tracking-tight">
-            Creative Super Agent
+
+        <!-- Super Agent Flashloop Badge -->
+        <div class="inline-flex items-center justify-center mb-4">
+            <div class="fl-badge-skew px-3.5 py-1 text-xs font-heading font-extrabold uppercase tracking-wider text-white shadow-lg shadow-orange-500/25 flex items-center gap-1.5">
+                <span>⚡</span>
+                <span class="fl-badge-unskew inline-block">Super Agent 3.0 • Autonomous Storyboard Director</span>
+            </div>
+        </div>
+
+        <!-- Main Heading -->
+        <h1 class="text-3xl sm:text-5xl md:text-6xl font-heading font-black tracking-tight text-white max-w-4xl mx-auto leading-tight">
+            Direct Multi-Scene Cinema with <span class="bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400">Autonomous AI</span>
         </h1>
-        <p class="text-xs md:text-sm text-slate-300">
-            Enter a single high-level creative prompt. The agent decomposes your idea into structured scenes, generates scene prompts, selects optimal models, and prepares a production plan with strict safety guardrails.
+
+        <!-- Subtitle -->
+        <p class="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto mt-3 leading-relaxed">
+            Enter a single high-level creative vision. The Super Agent uses advanced reasoning to decompose your idea into sequential storyboard scenes, craft camera physics, orchestrate consistent characters, and orchestrate production with full budget safety.
         </p>
+
+        <!-- Live Intelligence Ribbon -->
+        <div class="mt-6 flex items-center justify-center overflow-hidden py-2 border-y border-white/[0.05] bg-black/40">
+            <div class="flex items-center gap-6 text-[11px] text-slate-400 font-mono flex-wrap justify-center px-4">
+                <div class="flex items-center gap-1.5 text-orange-400">
+                    <span class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+                    <span>Gemini 2.5 Pro Reasoning</span>
+                </div>
+                <span>•</span>
+                <div class="flex items-center gap-1.5 text-slate-300">
+                    <span>🎬 Multi-Scene Decomposition</span>
+                </div>
+                <span>•</span>
+                <div class="flex items-center gap-1.5 text-amber-400">
+                    <span>🎭 Consistent AI Cast</span>
+                </div>
+                <span>•</span>
+                <div class="flex items-center gap-1.5 text-cyan-400">
+                    <span>📹 Dynamic Camera Physics</span>
+                </div>
+                <span>•</span>
+                <div class="flex items-center gap-1.5 text-emerald-400">
+                    <span>🛡️ Strict Budget Guardrails</span>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <!-- Agent Idea Input Form -->
+    <!-- ===================================================
+         SUPER AGENT COMPOSER CARD (fl-composer-card)
+         =================================================== -->
     <form hx-post="{% url 'agent:plan' %}"
           hx-target="#agent-plan-result"
           hx-swap="innerHTML"
-          hx-indicator="#agent-spinner"
-          class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-5">
+          hx-indicator="#agent-plan-skeleton, #agent-spinner"
+          class="fl-composer-card rounded-3xl p-5 sm:p-7 space-y-6 relative">
         {% csrf_token %}
+        <input type="hidden" name="aspect_ratio" :value="aspectRatio">
+        <input type="hidden" name="character_id" :value="characterId">
 
-        <div class="space-y-2">
-            <label class="block text-xs font-bold uppercase tracking-wider text-slate-300">What would you like to create?</label>
-            <textarea name="prompt"
-                      rows="4"
-                      required
-                      placeholder="e.g. Create a 30-second high-energy cinematic commercial for an AI-powered resume builder called ServInk. Show a frustrated job seeker discovering the tool, the AI instantly formatting a brilliant CV, and the candidate smiling as they receive an interview invite."
-                      class="w-full rounded-2xl bg-surface/80 border border-white/10 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 text-sm text-white placeholder-slate-500 p-4 outline-none resize-none"></textarea>
-        </div>
-
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-            <div class="flex items-center gap-3 w-full sm:w-auto">
-                <label class="text-xs font-semibold text-slate-400">Target Aspect Ratio:</label>
-                <select name="aspect_ratio" class="rounded-xl bg-surface border border-white/10 text-xs text-white px-3 py-2 outline-none">
-                    <option value="16:9">16:9 Landscape (YouTube/TV)</option>
-                    <option value="9:16">9:16 Portrait (TikTok/Reels)</option>
-                    <option value="1:1">1:1 Square (Social Feed)</option>
-                </select>
+        <!-- Header: Top Control Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+            <div class="flex items-center gap-2">
+                <span class="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 text-sm font-bold shadow-sm">
+                    ✨
+                </span>
+                <div>
+                    <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                        <span>Creative Narrative Brief</span>
+                    </h2>
+                    <p class="text-[11px] text-slate-400">Describe your story, commercial, music video, or scene concept</p>
+                </div>
             </div>
 
-            <button type="submit" class="btn btn-primary bg-gradient-to-r from-amber-500 via-brand-600 to-cyan-500 hover:opacity-95 text-white border-none shadow-xl shadow-brand-500/20 px-8 font-bold w-full sm:w-auto">
-                <span id="agent-spinner" class="htmx-indicator loading loading-spinner loading-xs mr-2"></span>
-                <span>✨</span> Generate Storyboard Plan
+            <!-- Live Wallet Pill -->
+            <div class="flex items-center gap-2.5 text-xs">
+                <div class="px-3.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-300 font-medium flex items-center gap-1.5">
+                    <span>💳</span>
+                    <span>Wallet:</span>
+                    <span class="font-bold text-white">{{ wallet.balance }}</span>
+                    <span>Credits</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Storyboard Idea Presets -->
+        <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                <span class="flex items-center gap-1.5">
+                    <span>🔥 Instant Storyboard Templates:</span>
+                    <span class="text-orange-400 font-normal">(click to auto-fill narrative)</span>
+                </span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <template x-for="p in presets" :key="p.title">
+                    <button type="button"
+                            @click="applyPreset(p)"
+                            class="p-3 rounded-2xl bg-white/[0.03] hover:bg-orange-500/10 border border-white/[0.06] hover:border-orange-500/40 text-left transition-all duration-200 group flex flex-col justify-between gap-2">
+                        <div class="flex items-center justify-between gap-1 w-full">
+                            <span class="text-xs font-bold text-slate-200 group-hover:text-orange-300 transition" x-text="p.title"></span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400 font-mono shrink-0" x-text="p.tag"></span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 line-clamp-2 leading-relaxed" x-text="p.prompt"></p>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Central Prompt Box -->
+        <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] focus-within:border-orange-500/50 focus-within:ring-1 focus-within:ring-orange-500/30 transition-all duration-200 p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                    <span>Story Overview & Desired Narrative Flow</span>
+                </label>
+                <span class="text-[10px] text-orange-400 font-mono">Decomposes into 3–6 scenes</span>
+            </div>
+
+            <textarea id="agent-prompt-textarea"
+                      name="prompt"
+                      rows="4"
+                      required
+                      x-model="promptText"
+                      placeholder="e.g. Create a 30-second high-energy cinematic commercial for an AI creative platform called CleaverLoop. Scene 1: A digital creator staring at a blank timeline in frustration. Scene 2: The creator types a prompt into CleaverLoop, and glowing orange neural beams illuminate the room. Scene 3: Hyperrealistic 4K video clips generate instantly in sequence. Scene 4: The creator smiles and exports the final film."
+                      class="w-full bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-0 resize-none leading-relaxed"></textarea>
+
+            <div class="flex items-center justify-between pt-2 border-t border-white/[0.04] text-xs text-slate-400">
+                <span class="text-[11px] text-slate-500">The agent automatically selects models, resolves camera movement, and calculates scene durations.</span>
+                <span class="text-[11px] font-mono text-slate-500" x-text="promptText.length + '/2000'"></span>
+            </div>
+        </div>
+
+        <!-- AI Character Roster & Cast Consistency Row -->
+        <div class="rounded-2xl bg-[#0e1012] border border-white/[0.08] p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <label class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <span class="text-orange-400">🎭</span>
+                    <span>AI Character & Cast Lock</span>
+                    <span class="text-[10px] text-slate-500 font-normal">(Zero Facial & Wardrobe Drift)</span>
+                </label>
+                <a href="{% url 'characters:create' %}" target="_blank" class="text-[11px] text-orange-400 hover:text-orange-300 font-semibold transition flex items-center gap-1">
+                    <span>+ New Character</span>
+                    <span>↗</span>
+                </a>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                <!-- Auto Cast Option -->
+                <button type="button"
+                        @click="characterId = ''"
+                        :class="characterId === '' ? 'bg-orange-500/15 border-orange-500/80 text-white' : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:border-white/20'"
+                        class="p-3 rounded-xl border text-left transition-all duration-200 flex items-start gap-3 group">
+                    <div class="w-8 h-8 rounded-lg bg-orange-500/20 border border-orange-500/30 flex items-center justify-center text-orange-400 text-sm shrink-0">
+                        ✨
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs font-bold text-white group-hover:text-orange-300 transition">Auto-Decompose Cast</div>
+                        <div class="text-[10px] text-slate-400 truncate">Super Agent creates tailored characters</div>
+                    </div>
+                </button>
+
+                <!-- User Saved Characters -->
+                {% for c in characters %}
+                    <button type="button"
+                            @click="characterId = '{{ c.id }}'"
+                            :class="characterId === '{{ c.id }}' ? 'bg-orange-500/15 border-orange-500/80 text-white' : 'bg-white/[0.02] border-white/[0.06] text-slate-400 hover:border-white/20'"
+                            class="p-3 rounded-xl border text-left transition-all duration-200 flex items-start gap-3 group">
+                        <div class="w-8 h-8 rounded-lg bg-white/[0.06] border border-white/[0.1] overflow-hidden flex items-center justify-center text-sm shrink-0">
+                            {% if c.avatar %}
+                                <img src="{{ c.avatar.url }}" alt="{{ c.name }}" class="w-full h-full object-cover">
+                            {% else %}
+                                <span>👤</span>
+                            {% endif %}
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs font-bold text-white group-hover:text-orange-300 transition truncate">{{ c.name }}</div>
+                            <div class="text-[10px] text-slate-400 truncate">{{ c.appearance_description|default:c.description|default:"Custom Identity" }}</div>
+                        </div>
+                    </button>
+                {% empty %}
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Integrated Settings & Aspect Ratio Row -->
+        <div class="rounded-2xl bg-[#0a0c0e] border border-white/[0.08] p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <!-- Aspect Ratio Selector Chips -->
+            <div class="space-y-1.5 w-full sm:w-auto">
+                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Target Aspect Ratio</label>
+                <div class="inline-flex p-1 rounded-2xl bg-[#141618] border border-white/[0.08] gap-1">
+                    <button type="button"
+                            @click="aspectRatio = '16:9'"
+                            :class="aspectRatio === '16:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'text-slate-400 hover:text-white border-transparent'"
+                            class="px-3 py-1.5 rounded-xl border text-xs font-semibold transition flex items-center gap-1.5">
+                        <span class="w-3.5 h-2 border border-current rounded-xs inline-block"></span>
+                        <span>16:9 Cinema</span>
+                    </button>
+                    <button type="button"
+                            @click="aspectRatio = '9:16'"
+                            :class="aspectRatio === '9:16' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'text-slate-400 hover:text-white border-transparent'"
+                            class="px-3 py-1.5 rounded-xl border text-xs font-semibold transition flex items-center gap-1.5">
+                        <span class="w-2 h-3.5 border border-current rounded-xs inline-block"></span>
+                        <span>9:16 Vertical</span>
+                    </button>
+                    <button type="button"
+                            @click="aspectRatio = '1:1'"
+                            :class="aspectRatio === '1:1' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'text-slate-400 hover:text-white border-transparent'"
+                            class="px-3 py-1.5 rounded-xl border text-xs font-semibold transition flex items-center gap-1.5">
+                        <span class="w-2.5 h-2.5 border border-current rounded-xs inline-block"></span>
+                        <span>1:1 Square</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Radiant Launch CTA Button -->
+            <button type="submit"
+                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
+                <span id="agent-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
+                <span>✨</span>
+                <span>Generate Storyboard Plan</span>
             </button>
         </div>
     </form>
 
-    <!-- Target Container for Agent Plan Card -->
-    <div id="agent-plan-result"></div>
+    <!-- Super Agent Shimmering Skeleton Loader (shown during AI decomposition) -->
+    <div id="agent-plan-skeleton" class="htmx-indicator mb-6">
+        <div class="rounded-3xl bg-[#0f1114] border border-orange-500/30 p-6 sm:p-8 space-y-6 relative overflow-hidden shadow-2xl">
+            <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent animate-scanline"></div>
+            
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.08]">
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-orange-400 animate-ping"></span>
+                        <span class="text-xs font-bold text-orange-400 font-mono uppercase tracking-wider">Super Agent Reasoning in Progress...</span>
+                    </div>
+                    <div class="h-6 w-64 bg-white/10 rounded-lg animate-pulse"></div>
+                    <div class="h-3 w-96 bg-white/5 rounded-md animate-pulse"></div>
+                </div>
+                <div class="h-10 w-32 bg-white/10 rounded-xl animate-pulse"></div>
+            </div>
+
+            <div class="space-y-3">
+                <div class="h-4 w-40 bg-white/10 rounded"></div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="h-28 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 space-y-2 animate-pulse">
+                        <div class="h-4 w-20 bg-orange-500/30 rounded"></div>
+                        <div class="h-3 w-full bg-white/10 rounded"></div>
+                        <div class="h-3 w-3/4 bg-white/5 rounded"></div>
+                    </div>
+                    <div class="h-28 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 space-y-2 animate-pulse">
+                        <div class="h-4 w-20 bg-orange-500/30 rounded"></div>
+                        <div class="h-3 w-full bg-white/10 rounded"></div>
+                        <div class="h-3 w-3/4 bg-white/5 rounded"></div>
+                    </div>
+                    <div class="h-28 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-4 space-y-2 animate-pulse">
+                        <div class="h-4 w-20 bg-orange-500/30 rounded"></div>
+                        <div class="h-3 w-full bg-white/10 rounded"></div>
+                        <div class="h-3 w-3/4 bg-white/5 rounded"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Target Container for Agent Plan Card (HTMX Target) -->
+    <div id="agent-plan-result" class="empty:hidden"></div>
+
+    <!-- ===================================================
+         RECENT STORYBOARD PROJECTS FEED
+         =================================================== -->
+    {% if recent_projects %}
+    <div class="space-y-4 pt-6 border-t border-white/[0.08]">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                <h3 class="text-base font-heading font-bold text-white flex items-center gap-2">
+                    <span>Recent Storyboard Projects</span>
+                    <span class="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[10px] text-amber-400 font-mono">{{ recent_projects|length }} projects</span>
+                </h3>
+            </div>
+            <a href="{% url 'projects:list' %}" class="text-xs font-semibold text-orange-400 hover:text-orange-300 flex items-center gap-1 group transition">
+                <span>View All Projects</span>
+                <span class="group-hover:translate-x-0.5 transition-transform">→</span>
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {% for proj in recent_projects %}
+                <a href="{% url 'projects:detail' proj.id %}" class="rounded-2xl bg-[#0e1013] border border-white/[0.08] hover:border-orange-500/50 p-4 space-y-3 transition-all duration-300 group hover:-translate-y-1 block shadow-lg hover:shadow-[0_10px_30px_rgba(249,115,22,0.15)]">
+                    <div class="flex items-center justify-between text-xs">
+                        <span class="px-2 py-0.5 rounded bg-orange-500/15 border border-orange-500/30 text-orange-400 font-mono text-[10px] font-bold">
+                            {{ proj.aspect_ratio }}
+                        </span>
+                        <span class="text-[10px] text-slate-500 font-mono">{{ proj.created_at|timesince }} ago</span>
+                    </div>
+
+                    <div>
+                        <h4 class="text-sm font-bold text-white group-hover:text-orange-300 transition truncate">{{ proj.name }}</h4>
+                        <p class="text-xs text-slate-400 line-clamp-2 mt-1">{{ proj.description|default:"Super Agent Storyboard Project" }}</p>
+                    </div>
+
+                    <div class="pt-2 border-t border-white/[0.04] flex items-center justify-between text-[11px] text-slate-400">
+                        <span>🎬 {{ proj.scenes.count }} Scenes</span>
+                        <span class="text-orange-400 font-semibold group-hover:translate-x-0.5 transition-transform">Open Project →</span>
+                    </div>
+                </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

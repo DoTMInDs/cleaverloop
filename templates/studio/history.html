@@ -39,11 +39,11 @@
                     <div class="aspect-video bg-black/60 relative overflow-hidden flex items-center justify-center">
                         {% if gen.output_media %}
                             {% if gen.generation_type == 'video' %}
-                                <video controls class="w-full h-full object-contain" poster="{{ gen.output_media.thumbnail_url }}">
+                                <video controls preload="none" class="w-full h-full object-contain" poster="{{ gen.output_media.thumbnail_url }}">
                                     <source src="{{ gen.output_media.url }}" type="video/mp4">
                                 </video>
                             {% else %}
-                                <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" class="w-full h-full object-cover">
+                                <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
                             {% endif %}
                         {% elif gen.status == 'failed' %}
                             <div class="p-4 text-center">

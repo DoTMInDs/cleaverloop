@@ -33,6 +33,16 @@ class SubscriptionPlan(models.Model):
     def __str__(self):
         return f"{self.name} (${self.price_monthly}/mo)"
 
+    def save(self, *args, **kwargs):
+        from django.core.cache import cache
+        cache.delete('active_subscription_plans')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        from django.core.cache import cache
+        cache.delete('active_subscription_plans')
+        super().delete(*args, **kwargs)
+
     @classmethod
     def resolve_plan(cls, plan_id=None, slug=None, paystack_code=None):
         """Idempotently resolve a SubscriptionPlan by ID, slug, or Paystack plan code."""

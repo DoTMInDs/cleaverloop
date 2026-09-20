@@ -15,6 +15,8 @@ from apps.credits.services import CreditService
 
 logger = logging.getLogger(__name__)
 
+from django.core.cache import cache
+
 class PricingPlansView(ListView):
     """Render public pricing page with 3 core tiers, Free tier callout, and feature matrix."""
     model = SubscriptionPlan
@@ -22,7 +24,12 @@ class PricingPlansView(ListView):
     context_object_name = 'plans'
 
     def get_queryset(self):
-        return SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly')
+        cached = cache.get('active_subscription_plans')
+        if cached is not None:
+            return cached
+        plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly'))
+        cache.set('active_subscription_plans', plans, timeout=1800)
+        return plans
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
