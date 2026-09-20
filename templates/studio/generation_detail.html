@@ -24,7 +24,15 @@
                     <img src="{{ generation.output_media.url }}" alt="{{ generation.prompt }}" class="w-full h-full object-cover">
                 {% endif %}
             {% else %}
-                <div class="text-slate-500 text-xs">No media output available</div>
+                <div class="relative w-full h-full skeleton-box flex flex-col items-center justify-center p-6 text-center">
+                    <div class="absolute inset-0 skeleton-shimmer opacity-40"></div>
+                    <div class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-brand-400/50 to-transparent animate-scanline"></div>
+                    <div class="relative z-10 space-y-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-brand-400 animate-ping inline-block"></span>
+                        <div class="text-sm font-bold text-white">Rendering Media Output...</div>
+                        <p class="text-xs text-slate-400">Diffusion pipeline is generating asset frames.</p>
+                    </div>
+                </div>
             {% endif %}
         </div>
 

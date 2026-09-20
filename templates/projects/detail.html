@@ -46,9 +46,9 @@
         </div>
     </div>
 
-    <!-- Active Assembly Rendering Live Status -->
+    <!-- Active Assembly Rendering Live Status with Skeleton Player -->
     {% if project.status == 'rendering' %}
-        <div class="glass-panel rounded-3xl p-6 border border-cyan-500/40 bg-cyan-950/20 text-cyan-200 flex flex-col sm:flex-row items-center justify-between gap-4 animate-pulse"
+        <div class="glass-panel rounded-3xl p-6 md:p-8 border border-cyan-500/40 bg-cyan-950/20 text-cyan-200 space-y-5 skeleton-box"
              {% if active_assembly_job %}
              x-data="{
                 poll() {
@@ -64,16 +64,61 @@
              }"
              x-init="setInterval(() => poll(), 3000)"
              {% endif %}>
-            <div class="flex items-center gap-3">
-                <span class="loading loading-spinner text-cyan-400 loading-md"></span>
-                <div>
-                    <h3 class="font-bold text-white text-sm">Assembling Full Video with FFmpeg...</h3>
-                    <p class="text-xs text-cyan-300/80">Stitching scene clips into continuous unified video. This card updates automatically when finished.</p>
+            
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400 relative">
+                        <span class="absolute inset-0 rounded-2xl bg-cyan-500/30 animate-ping"></span>
+                        <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-heading font-extrabold text-white text-base">Assembling Video Timeline with FFmpeg</h3>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 animate-pulse">Rendering</span>
+                        </div>
+                        <p class="text-xs text-cyan-300/80 mt-0.5">Stitching multi-scene clips, audio tracks & cross-dissolves into a continuous 1080p stream.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="window.location.reload()" class="btn btn-xs btn-outline border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 text-[11px] whitespace-nowrap">
+                    Refresh Status ↻
+                </button>
+            </div>
+
+            <!-- Video Player Canvas Skeleton -->
+            <div class="aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black/80 border border-cyan-500/30 relative flex flex-col items-center justify-center p-6 text-center">
+                <div class="absolute inset-0 skeleton-shimmer opacity-30"></div>
+                <div class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent animate-scanline"></div>
+
+                <div class="relative z-10 space-y-3 max-w-sm w-full">
+                    <div class="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 mx-auto flex items-center justify-center text-xl text-cyan-400 shadow-lg shadow-cyan-500/10 animate-pulse">
+                        🎬
+                    </div>
+                    <div>
+                        <h4 class="text-sm font-bold text-white">Rendering Master Timeline</h4>
+                        <p class="text-[11px] text-slate-400 mt-0.5">Concatenating scenes & normalizing audio levels</p>
+                    </div>
+                    <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden p-0.5 border border-white/10">
+                        <div class="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-brand-500 rounded-full w-3/4 animate-pulse skeleton-shimmer"></div>
+                    </div>
                 </div>
             </div>
-            <button type="button" onclick="window.location.reload()" class="btn btn-xs btn-outline btn-info text-[11px]">
-                Check Status
-            </button>
+
+            <!-- Shimmering Timeline Tracks Skeleton -->
+            <div class="space-y-2 pt-2 border-t border-cyan-500/20">
+                <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                    <span>Timeline Tracks</span>
+                    <span class="text-cyan-400 animate-pulse">Encoding Active</span>
+                </div>
+                <div class="grid grid-cols-4 gap-2">
+                    <div class="h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 skeleton-shimmer flex items-center px-3 text-[10px] text-cyan-300">Scene 1</div>
+                    <div class="h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 skeleton-shimmer flex items-center px-3 text-[10px] text-cyan-300">Scene 2</div>
+                    <div class="h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 skeleton-shimmer flex items-center px-3 text-[10px] text-cyan-300">Scene 3</div>
+                    <div class="h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 skeleton-shimmer flex items-center px-3 text-[10px] text-cyan-300">Audio Master</div>
+                </div>
+            </div>
         </div>
     {% endif %}
 

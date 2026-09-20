@@ -9,7 +9,7 @@ from django.views.decorators.http import require_POST
 from django.utils.decorators import method_decorator
 
 from apps.billing.models import SubscriptionPlan, Subscription
-from apps.billing.paystack import PaystackService
+from apps.billing.paystack import PaystackService, CurrencyService
 from apps.credits.models import CreditTransaction
 from apps.credits.services import CreditService
 
@@ -34,6 +34,8 @@ class PricingPlansView(ListView):
         ctx['creator_plan'] = next((p for p in all_plans if p.slug == 'creator'), None)
         ctx['ultra_plan'] = next((p for p in all_plans if p.slug == 'ultra'), None)
         
+        ctx['usd_to_ghs_rate'] = CurrencyService.get_usd_to_ghs_rate()
+
         if self.request.user.is_authenticated:
             ctx['current_subscription'] = getattr(self.request.user, 'subscription', None)
             ctx['wallet'] = CreditService.get_or_create_wallet(self.request.user)
@@ -50,6 +52,11 @@ class InitializeCheckoutView(LoginRequiredMixin, View):
         if plan.price_monthly <= 0:
             messages.info(request, "You are already on the Free Starter plan.")
             return redirect('billing:plans')
+
+        current_sub = getattr(request.user, 'subscription', None)
+        if current_sub and current_sub.status == 'active' and current_sub.plan_id == plan.id:
+            messages.info(request, f"You are already on the {plan.name} plan.")
+            return redirect('billing:portal')
 
         callback_url = request.build_absolute_uri(reverse('billing:callback'))
         # Include plan_id in callback for fallback resolution
@@ -105,8 +112,16 @@ class PaymentCallbackView(LoginRequiredMixin, View):
         # In live mode, ensure the verified transaction amount matches or exceeds plan price
         if not PaystackService.is_mock_mode() and plan and plan.price_monthly > 0:
             paid_amount = v_data.get('amount')
-            expected_amount = int(plan.price_monthly * 100)
-            if paid_amount is not None and paid_amount < expected_amount:
+            from django.conf import settings
+            currency = getattr(settings, 'PAYSTACK_CURRENCY', 'GHS')
+            if currency.upper() == 'GHS':
+                expected_ghs, _ = CurrencyService.convert_usd_to_ghs(plan.price_monthly)
+                expected_amount = int(round(expected_ghs * 100))
+            else:
+                expected_amount = int(plan.price_monthly * 100)
+
+            # Allow 5% tolerance for minor exchange rate variations or plan-matched pricing
+            if paid_amount is not None and paid_amount < (expected_amount * 0.95):
                 logger.warning(
                     f"Payment amount mismatch for user {request.user.id}: paid {paid_amount}, expected {expected_amount}"
                 )

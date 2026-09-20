@@ -94,3 +94,74 @@ html, body, * {
   width: 0 !important;
   height: 0 !important;
 }
+
+/* ===================================================
+   SKELETON LOADER ANIMATIONS & DESIGN TOKENS
+   =================================================== */
+
+@keyframes skeleton-sweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.02) 0%,
+    rgba(255, 255, 255, 0.08) 35%,
+    rgba(99, 102, 241, 0.14) 50%,
+    rgba(255, 255, 255, 0.08) 65%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  background-size: 300% 100%;
+  animation: skeleton-sweep 2s infinite ease-in-out;
+}
+
+.skeleton-box {
+  background: rgba(18, 22, 34, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-box::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.8s infinite ease-in-out;
+  pointer-events: none;
+}
+
+/* HTMX Smooth Indicator Transitions */
+.htmx-indicator {
+  display: none;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.htmx-request.htmx-indicator,
+.htmx-request .htmx-indicator {
+  display: block;
+  opacity: 1;
+}
+
+/* Simulated AI neural scanline animation */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(400%); }
+}
+
+.animate-scanline {
+  animation: scanline 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}

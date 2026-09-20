@@ -7,36 +7,114 @@
      class="glass-panel rounded-2xl p-5 border border-white/10 relative overflow-hidden transition-all duration-300">
 
     {% if generation.status == 'queued' %}
-        <div class="flex items-center gap-4 py-6">
-            <div class="w-12 h-12 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+        <!-- Rich Skeleton Loader: Queued State -->
+        <div class="space-y-4">
+            <!-- Header Meta Skeleton -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/5">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                        Queued in Scheduler
+                    </span>
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-white/5 text-slate-300 border border-white/5">
+                        {{ generation.model.display_name }}
+                    </span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="px-2 py-0.5 rounded bg-white/5 text-[11px]">{{ generation.aspect_ratio }}</span>
+                    {% if generation.duration %}
+                        <span class="px-2 py-0.5 rounded bg-white/5 text-[11px]">{{ generation.duration }}s</span>
+                    {% endif %}
+                </div>
             </div>
-            <div>
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20 mb-1">
-                    Queued
-                </span>
-                <h4 class="text-sm font-semibold text-white">Preparing Generation Request</h4>
-                <p class="text-xs text-slate-400 mt-0.5">Assigned to {{ generation.model.display_name }}</p>
+
+            <!-- Media Aspect-Ratio Canvas Skeleton -->
+            <div class="{% if generation.aspect_ratio == '9:16' %}aspect-[9/16] max-w-xs{% elif generation.aspect_ratio == '1:1' %}aspect-square max-w-sm{% else %}aspect-video max-w-2xl{% endif %} mx-auto rounded-2xl overflow-hidden bg-black/90 border border-amber-500/20 relative flex flex-col items-center justify-center p-6 text-center skeleton-box">
+                <div class="absolute inset-0 skeleton-shimmer opacity-40"></div>
+                <div class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-amber-400/50 to-transparent animate-scanline"></div>
+
+                <div class="relative z-10 space-y-3 max-w-sm w-full">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 mx-auto flex items-center justify-center text-amber-400 shadow-lg shadow-amber-500/10">
+                        <svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+
+                    <div>
+                        <h4 class="text-sm font-heading font-bold text-white">Preparing Generation Request</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Allocating dedicated compute on {{ generation.provider.name }}</p>
+                    </div>
+
+                    <!-- Progress bar skeleton -->
+                    <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden p-0.5">
+                        <div class="h-full bg-gradient-to-r from-amber-500 to-amber-300 rounded-full w-1/4 animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prompt Preview Skeleton -->
+            <div class="p-3.5 rounded-xl bg-surface/50 border border-white/5 space-y-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Prompt</span>
+                <p class="text-xs text-slate-300 line-clamp-2">{{ generation.prompt }}</p>
             </div>
         </div>
 
     {% elif generation.status == 'processing' %}
-        <div class="flex items-center gap-4 py-6">
-            <div class="w-12 h-12 rounded-xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400 relative">
-                <span class="absolute inset-0 rounded-xl bg-brand-500/20 animate-ping opacity-75"></span>
-                <svg class="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+        <!-- Rich Skeleton Loader: Processing / Rendering State -->
+        <div class="space-y-4">
+            <!-- Header Meta Skeleton -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/5">
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-500/15 text-brand-300 border border-brand-500/30">
+                        <span class="w-2 h-2 rounded-full bg-brand-400 animate-ping"></span>
+                        Synthesizing {{ generation.generation_type|title }}
+                    </span>
+                    <span class="px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-white/5 text-slate-300 border border-white/5">
+                        {{ generation.model.display_name }}
+                    </span>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="px-2 py-0.5 rounded bg-white/5 text-[11px]">{{ generation.aspect_ratio }}</span>
+                    {% if generation.duration %}
+                        <span class="px-2 py-0.5 rounded bg-white/5 text-[11px]">{{ generation.duration }}s</span>
+                    {% endif %}
+                </div>
             </div>
-            <div>
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-400 border border-brand-500/20 mb-1">
-                    Generating...
-                </span>
-                <h4 class="text-sm font-semibold text-white">Rendering Creative Assets</h4>
-                <p class="text-xs text-slate-400 mt-0.5">Orchestrating {{ generation.provider.name }} pipeline...</p>
+
+            <!-- Media Aspect-Ratio Canvas Skeleton -->
+            <div class="{% if generation.aspect_ratio == '9:16' %}aspect-[9/16] max-w-xs{% elif generation.aspect_ratio == '1:1' %}aspect-square max-w-sm{% else %}aspect-video max-w-2xl{% endif %} mx-auto rounded-2xl overflow-hidden bg-black/90 border border-brand-500/30 relative flex flex-col items-center justify-center p-6 text-center skeleton-box">
+                <div class="absolute inset-0 skeleton-shimmer opacity-50"></div>
+                <div class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-brand-400/60 to-transparent animate-scanline"></div>
+
+                <div class="relative z-10 space-y-3.5 max-w-sm w-full">
+                    <div class="w-14 h-14 rounded-3xl bg-gradient-to-tr from-brand-600/30 via-indigo-500/20 to-cyan-500/30 border border-brand-500/40 mx-auto flex items-center justify-center text-xl shadow-xl shadow-brand-500/20 relative">
+                        <span class="absolute inset-0 rounded-3xl bg-brand-500/20 animate-ping"></span>
+                        <span class="relative z-10 animate-spin">✨</span>
+                    </div>
+
+                    <div>
+                        <h4 class="text-sm font-heading font-extrabold text-white tracking-wide">Diffusion Pipeline Active</h4>
+                        <p class="text-xs text-slate-400 mt-0.5">Generating cinematic frames at 1080p resolution</p>
+                    </div>
+
+                    <!-- Progress bar skeleton -->
+                    <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden p-0.5 border border-white/10">
+                        <div class="h-full bg-gradient-to-r from-brand-600 via-indigo-400 to-cyan-400 rounded-full w-4/5 animate-pulse skeleton-shimmer"></div>
+                    </div>
+
+                    <div class="flex items-center justify-center gap-2 text-[10px] font-mono text-slate-400">
+                        <span class="text-emerald-400 font-semibold">Step 2/3</span>
+                        <span>•</span>
+                        <span class="animate-pulse">Rendering Neural Noise</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prompt Preview Skeleton -->
+            <div class="p-3.5 rounded-xl bg-surface/50 border border-white/5 space-y-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Prompt</span>
+                <p class="text-xs text-slate-300 line-clamp-2">{{ generation.prompt }}</p>
             </div>
         </div>
 

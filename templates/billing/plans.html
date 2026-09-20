@@ -58,7 +58,9 @@
         {% for plan in paid_plans %}
             {% with is_creator=plan.slug|slice:":7"|stringformat:"s" %}
             <div class="rounded-3xl p-7 flex flex-col justify-between relative transition duration-300 backdrop-blur-xl
-                        {% if plan.slug == 'creator' %}
+                        {% if user.is_authenticated and current_subscription and current_subscription.status == 'active' and current_subscription.plan_id == plan.id %}
+                            bg-gradient-to-b from-emerald-950/40 to-[#0e0d14]/95 border-2 border-emerald-500/80 shadow-2xl shadow-emerald-500/20 ring-1 ring-emerald-400/40 md:-translate-y-1
+                        {% elif plan.slug == 'creator' %}
                             bg-gradient-to-b from-[#1c130d]/90 to-[#0e0d14]/95 border-2 border-orange-500/80 shadow-2xl shadow-orange-500/20 ring-1 ring-orange-400/40 md:-translate-y-2
                         {% elif plan.slug == 'ultra' %}
                             bg-surface/80 border border-brand-500/30 shadow-xl shadow-brand-500/10 hover:border-brand-500/60
@@ -67,7 +69,12 @@
                         {% endif %}">
 
                 <!-- Badge -->
-                {% if plan.slug == 'creator' %}
+                {% if user.is_authenticated and current_subscription and current_subscription.status == 'active' and current_subscription.plan_id == plan.id %}
+                    <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-emerald-500 to-teal-400 text-black tracking-widest shadow-lg shadow-emerald-500/40 flex items-center gap-1.5 z-10">
+                        <span class="w-1.5 h-1.5 rounded-full bg-black animate-pulse"></span>
+                        <span>CURRENT PLAN</span>
+                    </div>
+                {% elif plan.slug == 'creator' %}
                     <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-orange-500 to-amber-500 text-black tracking-widest shadow-lg shadow-orange-500/40 flex items-center gap-1">
                         <span>🔥</span>
                         <span>MOST POPULAR</span>
@@ -146,31 +153,66 @@
                         </div>
                     </div>
 
-                    <!-- CTA Action Button -> Paystack Checkout -->
+                    <!-- CTA Action Button -> Paystack Checkout / Current Plan -->
                     <div class="pt-2">
-                        <form method="POST" action="{% url 'billing:checkout' plan.id %}">
-                            {% csrf_token %}
-                            {% if plan.slug == 'creator' %}
+                        {% if user.is_authenticated and current_subscription and current_subscription.status == 'active' and current_subscription.plan_id == plan.id %}
+                            <a href="{% url 'billing:portal' %}"
+                               class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-emerald-300 uppercase tracking-wider
+                                      bg-emerald-500/15 border-2 border-emerald-500/60 hover:bg-emerald-500/25 shadow-lg shadow-emerald-500/15
+                                      flex items-center justify-center gap-2 transition transform hover:-translate-y-0.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Current Plan
+                            </a>
+                        {% elif user.is_authenticated and current_subscription and current_subscription.status == 'active' and plan.price_monthly > current_subscription.plan.price_monthly %}
+                            <form method="POST" action="{% url 'billing:checkout' plan.id %}">
+                                {% csrf_token %}
                                 <button type="submit"
-                                        class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
-                                               bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300
-                                               shadow-lg shadow-orange-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0">
-                                    Get Creator
+                                        class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs uppercase tracking-wider
+                                               transition transform hover:-translate-y-0.5 active:translate-y-0
+                                               {% if plan.slug == 'creator' %}
+                                                   text-black bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300 shadow-lg shadow-orange-500/30
+                                               {% elif plan.slug == 'ultra' %}
+                                                   text-black bg-white hover:bg-slate-100 shadow-lg shadow-white/10
+                                               {% else %}
+                                                   text-white bg-white/10 hover:bg-white/20 border border-white/10
+                                               {% endif %}">
+                                    Upgrade to {{ plan.name }}
                                 </button>
-                            {% elif plan.slug == 'ultra' %}
-                                <button type="submit"
-                                        class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
-                                               bg-white hover:bg-slate-100 shadow-lg shadow-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
-                                    Get Ultra
-                                </button>
-                            {% else %}
+                            </form>
+                        {% elif user.is_authenticated and current_subscription and current_subscription.status == 'active' and plan.price_monthly < current_subscription.plan.price_monthly %}
+                            <form method="POST" action="{% url 'billing:checkout' plan.id %}">
+                                {% csrf_token %}
                                 <button type="submit"
                                         class="w-full py-3 px-4 rounded-xl font-heading font-bold text-xs text-white uppercase tracking-wider
                                                bg-white/10 hover:bg-white/20 border border-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
-                                    Get Starter
+                                    Switch to {{ plan.name }}
                                 </button>
-                            {% endif %}
-                        </form>
+                            </form>
+                        {% else %}
+                            <form method="POST" action="{% url 'billing:checkout' plan.id %}">
+                                {% csrf_token %}
+                                {% if plan.slug == 'creator' %}
+                                    <button type="submit"
+                                            class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
+                                                   bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300
+                                                   shadow-lg shadow-orange-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0">
+                                        Get Creator
+                                    </button>
+                                {% elif plan.slug == 'ultra' %}
+                                    <button type="submit"
+                                            class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
+                                                   bg-white hover:bg-slate-100 shadow-lg shadow-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
+                                        Get Ultra
+                                    </button>
+                                {% else %}
+                                    <button type="submit"
+                                            class="w-full py-3 px-4 rounded-xl font-heading font-bold text-xs text-white uppercase tracking-wider
+                                                   bg-white/10 hover:bg-white/20 border border-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
+                                        Get Starter
+                                    </button>
+                                {% endif %}
+                            </form>
+                        {% endif %}
                     </div>
 
                     <!-- Feature Checklist -->

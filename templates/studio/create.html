@@ -42,7 +42,8 @@
         </div>
     </div>
 
-    <!-- Real Commercial AI Status Banner -->
+    {% if user.is_superuser %}
+    <!-- Real Commercial AI Status Banner (Superuser Only) -->
     <div class="glass-panel rounded-2xl p-4 border border-brand-500/20 bg-brand-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
         <div class="flex items-center gap-2.5 text-slate-300">
             <span class="text-base">💡</span>
@@ -52,6 +53,12 @@
             View Live API Balances ↗
         </a>
     </div>
+    {% endif %}
+
+    <!-- Instant Skeleton Loader shown while HTMX request is in flight -->
+    <div id="gen-skeleton-loader" class="htmx-indicator mb-6">
+        {% include 'partials/skeleton_generator.html' %}
+    </div>
 
     <!-- Active Generation Output Container (HTMX Target) -->
     <div id="active-generation-target" class="empty:hidden"></div>
@@ -60,7 +67,7 @@
     <form hx-post="{% url 'generations:create' %}"
           hx-target="#active-generation-target"
           hx-swap="innerHTML"
-          hx-indicator="#gen-spinner"
+          hx-indicator="#gen-skeleton-loader, #gen-spinner"
           enctype="multipart/form-data"
           class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-6">
         {% csrf_token %}

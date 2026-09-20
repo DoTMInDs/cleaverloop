@@ -1,0 +1,66 @@
+<div class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-6 skeleton-box border border-brand-500/30">
+    <!-- Top Header Status Skeleton -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-brand-500/20 border border-brand-500/40 flex items-center justify-center text-brand-400 relative">
+                <span class="absolute inset-0 rounded-2xl bg-brand-500/30 animate-ping"></span>
+                <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-300 border border-brand-500/20 animate-pulse">
+                        <span class="w-1.5 h-1.5 rounded-full bg-brand-400 animate-ping"></span>
+                        Synthesizing AI Generation...
+                    </span>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">Allocating GPU clusters & orchestrating model weights</p>
+            </div>
+        </div>
+        <div class="h-6 w-20 rounded-full bg-white/10 skeleton-shimmer hidden sm:block"></div>
+    </div>
+
+    <!-- Media Canvas Skeleton Frame -->
+    <div class="aspect-video max-w-2xl mx-auto rounded-2xl overflow-hidden bg-black/90 border border-white/10 relative flex flex-col items-center justify-center p-6 text-center">
+        <!-- Sweeping Beam & Scanline -->
+        <div class="absolute inset-0 skeleton-shimmer opacity-40"></div>
+        <div class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-brand-400/50 to-transparent animate-scanline"></div>
+
+        <!-- Dynamic Hologram Core -->
+        <div class="relative z-10 space-y-4 max-w-md w-full">
+            <div class="w-16 h-16 rounded-3xl bg-gradient-to-tr from-brand-600/30 via-indigo-500/20 to-cyan-500/30 border border-brand-500/40 mx-auto flex items-center justify-center text-2xl shadow-xl shadow-brand-500/20 animate-pulse">
+                ✨
+            </div>
+
+            <div class="space-y-1.5">
+                <h4 class="text-sm font-heading font-bold text-white tracking-wide">Rendering Neural Assets</h4>
+                <p class="text-xs text-slate-400">Diffusion passes are executing. This card updates automatically when finished.</p>
+            </div>
+
+            <!-- Pulsing Progress Bar Skeleton -->
+            <div class="w-full bg-white/5 h-2 rounded-full overflow-hidden p-0.5 border border-white/10">
+                <div class="h-full bg-gradient-to-r from-brand-600 via-indigo-500 to-cyan-400 rounded-full animate-pulse w-3/4 skeleton-shimmer"></div>
+            </div>
+
+            <!-- Pipeline Status Tags -->
+            <div class="flex items-center justify-center gap-2 text-[10px] font-mono text-slate-400 pt-1">
+                <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-emerald-400">✓ Prompt Encoded</span>
+                <span>→</span>
+                <span class="px-2 py-0.5 rounded bg-brand-500/20 border border-brand-500/30 text-brand-300 animate-pulse">Rendering</span>
+                <span>→</span>
+                <span class="px-2 py-0.5 rounded bg-white/5 border border-white/5 text-slate-500">Post-processing</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shimmering Prompt Box Skeleton -->
+    <div class="space-y-2 pt-2">
+        <div class="h-3 w-24 rounded bg-white/10 skeleton-shimmer"></div>
+        <div class="p-4 rounded-xl bg-surface/40 border border-white/5 space-y-2">
+            <div class="h-3 w-full rounded bg-white/10 skeleton-shimmer"></div>
+            <div class="h-3 w-4/5 rounded bg-white/10 skeleton-shimmer"></div>
+        </div>
+    </div>
+</div>

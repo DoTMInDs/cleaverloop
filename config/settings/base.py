@@ -249,7 +249,8 @@ FAL_KEY = env('FAL_KEY', default='')
 PAYMENT_PROVIDER = env('PAYMENT_PROVIDER', default='mock')
 PAYSTACK_PUBLIC_KEY = env('PAYSTACK_PUBLIC_KEY', default='')
 PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY', default='')
-PAYSTACK_CURRENCY = env('PAYSTACK_CURRENCY', default='USD')
+PAYSTACK_CURRENCY = env('PAYSTACK_CURRENCY', default='GHS')
+USD_TO_GHS_RATE = env('USD_TO_GHS_RATE', default='auto')
 
 # Platform Economics Configuration
 DEFAULT_STARTER_CREDITS = env('DEFAULT_STARTER_CREDITS', default=500)
