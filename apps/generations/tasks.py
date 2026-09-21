@@ -278,3 +278,26 @@ def _finalize_failed_generation(generation: Generation, raw_error: str):
             f"Action Taken  : {generation.credits_reserved} credits automatically refunded\n"
             f"================================================================================"
         )
+
+
+@shared_task
+def reap_stale_generations_task(timeout_minutes: int = 15):
+    """
+    Scheduled / worker maintenance task: Identifies stuck generations older than timeout_minutes,
+    marks them as timed out/failed, and automatically refunds any held credits to the user.
+    """
+    cutoff = timezone.now() - timezone.timedelta(minutes=timeout_minutes)
+    stale_generations = Generation.objects.filter(
+        status__in=['queued', 'processing'],
+        created_at__lte=cutoff
+    ).select_related('user', 'provider', 'model', 'scene')
+
+    reaped_count = 0
+    for gen in stale_generations:
+        logger.warning(f"Reaping stale generation {gen.id} (created at {gen.created_at})")
+        _finalize_failed_generation(gen, f"Generation timed out after {timeout_minutes} minutes without completion.")
+        reaped_count += 1
+
+    logger.info(f"Stale generation reaper finished: {reaped_count} jobs cleaned and refunded.")
+    return reaped_count
+

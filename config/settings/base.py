@@ -38,6 +38,7 @@ DJANGO_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.humanize',
 ]
 
 THIRD_PARTY_APPS = [
@@ -254,18 +255,16 @@ else:
         },
     }
 
-# AI Provider API Keys
+# AI Provider API Keys (Unified Single Google AI / Gemini Key)
 MOCK_PROVIDERS_ENABLED = env.bool('MOCK_PROVIDERS_ENABLED', default=True)
 ALLOW_MOCK_FALLBACK = env.bool('ALLOW_MOCK_FALLBACK', default=True)
 
-# Google AI Studio - Generative Media (Veo 3.1 & Imagen 3)
-GOOGLE_AI_API_KEY = env('GOOGLE_AI_API_KEY', default='')
-
-# Google AI Studio - Reasoning LLM (Super Agent Storyboard Planner)
-GEMINI_API_KEY = env('GEMINI_API_KEY', default='')
+# Single Unified Google Gemini Key for all Multimodal, Video (Veo), Image (Nano Banana), and Reasoning
+GEMINI_API_KEY = env('GEMINI_API_KEY', default='') or env('GOOGLE_AI_API_KEY', default='') or env('GOOGLE_API_KEY', default='')
+GOOGLE_AI_API_KEY = GEMINI_API_KEY
 AGENT_LLM_PROVIDER = env('AGENT_LLM_PROVIDER', default='gemini')
 
-# Video & Image Commercial Providers
+# Video & Image Commercial Providers (Optional Third-Party Fallbacks)
 KLING_API_KEY = env('KLING_API_KEY', default='')
 SEEDANCE_API_KEY = env('SEEDANCE_API_KEY', default='')
 ALIBABA_API_KEY = env('ALIBABA_API_KEY', default='')
@@ -281,8 +280,41 @@ PAYSTACK_SECRET_KEY = env('PAYSTACK_SECRET_KEY', default='')
 PAYSTACK_CURRENCY = env('PAYSTACK_CURRENCY', default='GHS')
 USD_TO_GHS_RATE = env('USD_TO_GHS_RATE', default='auto')
 
-# Platform Economics Configuration
-DEFAULT_STARTER_CREDITS = env('DEFAULT_STARTER_CREDITS', default=500)
+# Platform Economics Configuration (Flashloop Benchmark)
+DEFAULT_STARTER_CREDITS = env.int('DEFAULT_STARTER_CREDITS', default=500)
+SUBSCRIPTION_PLANS = {
+    'free': {
+        'name': 'Free Trial',
+        'price_monthly': 0,
+        'credits': 500,
+        'has_unlimited': False,
+        'max_concurrency': 1,
+    },
+    'starter': {
+        'name': 'Starter',
+        'price_monthly': 19,
+        'price_annual_monthly_equiv': 15,
+        'credits': 90000,
+        'has_unlimited': False,
+        'max_concurrency': 1,
+    },
+    'creator': {
+        'name': 'Creator',
+        'price_monthly': 59,
+        'price_annual_monthly_equiv': 49,
+        'credits': 400000,
+        'has_unlimited': True,
+        'max_concurrency': 2,
+    },
+    'ultra': {
+        'name': 'Ultra / Pro',
+        'price_monthly': 129,
+        'price_annual_monthly_equiv': 99,
+        'credits': 1000000,
+        'has_unlimited': True,
+        'max_concurrency': 4,
+    },
+}
 CREDIT_COST_IMAGE_STANDARD = env('CREDIT_COST_IMAGE_STANDARD', default=50)
 CREDIT_COST_VIDEO_PER_SEC = env('CREDIT_COST_VIDEO_PER_SEC', default=50)
 MAX_AGENT_CREDITS_PER_REQUEST = env('MAX_AGENT_CREDITS_PER_REQUEST', default=2500)

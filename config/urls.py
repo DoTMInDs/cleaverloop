@@ -2,13 +2,16 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from apps.studio.views import HomeView
+from apps.studio.views import HomeView, ExploreView
+from apps.billing.views import PricingPlansView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # Dedicated Homepage
+    # Dedicated Homepage, Explore Feed & Pricing
     path('', HomeView.as_view(), name='home'),
+    path('explore/', ExploreView.as_view(), name='explore'),
+    path('pricing/', PricingPlansView.as_view(), name='pricing'),
 
     # CleaverLoop Applications
     path('accounts/', include('apps.accounts.urls', namespace='accounts')),

@@ -88,14 +88,33 @@ def generate_scene_view(request, scene_id):
     scene = get_object_or_404(Scene, id=scene_id, project__owner=request.user)
     project = scene.project
 
+    # Check concurrency limits based on tier
+    wallet = CreditService.get_or_create_wallet(request.user)
+    active_jobs = Generation.objects.filter(
+        user=request.user,
+        status__in=['queued', 'processing']
+    ).count()
+    if active_jobs >= wallet.max_parallel_generations:
+        return HttpResponse(
+            f"<div class='text-rose-400 p-2 text-xs'>Concurrency limit reached ({active_jobs}/{wallet.max_parallel_generations} active jobs). Please wait for ongoing jobs to complete.</div>",
+            status=429
+        )
+
     # Use ModelRouter to select video model
-    model = ModelRouter.select_model(
-        modality='video',
-        user_preference='automatic',
-        duration=scene.duration,
-        aspect_ratio=project.aspect_ratio
-    )
+    try:
+        model = ModelRouter.select_model(
+            modality='video',
+            user_preference='automatic',
+            duration=scene.duration,
+            aspect_ratio=project.aspect_ratio
+        )
+    except Exception as exc:
+        return HttpResponse(f"<div class='text-rose-400 p-2 text-xs'>Model routing error: {exc}</div>", status=400)
+
     credit_cost = model.calculate_credit_cost(scene.duration)
+    is_allowed, eff_cost, msg = CreditService.can_generate(request.user, credit_cost, modality='video')
+    if not is_allowed:
+        return HttpResponse(f"<div class='text-rose-400 p-2 text-xs'>{msg}</div>", status=400)
 
     generation = Generation.objects.create(
         user=request.user,

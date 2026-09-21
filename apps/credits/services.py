@@ -85,19 +85,77 @@ class CreditService:
         return tx
 
     @classmethod
+    def can_generate(cls, user, estimated_credits: int, modality: str = 'image') -> tuple[bool, int, str]:
+        """
+        Check if a user has sufficient credits or is eligible for unlimited relaxed generations.
+        Returns: (is_allowed: bool, effective_cost: int, message: str)
+        """
+        wallet = cls.get_or_create_wallet(user)
+
+        # Anti-abuse: Video generation requires a paid tier
+        if modality == 'video' and wallet.subscription_tier == 'free':
+            return (
+                False,
+                estimated_credits,
+                "Video generation requires a paid subscription (Starter, Creator, or Ultra). Please upgrade your plan."
+            )
+
+        # Sufficient priority balance
+        if wallet.balance >= estimated_credits:
+            return (True, estimated_credits, "Priority Queue")
+
+        # Creator & Ultra users get unlimited relaxed generations when priority credits are exhausted
+        if wallet.is_unlimited_eligible:
+            return (True, 0, "Unlimited Relaxed Queue (0 Credits)")
+
+        # Insufficient credits on Free or Starter tier
+        return (
+            False,
+            estimated_credits,
+            f"Insufficient credits. Required: {estimated_credits:,}, Available: {wallet.balance:,}. Please upgrade or top up."
+        )
+
+    @classmethod
     @transaction.atomic
     def reserve_credits(cls, user, estimated_credits: int, generation) -> CreditTransaction:
         """
         Atomically reserve credits for a generation job.
+        Supports unlimited relaxed generation for Creator/Ultra tiers when balance is exhausted.
         Uses row-level locking (select_for_update) to prevent double spending.
         """
+        wallet = CreditWallet.objects.select_for_update().get_or_create(user=user)[0]
+        gen_type = getattr(generation, 'generation_type', 'image')
+
+        # Video gate on Free tier
+        if gen_type == 'video' and wallet.subscription_tier == 'free':
+            raise InsufficientCreditsError(
+                "Video generation requires a paid subscription (Starter, Creator, or Ultra). Please upgrade your plan."
+            )
+
+        # Handle Relaxed Unlimited Generation (Creator / Ultra with 0 or insufficient priority credits)
+        if wallet.is_unlimited_eligible and wallet.balance < estimated_credits:
+            generation.credits_reserved = 0
+            generation.save(update_fields=['credits_reserved'])
+            tx = CreditTransaction.objects.create(
+                wallet=wallet,
+                amount=0,
+                transaction_type='generation_hold',
+                generation=generation,
+                balance_before=wallet.balance,
+                balance_after=wallet.balance,
+                description=f"Unlimited Relaxed Queue generation: {generation.generation_type} ({generation.model_id_snapshot})",
+            )
+            logger.info(f"Reserved 0 credits (Unlimited Relaxed) for generation {generation.id} from {user.email}")
+            return tx
+
         if estimated_credits <= 0:
+            generation.credits_reserved = 0
+            generation.save(update_fields=['credits_reserved'])
             return None
 
-        wallet = CreditWallet.objects.select_for_update().get_or_create(user=user)[0]
         if wallet.balance < estimated_credits:
             raise InsufficientCreditsError(
-                f"Insufficient credits. Required: {estimated_credits}, Available: {wallet.balance}."
+                f"Insufficient credits. Required: {estimated_credits:,}, Available: {wallet.balance:,}. Please upgrade or top up."
             )
 
         bal_before = wallet.balance

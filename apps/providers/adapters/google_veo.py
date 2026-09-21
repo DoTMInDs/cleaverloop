@@ -33,7 +33,7 @@ class GoogleVeoProvider(BaseAIProvider):
             )
         try:
             target_model = model_id
-            if target_model in ["imagen-3.0-generate-002", "imagen-3.0", "google-imagen"]:
+            if target_model in ["nano-banana-2-lite", "nano-banana-2", "nano-banana-pro", "imagen-3.0-generate-002", "imagen-3.0", "google-imagen"]:
                 target_model = "gemini-2.5-flash-image"
 
             with httpx.Client(timeout=30.0) as client:
@@ -77,7 +77,8 @@ class GoogleVeoProvider(BaseAIProvider):
                                 )
 
                 # 2. Try legacy Imagen predict endpoint
-                predict_endpoint = f"{self.BASE_URL}/models/{model_id}:predict?key={self.api_key}"
+                predict_model = "imagen-3.0-generate-002" if model_id.startswith("nano-banana") else model_id
+                predict_endpoint = f"{self.BASE_URL}/models/{predict_model}:predict?key={self.api_key}"
                 predict_payload = {
                     "instances": [{"prompt": request.prompt}],
                     "parameters": {
@@ -132,7 +133,7 @@ class GoogleVeoProvider(BaseAIProvider):
             target_model = model_id
             if target_model in ["veo-3.1-standard", "veo-3.1"]:
                 target_model = "veo-3.1-generate-preview"
-            elif target_model in ["veo-3.1-fast"]:
+            elif target_model in ["veo-3.1-fast", "veo-3.1-lite"]:
                 target_model = "veo-3.1-fast-generate-preview"
 
             endpoint = f"{self.BASE_URL}/models/{target_model}:predictLongRunning?key={self.api_key}"

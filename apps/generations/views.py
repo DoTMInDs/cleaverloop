@@ -106,6 +106,24 @@ def create_generation_view(request):
     if not prompt:
         return HttpResponse(_render_error_card("Please enter a prompt describing your vision in detail.", is_staff_or_debug=is_staff_or_debug), status=400)
 
+    # Enforce concurrency limit based on user subscription tier
+    wallet = CreditService.get_or_create_wallet(request.user)
+    active_jobs_count = Generation.objects.filter(
+        user=request.user,
+        status__in=['queued', 'processing']
+    ).count()
+    if active_jobs_count >= wallet.max_parallel_generations:
+        tier_display = wallet.get_subscription_tier_display()
+        return HttpResponse(
+            _render_error_card(
+                f"Concurrency limit reached ({active_jobs_count}/{wallet.max_parallel_generations} active jobs). "
+                f"Your {tier_display} plan allows {wallet.max_parallel_generations} simultaneous generation{'s' if wallet.max_parallel_generations > 1 else ''}. "
+                "Please wait for current jobs to finish or upgrade your plan to run more in parallel.",
+                is_staff_or_debug=is_staff_or_debug
+            ),
+            status=429
+        )
+
     # Validate character ownership to prevent IDOR
     valid_character = None
     if character_id:

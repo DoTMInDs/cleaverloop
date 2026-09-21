@@ -1,87 +1,202 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static humanize %}
 
-{% block title %}Membership & Credit Plans — CleaverLoop AI{% endblock %}
+{% block title %}Pricing & Plans — CleaverLoop AI (Flashloop Edition){% endblock %}
+
+{% block main_classes %}flex-1 w-full max-w-full px-0 py-0 pb-24 relative overflow-hidden{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto space-y-12 pb-20">
-    <!-- Header & Toggle -->
-    <div class="text-center space-y-4 max-w-2xl mx-auto pt-4">
-        <h1 class="text-3xl md:text-5xl font-heading font-extrabold text-white tracking-tight">
-            Flexible Plans for Modern Creators
+<div class="relative w-full overflow-hidden" x-data="{
+    annual: false,
+    calcPlan: 'starter',
+    calcCredits: 90000,
+    topUpModalOpen: false,
+
+    setPlan(slug, credits) {
+        this.calcPlan = slug;
+        this.calcCredits = credits;
+    }
+}">
+
+    <!-- ===================================================
+         ATMOSPHERIC BACKGROUND DESIGNS & AMBIENT SCI-FI GLOWS
+         =================================================== -->
+    <div class="pointer-events-none select-none absolute inset-0 overflow-hidden z-0">
+        <!-- 1. Top Horizon Arch Corona Flare (Flashloop Eclipse Glow) -->
+        <div class="absolute -top-48 left-1/2 -translate-x-1/2 w-[1200px] h-[650px] rounded-full opacity-70 filter blur-[100px] pointer-events-none animate-pulse-glow"
+             style="background: radial-gradient(circle, rgba(251,146,60,0.45) 0%, rgba(234,88,12,0.28) 32%, rgba(99,102,241,0.2) 60%, transparent 75%);"></div>
+
+        <!-- Glowing Horizon Beam Line -->
+        <div class="absolute top-28 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-500/40 via-indigo-500/40 to-transparent opacity-60"></div>
+        <div class="absolute top-36 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-400/20 to-transparent opacity-40"></div>
+
+        <!-- 2. Concentric Orbit Rings / Sci-Fi Aperture Glyphs -->
+        <div class="absolute -top-56 left-1/2 -translate-x-1/2 w-[1000px] h-[1000px] rounded-full border border-orange-500/20 opacity-40 pointer-events-none animate-[spin_200s_linear_infinite]">
+            <div class="absolute top-16 left-1/4 w-3.5 h-3.5 rounded-full bg-orange-400 shadow-[0_0_16px_#fb923c]"></div>
+            <div class="absolute bottom-20 right-1/4 w-3 h-3 rounded-full bg-indigo-400 shadow-[0_0_14px_#818cf8]"></div>
+            <div class="absolute top-1/2 -right-1.5 w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_12px_#22d3ee]"></div>
+            <div class="absolute top-1/2 -left-1.5 w-2 h-2 rounded-full bg-amber-300 shadow-[0_0_10px_#fcd34d]"></div>
+        </div>
+        <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[780px] h-[780px] rounded-full border border-dashed border-white/15 opacity-35 pointer-events-none animate-[spin_260s_linear_infinite_reverse]"></div>
+        <div class="absolute -top-12 left-1/2 -translate-x-1/2 w-[520px] h-[520px] rounded-full border border-white/10 opacity-25 pointer-events-none"></div>
+
+        <!-- 3. Perspective Cyber Grid Floor with Radial Vignette Fade -->
+        <div class="absolute top-0 inset-x-0 h-[850px] opacity-25"
+             style="background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+                background-size: 48px 48px;
+                mask-image: radial-gradient(ellipse 85% 70% at 50% 20%, black 30%, transparent 80%);
+                -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 20%, black 30%, transparent 80%);">
+        </div>
+
+        <!-- 4. Ambient Side & Depth Orbs -->
+        <!-- Top Left Cosmic Indigo Orb -->
+        <div class="absolute top-20 -left-32 w-[650px] h-[650px] bg-indigo-600/25 rounded-full filter blur-[140px] opacity-75 animate-float-slow"></div>
+        <!-- Top Right Sunset Coral Orb -->
+        <div class="absolute top-32 -right-32 w-[700px] h-[700px] bg-orange-500/25 rounded-full filter blur-[150px] opacity-70 animate-float-reverse"></div>
+        <!-- Mid-Page Cyan Pulse Orb (behind Yield Calculator) -->
+        <div class="absolute top-[860px] left-1/2 -translate-x-1/2 w-[1000px] h-[520px] bg-cyan-500/15 rounded-full filter blur-[160px] opacity-65"></div>
+        <!-- Lower Left Violet Glow -->
+        <div class="absolute top-[1480px] -left-32 w-[600px] h-[600px] bg-purple-600/20 rounded-full filter blur-[150px] opacity-55"></div>
+        <!-- Lower Right Amber/Emerald Aura -->
+        <div class="absolute top-[1750px] -right-32 w-[650px] h-[650px] bg-emerald-500/15 rounded-full filter blur-[150px] opacity-55"></div>
+
+        <!-- 5. Decorative Sci-Fi Constellations & Tech Markers -->
+        <!-- Left Blueprint Accent -->
+        <div class="absolute top-44 left-6 2xl:left-12 text-white/25 font-mono text-[11px] hidden xl:flex flex-col gap-1 tracking-widest uppercase">
+            <div class="flex items-center gap-2"><span class="w-2 h-2 bg-orange-400 rounded-full animate-ping"></span> FLASHLOOP // ENGINE v3.1</div>
+            <div class="text-white/20">ACCELERATION // TENSOR-H100</div>
+            <div class="text-white/15">LATENCY // 12ms ULTRA-PRIORITY</div>
+            <div class="w-28 h-px bg-gradient-to-r from-orange-400/60 to-transparent mt-1.5"></div>
+        </div>
+
+        <!-- Right Blueprint Accent -->
+        <div class="absolute top-44 right-6 2xl:right-12 text-white/25 font-mono text-[11px] hidden xl:flex flex-col items-end gap-1 tracking-widest uppercase">
+            <div class="flex items-center gap-2">VEO-3.1 // SYNCHRONIZED <span class="w-2 h-2 bg-emerald-400 rounded-full"></span></div>
+            <div class="text-white/20">THROUGHPUT // 4K NATIVE</div>
+            <div class="text-white/15">UNLIMITED RELAXED // ACTIVE</div>
+            <div class="w-28 h-px bg-gradient-to-l from-emerald-400/60 to-transparent mt-1.5"></div>
+        </div>
+
+        <!-- Floating Starburst Sparkles (Linear / Midjourney style) -->
+        <svg class="absolute top-28 left-[12%] w-7 h-7 text-orange-400/40 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+        </svg>
+        <svg class="absolute top-64 right-[14%] w-6 h-6 text-indigo-400/45 animate-bounce" style="animation-duration: 5s;" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+        </svg>
+        <svg class="absolute top-[720px] left-[6%] w-8 h-8 text-cyan-400/35 animate-pulse" style="animation-duration: 4s;" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+        </svg>
+        <svg class="absolute top-[1150px] right-[7%] w-7 h-7 text-pink-400/35 animate-pulse" style="animation-duration: 6s;" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+        </svg>
+        <svg class="absolute top-[1650px] left-[9%] w-6 h-6 text-amber-400/30 animate-bounce" style="animation-duration: 7s;" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0L14.59 9.41L24 12L14.59 14.59L12 24L9.41 14.59L0 12L9.41 9.41L12 0Z"/>
+        </svg>
+    </div>
+
+    <!-- MAIN FOREGROUND CONTENT -->
+    <div class="relative z-10 max-w-7xl mx-auto px-4 lg:px-8 py-8 space-y-12">
+
+    <!-- ===================================================
+         HEADER & BILLING CADENCE TOGGLE
+         =================================================== -->
+    <div class="text-center space-y-4 max-w-3xl mx-auto pt-4 select-none">
+        <!-- Super Agent Badge -->
+        <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold uppercase tracking-wider mb-1 shadow-lg shadow-orange-500/10">
+            <span class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
+            <span>Flashloop Subscription Economics</span>
+            <span class="fl-badge-skew rounded-[4px] px-1.5 py-0.2 text-[9px] font-extrabold uppercase text-white shadow"
+                  style="background-image: radial-gradient(39.71% 136.54% at 51.64% 117.31%, #FB923C 0%, #EA580C 100%)">
+                <span class="fl-badge-unskew inline-block">Credits + Unlimited</span>
+            </span>
+        </div>
+
+        <h1 class="text-3xl md:text-5xl lg:text-6xl font-heading font-black uppercase text-white tracking-tight leading-tight">
+            Plans Built for<br>
+            <span class="inline-block fl-badge-skew rounded-xl sm:rounded-2xl px-4 sm:px-6 py-1 text-white shadow-2xl fl-glow-orange-lg mt-1"
+                  style="background-image: radial-gradient(39.71% 136.54% at 51.64% 117.31%, #FB923C 0%, #EA580C 100%)">
+                <span class="fl-badge-unskew inline-block">High-Intent Creators</span>
+            </span>
         </h1>
-        <p class="text-xs md:text-sm text-slate-400">
-            Scale your generative video and image workflows with dedicated monthly credits, priority queues, and full commercial model access.
+        <p class="text-xs md:text-sm text-slate-400 max-w-xl mx-auto leading-relaxed">
+            Monthly credits refresh each billing cycle. Creator & Ultra tiers include <strong class="text-orange-400">Unlimited Relaxed Generations</strong> so your creative studio never halts.
         </p>
 
         <!-- Monthly / Annual Toggle -->
-        <div class="inline-flex items-center gap-3 p-1.5 rounded-full bg-surface border border-white/10 mt-3"
-             x-data="{ annual: false }"
-             @toggle-annual.window="annual = !annual">
+        <div class="inline-flex items-center gap-3 p-1.5 rounded-full bg-[#0d0f12] border border-white/10 mt-3 shadow-xl">
             <button type="button"
                     @click="annual = false"
                     :class="!annual ? 'bg-white/10 text-white font-bold shadow' : 'text-slate-400 hover:text-white'"
                     class="px-4 py-1.5 rounded-full text-xs transition duration-200">
-                Monthly
+                Monthly Billing
             </button>
             <button type="button"
                     @click="annual = true"
-                    :class="annual ? 'bg-brand-600 text-white font-bold shadow' : 'text-slate-400 hover:text-white'"
+                    :class="annual ? 'fl-gradient-orange-btn text-white font-bold shadow-lg fl-glow-orange' : 'text-slate-400 hover:text-white'"
                     class="px-4 py-1.5 rounded-full text-xs transition duration-200 flex items-center gap-2">
-                <span>Annual</span>
-                <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase bg-pink-500 text-white tracking-wide shadow">
-                    UP TO 30% OFF
+                <span>Annual Billing</span>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-pink-500 text-white tracking-wide shadow">
+                    SAVE UP TO 24%
                 </span>
             </button>
         </div>
 
-        <!-- Free Tier Callout Banner -->
-        <div class="glass-panel rounded-2xl p-3 max-w-xl mx-auto border border-emerald-500/30 bg-emerald-950/20 text-emerald-200 flex items-center justify-between text-xs">
-            <div class="flex items-center gap-2">
-                <span class="text-base">🎁</span>
-                <span><strong>Free Onboarding:</strong> New accounts get <strong>500 Starter Credits</strong> immediately upon signup.</span>
+        <!-- Free Trial Callout Banner -->
+        <div class="glass-panel rounded-2xl p-3.5 max-w-2xl mx-auto border border-emerald-500/30 bg-emerald-950/20 text-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-lg">
+            <div class="flex items-center gap-2.5">
+                <span class="text-lg">🎁</span>
+                <div class="text-left">
+                    <span class="font-bold text-white">Free Starter Trial:</span>
+                    <span class="text-emerald-300"> New accounts receive <strong class="text-amber-400">500 Credits</strong> on signup (yields <strong>2 Nano Banana 2 Lite images</strong>).</span>
+                </div>
             </div>
             {% if not user.is_authenticated %}
-                <a href="{% url 'account_signup' %}" class="btn btn-xs btn-outline border-emerald-400 text-emerald-300 hover:bg-emerald-500/20">
-                    Sign Up Free
+                <a href="{% url 'account_signup' %}" class="btn btn-xs bg-emerald-500 hover:bg-emerald-400 border-none text-black font-bold uppercase tracking-wider px-3.5 whitespace-nowrap shadow">
+                    Claim 500 Credits
                 </a>
             {% else %}
-                <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold text-[11px]">
-                    Wallet: {{ wallet.balance|default:0 }} credits
-                </span>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30">
+                        ⚡ {{ wallet.formatted_balance|default:"500" }} Credits
+                    </span>
+                </div>
             {% endif %}
         </div>
     </div>
 
-    <!-- 3 Core Pricing Cards -->
+    <!-- ===================================================
+         3 CORE SUBSCRIPTION TIERS (Flashloop Grid)
+         =================================================== -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch pt-2">
         {% for plan in paid_plans %}
-            {% with is_creator=plan.slug|slice:":7"|stringformat:"s" %}
             <div class="rounded-3xl p-7 flex flex-col justify-between relative transition duration-300 backdrop-blur-xl
                         {% if user.is_authenticated and current_subscription and current_subscription.status == 'active' and current_subscription.plan_id == plan.id %}
                             bg-gradient-to-b from-emerald-950/40 to-[#0e0d14]/95 border-2 border-emerald-500/80 shadow-2xl shadow-emerald-500/20 ring-1 ring-emerald-400/40 md:-translate-y-1
                         {% elif plan.slug == 'creator' %}
-                            bg-gradient-to-b from-[#1c130d]/90 to-[#0e0d14]/95 border-2 border-orange-500/80 shadow-2xl shadow-orange-500/20 ring-1 ring-orange-400/40 md:-translate-y-2
+                            bg-gradient-to-b from-[#1c130d]/95 to-[#0e0d14]/98 border-2 border-orange-500/80 shadow-2xl shadow-orange-500/25 ring-1 ring-orange-400/40 md:-translate-y-2
                         {% elif plan.slug == 'ultra' %}
-                            bg-surface/80 border border-brand-500/30 shadow-xl shadow-brand-500/10 hover:border-brand-500/60
+                            bg-surface/80 border border-brand-500/40 shadow-xl shadow-brand-500/10 hover:border-brand-500/70
                         {% else %}
                             bg-surface/80 border border-white/10 shadow-lg hover:border-white/20
                         {% endif %}">
 
-                <!-- Badge -->
+                <!-- Prominent Top Badge -->
                 {% if user.is_authenticated and current_subscription and current_subscription.status == 'active' and current_subscription.plan_id == plan.id %}
                     <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-emerald-500 to-teal-400 text-black tracking-widest shadow-lg shadow-emerald-500/40 flex items-center gap-1.5 z-10">
                         <span class="w-1.5 h-1.5 rounded-full bg-black animate-pulse"></span>
-                        <span>CURRENT PLAN</span>
+                        <span>ACTIVE SUBSCRIPTION</span>
                     </div>
                 {% elif plan.slug == 'creator' %}
-                    <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-orange-500 to-amber-500 text-black tracking-widest shadow-lg shadow-orange-500/40 flex items-center gap-1">
+                    <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full text-[10px] font-black uppercase bg-gradient-to-r from-orange-500 to-amber-500 text-black tracking-widest shadow-lg shadow-orange-500/40 flex items-center gap-1 z-10">
                         <span>🔥</span>
-                        <span>MOST POPULAR</span>
+                        <span>MOST POPULAR • UNLIMITED</span>
                     </div>
                 {% elif plan.slug == 'ultra' %}
-                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 tracking-wider">
-                        BEST VALUE
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full text-[10px] font-bold uppercase bg-brand-500/20 text-brand-300 border border-brand-500/40 tracking-wider z-10">
+                        👑 STUDIO PRO • BEST VALUE
                     </div>
                 {% endif %}
 
@@ -89,126 +204,161 @@
                 <div class="space-y-5">
                     <div>
                         <div class="flex items-center justify-between">
-                            <h3 class="text-xl font-heading font-extrabold text-white">{{ plan.name }}</h3>
-                            {% if plan.slug == 'creator' %}
+                            <h3 class="text-2xl font-heading font-black text-white uppercase tracking-tight">{{ plan.name }}</h3>
+                            {% if plan.slug == 'starter' %}
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-slate-300 border border-white/10" x-show="annual" x-cloak>
+                                    Save 21%
+                                </span>
+                            {% elif plan.slug == 'creator' %}
                                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30">
-                                    20% OFF
+                                    <span x-show="!annual">400K Priority</span>
+                                    <span x-show="annual" x-cloak>Save $120/yr</span>
                                 </span>
                             {% elif plan.slug == 'ultra' %}
-                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                    23% OFF
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
+                                    <span x-show="!annual">1M Priority</span>
+                                    <span x-show="annual" x-cloak>Save $360/yr</span>
                                 </span>
                             {% endif %}
                         </div>
-                        <p class="text-xs text-slate-400 mt-1">{{ plan.tagline|default:"Explore high-quality AI media creation" }}</p>
+                        <p class="text-xs text-slate-400 mt-1">{{ plan.tagline|default:"High-intent AI visual & video production" }}</p>
                     </div>
 
-                    <!-- Monthly Credit Box -->
+                    <!-- Monthly Credit & Yield Box -->
                     <div class="rounded-2xl p-4 space-y-2 border
                                 {% if plan.slug == 'creator' %}
-                                    bg-black/40 border-orange-500/30 text-slate-200
+                                    bg-black/50 border-orange-500/40 text-slate-200 shadow-inner
+                                {% elif plan.slug == 'ultra' %}
+                                    bg-black/40 border-brand-500/30 text-slate-200
                                 {% else %}
                                     bg-black/30 border-white/5 text-slate-300
                                 {% endif %}">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm {% if plan.slug == 'creator' %}text-orange-400{% else %}text-brand-400{% endif %}">✦</span>
-                            <span class="text-sm font-bold text-white">{{ plan.credits_per_month|floatformat:0 }} credits/mo.</span>
-                        </div>
-                        <div class="text-[11px] text-slate-400 space-y-0.5">
-                            {% if plan.slug == 'starter' %}
-                                <div>≈ 60 GPT Image 2 images</div>
-                                <div>≈ 12 Veo 3.1 videos</div>
-                            {% elif plan.slug == 'creator' %}
-                                <div>≈ 200 GPT Image 2 images</div>
-                                <div>≈ 40 Veo 3.1 videos</div>
-                            {% elif plan.slug == 'ultra' %}
-                                <div>≈ 500 GPT Image 2 images</div>
-                                <div>≈ 100 Veo 3.1 videos</div>
-                            {% else %}
-                                <div>Dedicated multi-model credit allowance</div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm {% if plan.slug == 'creator' %}text-orange-400{% else %}text-brand-400{% endif %}">✦</span>
+                                <span class="text-base font-black text-white font-mono">{{ plan.credits_per_month|intcomma }}</span>
+                                <span class="text-xs text-slate-400 font-semibold">credits/mo</span>
+                            </div>
+                            {% if plan.slug != 'starter' %}
+                                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-orange-500/20 text-orange-300 border border-orange-500/30">
+                                    + UNLIMITED
+                                </span>
                             {% endif %}
                         </div>
+
+                        <!-- Approximate Yield Estimation -->
+                        <div class="text-[11px] text-slate-400 space-y-1 pt-1 border-t border-white/5">
+                            {% if plan.slug == 'starter' %}
+                                <div class="flex items-center justify-between">
+                                    <span>≈ 120 Nano Banana 2 (Standard)</span>
+                                    <span class="text-slate-500 font-mono">750 cr</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>≈ 360 Nano Banana 2 Lite drafts</span>
+                                    <span class="text-slate-500 font-mono">250 cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-orange-300 font-semibold">
+                                    <span>≈ 4 Veo 3.1 Fast clips (5s with audio)</span>
+                                    <span class="font-mono">22k cr</span>
+                                </div>
+                            {% elif plan.slug == 'creator' %}
+                                <div class="flex items-center justify-between">
+                                    <span>≈ 530 Nano Banana 2 (Standard)</span>
+                                    <span class="text-slate-500 font-mono">750 cr</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>≈ 1,600 Nano Banana 2 Lite drafts</span>
+                                    <span class="text-slate-500 font-mono">250 cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-orange-300 font-semibold">
+                                    <span>≈ 18 Veo 3.1 Fast clips (5s with audio)</span>
+                                    <span class="font-mono">22k cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-amber-300 font-bold pt-1 border-t border-white/5">
+                                    <span>✨ Unlimited Relaxed Queue</span>
+                                    <span class="font-mono">0 cr</span>
+                                </div>
+                            {% elif plan.slug == 'ultra' %}
+                                <div class="flex items-center justify-between">
+                                    <span>≈ 1,330 Nano Banana 2 (Standard)</span>
+                                    <span class="text-slate-500 font-mono">750 cr</span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>≈ 4,000 Nano Banana 2 Lite drafts</span>
+                                    <span class="text-slate-500 font-mono">250 cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-brand-300 font-semibold">
+                                    <span>≈ 45 Veo 3.1 Fast clips (5s with audio)</span>
+                                    <span class="font-mono">22k cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-amber-300 font-bold pt-1 border-t border-white/5">
+                                    <span>✨ Unlimited Relaxed + VIP Instant GPU</span>
+                                    <span class="font-mono">0 cr</span>
+                                </div>
+                            {% endif %}
+                        </div>
+
                         <div class="pt-1 text-[10px] font-bold text-slate-400 border-t border-white/5 flex items-center gap-1.5">
                             <span class="text-emerald-400">✓</span>
-                            <span>Fixed amount of {{ plan.credits_per_month|floatformat:0 }} credits/mo</span>
+                            <span>Refreshes automatically each monthly billing cycle</span>
                         </div>
                     </div>
 
-                    <!-- Price -->
+                    <!-- Price Display with Annual Switcher -->
                     <div class="pt-1">
                         <div class="flex items-baseline gap-1.5">
-                            <span class="text-4xl font-extrabold text-white tracking-tight">
-                                ${{ plan.price_monthly|floatformat:0 }}
+                            <span class="text-4xl sm:text-5xl font-black text-white tracking-tight font-heading">
+                                <span x-show="!annual">${{ plan.price_monthly|floatformat:0 }}</span>
+                                <span x-show="annual" x-cloak>
+                                    {% if plan.slug == 'starter' %}$15{% elif plan.slug == 'creator' %}$49{% elif plan.slug == 'ultra' %}$99{% else %}${{ plan.price_monthly|floatformat:0 }}{% endif %}
+                                </span>
                             </span>
                             <span class="text-xs text-slate-400 font-medium">/ month</span>
                         </div>
-                        <div class="text-[11px] text-slate-400 mt-0.5">
-                            {% if plan.slug == 'creator' %}
-                                <span class="text-orange-400 font-semibold">Save $108</span> compared to individual packs
-                            {% elif plan.slug == 'ultra' %}
-                                <span class="text-emerald-400 font-semibold">Save $180</span> compared to individual packs
-                            {% else %}
-                                Pay as you go with no long-term lock-in
-                            {% endif %}
+                        <div class="text-[11px] text-slate-400 mt-1">
+                            <span x-show="!annual">Billed monthly • Cancel anytime</span>
+                            <span x-show="annual" x-cloak class="text-emerald-400 font-semibold">
+                                {% if plan.slug == 'starter' %}Billed $180 annually (Save $48/yr){% elif plan.slug == 'creator' %}Billed $588 annually (Save $120/yr){% elif plan.slug == 'ultra' %}Billed $1,188 annually (Save $360/yr){% endif %}
+                            </span>
                         </div>
                     </div>
 
-                    <!-- CTA Action Button -> Paystack Checkout / Current Plan -->
+                    <!-- CTA Checkout Button -->
                     <div class="pt-2">
                         {% if user.is_authenticated and current_subscription and current_subscription.status == 'active' and current_subscription.plan_id == plan.id %}
                             <a href="{% url 'billing:portal' %}"
-                               class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-emerald-300 uppercase tracking-wider
+                               class="w-full py-3.5 px-4 rounded-xl font-heading font-black text-xs text-emerald-300 uppercase tracking-wider
                                       bg-emerald-500/15 border-2 border-emerald-500/60 hover:bg-emerald-500/25 shadow-lg shadow-emerald-500/15
                                       flex items-center justify-center gap-2 transition transform hover:-translate-y-0.5">
                                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                Current Plan
+                                Manage Subscription
                             </a>
-                        {% elif user.is_authenticated and current_subscription and current_subscription.status == 'active' and plan.price_monthly > current_subscription.plan.price_monthly %}
-                            <form method="POST" action="{% url 'billing:checkout' plan.id %}">
-                                {% csrf_token %}
-                                <button type="submit"
-                                        class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs uppercase tracking-wider
-                                               transition transform hover:-translate-y-0.5 active:translate-y-0
-                                               {% if plan.slug == 'creator' %}
-                                                   text-black bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300 shadow-lg shadow-orange-500/30
-                                               {% elif plan.slug == 'ultra' %}
-                                                   text-black bg-white hover:bg-slate-100 shadow-lg shadow-white/10
-                                               {% else %}
-                                                   text-white bg-white/10 hover:bg-white/20 border border-white/10
-                                               {% endif %}">
-                                    Upgrade to {{ plan.name }}
-                                </button>
-                            </form>
-                        {% elif user.is_authenticated and current_subscription and current_subscription.status == 'active' and plan.price_monthly < current_subscription.plan.price_monthly %}
-                            <form method="POST" action="{% url 'billing:checkout' plan.id %}">
-                                {% csrf_token %}
-                                <button type="submit"
-                                        class="w-full py-3 px-4 rounded-xl font-heading font-bold text-xs text-white uppercase tracking-wider
-                                               bg-white/10 hover:bg-white/20 border border-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
-                                    Switch to {{ plan.name }}
-                                </button>
-                            </form>
                         {% else %}
                             <form method="POST" action="{% url 'billing:checkout' plan.id %}">
                                 {% csrf_token %}
                                 {% if plan.slug == 'creator' %}
                                     <button type="submit"
-                                            class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
-                                                   bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300
-                                                   shadow-lg shadow-orange-500/30 transition transform hover:-translate-y-0.5 active:translate-y-0">
-                                        Get Creator
+                                            class="w-full py-3.5 px-4 rounded-xl font-heading font-black text-xs text-white uppercase tracking-wider
+                                                   fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg border-none shadow-xl
+                                                   transition transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                                        <span>Get Creator Plan</span>
+                                        <span>→</span>
                                     </button>
                                 {% elif plan.slug == 'ultra' %}
                                     <button type="submit"
-                                            class="w-full py-3 px-4 rounded-xl font-heading font-extrabold text-xs text-black uppercase tracking-wider
-                                                   bg-white hover:bg-slate-100 shadow-lg shadow-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
-                                        Get Ultra
+                                            class="w-full py-3.5 px-4 rounded-xl font-heading font-black text-xs text-black uppercase tracking-wider
+                                                   bg-white hover:bg-slate-100 shadow-xl shadow-white/10
+                                                   transition transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                                        <span>Get Ultra Studio</span>
+                                        <span>→</span>
                                     </button>
                                 {% else %}
                                     <button type="submit"
-                                            class="w-full py-3 px-4 rounded-xl font-heading font-bold text-xs text-white uppercase tracking-wider
-                                                   bg-white/10 hover:bg-white/20 border border-white/10 transition transform hover:-translate-y-0.5 active:translate-y-0">
-                                        Get Starter
+                                            class="w-full py-3.5 px-4 rounded-xl font-heading font-black text-xs text-white uppercase tracking-wider
+                                                   bg-white/10 hover:bg-white/20 border border-white/15
+                                                   transition transform hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                                        <span>Get Starter Plan</span>
+                                        <span>→</span>
                                     </button>
                                 {% endif %}
                             </form>
@@ -216,7 +366,7 @@
                     </div>
 
                     <!-- Feature Checklist -->
-                    <div class="pt-2">
+                    <div class="pt-3 border-t border-white/5">
                         <ul class="space-y-2.5 text-xs text-slate-300">
                             {% for feat in plan.features %}
                                 <li class="flex items-start gap-2">
@@ -224,227 +374,338 @@
                                     <span>{{ feat }}</span>
                                 </li>
                             {% endfor %}
-                            {% if plan.slug == 'starter' %}
-                                <li class="flex items-start gap-2 text-slate-500">
-                                    <span class="font-bold mt-0.5">✕</span>
-                                    <span>Access to all premium models</span>
-                                </li>
-                                <li class="flex items-start gap-2 text-slate-500">
-                                    <span class="font-bold mt-0.5">✕</span>
-                                    <span>Early access to new trends</span>
-                                </li>
-                            {% elif plan.slug == 'creator' %}
-                                <li class="flex items-start gap-2 text-slate-500">
-                                    <span class="font-bold mt-0.5">✕</span>
-                                    <span>Lowest cost per credit</span>
-                                </li>
-                            {% endif %}
                         </ul>
                     </div>
 
-                    <!-- Subsections: Unlimited & Free / Model Access -->
-                    <div class="space-y-3 pt-3 border-t border-white/5 text-[11px]">
-                        <!-- Unlimited & Free Models -->
-                        <div class="rounded-xl p-3 bg-black/20 border border-white/5 space-y-1.5">
+                    <!-- Unlimited & Model Access Highlights -->
+                    <div class="space-y-2.5 pt-3 border-t border-white/5 text-[11px]">
+                        <div class="rounded-xl p-3 bg-black/30 border border-white/5 space-y-1.5">
                             <div class="text-[10px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center justify-between">
-                                <span>♾ UNLIMITED & FREE</span>
+                                <span>♾ UNLIMITED RELAXED QUEUE</span>
                             </div>
                             <div class="flex items-center justify-between text-slate-300">
-                                <span>Veo 3.1</span>
+                                <span>Nano Banana 2 Lite & Standard</span>
                                 {% if plan.slug == 'starter' %}
-                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Paid access only</span>
+                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Priority credits only</span>
                                 {% else %}
-                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 font-mono font-bold uppercase">Unlimited</span>
+                                    <span class="text-[9px] px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 font-mono font-bold uppercase">Unlimited (0 cr)</span>
                                 {% endif %}
                             </div>
                             <div class="flex items-center justify-between text-slate-300">
-                                <span>Nano Banana Pro</span>
+                                <span>Veo 3.1 Lite & Fast</span>
                                 {% if plan.slug == 'starter' %}
-                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Paid access only</span>
+                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Priority credits only</span>
                                 {% else %}
-                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-orange-500/20 text-orange-300 font-mono font-bold uppercase">Unlimited</span>
-                                {% endif %}
-                            </div>
-                        </div>
-
-                        <!-- Seedance & Kling Access -->
-                        <div class="rounded-xl p-3 bg-black/20 border border-white/5 space-y-1.5">
-                            <div class="text-[10px] font-extrabold uppercase tracking-wider text-pink-400">
-                                <span>⚡ SEEDANCE & KLING</span>
-                            </div>
-                            <div class="flex items-center justify-between text-slate-300">
-                                <span>Seedance 2.5</span>
-                                {% if plan.slug == 'starter' %}
-                                    <span class="text-[9px] text-slate-500 uppercase font-mono">No Access</span>
-                                {% else %}
-                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-pink-500/20 text-pink-300 font-mono font-bold uppercase">Full Access</span>
-                                {% endif %}
-                            </div>
-                            <div class="flex items-center justify-between text-slate-300">
-                                <span>Kling 2.6 Motion</span>
-                                {% if plan.slug == 'starter' %}
-                                    <span class="text-[9px] text-slate-500 uppercase font-mono">Standard only</span>
-                                {% else %}
-                                    <span class="text-[9px] px-1.5 py-0.2 rounded bg-pink-500/20 text-pink-300 font-mono font-bold uppercase">Full Access</span>
+                                    <span class="text-[9px] px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 font-mono font-bold uppercase">Unlimited (0 cr)</span>
                                 {% endif %}
                             </div>
                         </div>
 
-                        <!-- Model Access Summary -->
-                        <div class="rounded-xl p-3 bg-black/20 border border-white/5 space-y-1.5">
+                        <div class="rounded-xl p-3 bg-black/30 border border-white/5 space-y-1.5">
                             <div class="text-[10px] font-extrabold uppercase tracking-wider text-brand-400">
-                                <span>🎨 MODEL ACCESS</span>
+                                <span>⚡ PARALLEL RENDERS & SPEED</span>
                             </div>
                             <div class="flex items-center justify-between text-slate-300">
-                                <span>All image models</span>
-                                <span class="text-emerald-400 font-bold">✓</span>
+                                <span>Concurrent Render Slots</span>
+                                <span class="font-mono text-[10px] font-bold text-white">{{ plan.max_parallel_generations }} Parallel</span>
                             </div>
                             <div class="flex items-center justify-between text-slate-300">
-                                <span>Video model catalog</span>
-                                <span class="font-mono text-[10px] {% if plan.has_all_models_access %}text-emerald-400 font-bold{% else %}text-slate-400{% endif %}">
-                                    {{ plan.video_models_access }}
-                                </span>
+                                <span>Character DNA Profiles</span>
+                                <span class="font-mono text-[10px] text-white">{% if plan.max_characters == 0 %}Unlimited{% else %}Up to {{ plan.max_characters }}{% endif %}</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Footer safe badge -->
-                <div class="mt-6 pt-4 border-t border-white/5 text-center text-[10px] text-slate-500 flex items-center justify-center gap-1.5">
+                <div class="mt-6 pt-4 border-t border-white/5 text-center text-[10px] text-slate-500 flex items-center justify-center gap-2">
                     <span>🔒</span>
-                    <span>Secured with Paystack • Cancel anytime</span>
+                    <span>Secured Paystack Checkout • Instant Activation</span>
                 </div>
             </div>
-            {% endwith %}
         {% endfor %}
     </div>
 
-    <!-- "Compare every plan" Detailed Feature Matrix -->
-    <div class="pt-16 space-y-6">
-        <div class="text-center space-y-1.5 max-w-xl mx-auto">
-            <h2 class="text-2xl md:text-3xl font-heading font-extrabold text-white">
-                Compare every plan
+    <!-- ===================================================
+         INTERACTIVE GENERATION YIELD CALCULATOR
+         =================================================== -->
+    <div class="pt-8 space-y-6">
+        <div class="text-center space-y-2 max-w-xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-heading font-black text-white uppercase tracking-tight">
+                Interactive Yield Calculator
             </h2>
             <p class="text-xs md:text-sm text-slate-400">
-                See exactly what you unlock as you level up your creative workflow.
+                Calculate exactly what you can generate with each subscription tier or custom credit pack.
             </p>
         </div>
 
-        <div class="glass-panel rounded-3xl p-4 md:p-8 overflow-x-auto border border-white/10 shadow-2xl">
+        <div class="glass-panel rounded-3xl p-6 md:p-8 border border-white/10 shadow-2xl space-y-8 bg-[#0d0f12]/90">
+            <!-- Plan Selector Pills -->
+            <div class="flex flex-wrap items-center justify-center gap-2.5">
+                <button type="button"
+                        @click="setPlan('free', 500)"
+                        :class="calcPlan === 'free' ? 'fl-gradient-orange-btn text-white font-bold' : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'"
+                        class="px-4 py-2 rounded-xl text-xs transition duration-200">
+                    🎁 Free Trial (500 Credits)
+                </button>
+                <button type="button"
+                        @click="setPlan('starter', 90000)"
+                        :class="calcPlan === 'starter' ? 'fl-gradient-orange-btn text-white font-bold' : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'"
+                        class="px-4 py-2 rounded-xl text-xs transition duration-200">
+                    🚀 Starter (90,000 Credits)
+                </button>
+                <button type="button"
+                        @click="setPlan('creator', 400000)"
+                        :class="calcPlan === 'creator' ? 'fl-gradient-orange-btn text-white font-bold' : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'"
+                        class="px-4 py-2 rounded-xl text-xs transition duration-200">
+                    🔥 Creator (400,000 Credits + Unlimited)
+                </button>
+                <button type="button"
+                        @click="setPlan('ultra', 1000000)"
+                        :class="calcPlan === 'ultra' ? 'fl-gradient-orange-btn text-white font-bold' : 'bg-white/5 text-slate-300 hover:text-white border border-white/10'"
+                        class="px-4 py-2 rounded-xl text-xs transition duration-200">
+                    👑 Ultra (1,000,000 Credits + Unlimited)
+                </button>
+            </div>
+
+            <!-- Output Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Nano Banana 2 Lite -->
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Nano Banana 2 Lite</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 text-emerald-400">250 cr / img</span>
+                    </div>
+                    <div class="text-2xl font-heading font-black text-white font-mono" x-text="Math.floor(calcCredits / 250) + ' Images'"></div>
+                    <div class="text-[11px] text-slate-400">Fast visual drafts & rapid storyboard concepting</div>
+                </div>
+
+                <!-- Nano Banana 2 Standard -->
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Nano Banana 2 (Standard)</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-orange-500/15 text-orange-400">750 cr / img</span>
+                    </div>
+                    <div class="text-2xl font-heading font-black text-orange-300 font-mono" x-text="Math.floor(calcCredits / 750) + ' Images'"></div>
+                    <div class="text-[11px] text-slate-400">Photoreal 1K/2K production frames with Character DNA</div>
+                </div>
+
+                <!-- Nano Banana Pro -->
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Nano Banana Pro</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/15 text-purple-400">1,500 cr / img</span>
+                    </div>
+                    <div class="text-2xl font-heading font-black text-purple-300 font-mono" x-text="Math.floor(calcCredits / 1500) + ' Images'"></div>
+                    <div class="text-[11px] text-slate-400">Ultra 4K masterpiece rendering with full dynamic range</div>
+                </div>
+
+                <!-- Veo 3.1 Lite (5s) -->
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Veo 3.1 Lite (5s)</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/15 text-cyan-400">10,000 cr / clip</span>
+                    </div>
+                    <div class="text-2xl font-heading font-black text-cyan-300 font-mono"
+                         x-text="calcPlan === 'free' ? 'Paid Only' : Math.floor(calcCredits / 10000) + ' Videos'"></div>
+                    <div class="text-[11px] text-slate-400">5-second draft motion test with fast render</div>
+                </div>
+
+                <!-- Veo 3.1 Fast (5s + Native Audio) -->
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5 border-orange-500/20">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Veo 3.1 Fast (5s Native Audio)</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-orange-500/15 text-orange-400">22,000 cr / clip</span>
+                    </div>
+                    <div class="text-2xl font-heading font-black text-orange-400 font-mono"
+                         x-text="calcPlan === 'free' ? 'Paid Only' : Math.floor(calcCredits / 22000) + ' Videos'"></div>
+                    <div class="text-[11px] text-slate-400">Cinematic 1080p video with synchronized native soundtrack & SFX</div>
+                </div>
+
+                <!-- Veo 3.1 Standard (5s Master) -->
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-white">Veo 3.1 Cinema Master (5s)</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-400">42,500 cr / clip</span>
+                    </div>
+                    <div class="text-2xl font-heading font-black text-amber-300 font-mono"
+                         x-text="calcPlan === 'free' ? 'Paid Only' : Math.floor(calcCredits / 42500) + ' Videos'"></div>
+                    <div class="text-[11px] text-slate-400">Highest fidelity cinema master with atmospheric soundscapes</div>
+                </div>
+            </div>
+
+            <!-- Unlimited Relaxed Banner inside Calculator -->
+            <div x-show="calcPlan === 'creator' || calcPlan === 'ultra'" x-cloak class="rounded-2xl p-4 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent border border-orange-500/30 flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-2xl">✨</span>
+                    <div>
+                        <span class="text-xs font-bold text-white block">Unlimited Relaxed Generations Active</span>
+                        <span class="text-[11px] text-slate-400">When your priority credits are exhausted, continue generating unlimited Nano Banana and Veo creations for 0 credits in relaxed queue!</span>
+                    </div>
+                </div>
+                <span class="px-3 py-1 rounded-full text-xs font-black uppercase bg-orange-500 text-black shrink-0">
+                    INFINITE YIELD
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================
+         A LA CARTE TOP-UP CREDIT PACKS SECTION
+         =================================================== -->
+    <div class="pt-8 space-y-6">
+        <div class="text-center space-y-2 max-w-xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-heading font-black text-white uppercase tracking-tight">
+                Need Extra Credits?
+            </h2>
+            <p class="text-xs md:text-sm text-slate-400">
+                Non-expiring credit top-ups available anytime for high-volume sprints.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <!-- Pack 1: 50,000 Credits -->
+            <div class="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between space-y-4 hover:border-white/20 transition">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase text-slate-400">Starter Pack</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono">Never Expires</span>
+                    </div>
+                    <div class="text-3xl font-heading font-black text-white mt-2">50,000 <span class="text-sm font-normal text-slate-400">credits</span></div>
+                    <div class="text-xs text-slate-400 mt-1">≈ 66 Nano Banana 2 images or 2 Veo Fast clips</div>
+                </div>
+                <div class="pt-2 border-t border-white/5 flex items-center justify-between">
+                    <span class="text-xl font-black text-white">$10 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                    <a href="{% if user.is_authenticated %}{% url 'credits:wallet' %}{% else %}{% url 'account_login' %}{% endif %}" class="btn btn-xs bg-white/10 hover:bg-white/20 text-white border-none font-bold uppercase">
+                        Add Credits
+                    </a>
+                </div>
+            </div>
+
+            <!-- Pack 2: 250,000 Credits -->
+            <div class="glass-panel rounded-2xl p-6 border border-orange-500/40 bg-orange-950/10 flex flex-col justify-between space-y-4 hover:border-orange-500/60 transition shadow-lg shadow-orange-500/10">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase text-orange-400">Creator Pack</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 font-mono font-bold">+10% BONUS</span>
+                    </div>
+                    <div class="text-3xl font-heading font-black text-white mt-2">250,000 <span class="text-sm font-normal text-slate-400">credits</span></div>
+                    <div class="text-xs text-slate-400 mt-1">≈ 330 Nano Banana 2 images or 11 Veo Fast clips</div>
+                </div>
+                <div class="pt-2 border-t border-white/5 flex items-center justify-between">
+                    <span class="text-xl font-black text-white">$45 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                    <a href="{% if user.is_authenticated %}{% url 'credits:wallet' %}{% else %}{% url 'account_login' %}{% endif %}" class="btn btn-xs fl-gradient-orange-btn text-white border-none font-bold uppercase shadow">
+                        Add Credits
+                    </a>
+                </div>
+            </div>
+
+            <!-- Pack 3: 600,000 Credits -->
+            <div class="glass-panel rounded-2xl p-6 border border-brand-500/40 bg-brand-950/10 flex flex-col justify-between space-y-4 hover:border-brand-500/60 transition shadow-lg shadow-brand-500/10">
+                <div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase text-brand-300">Studio Pack</span>
+                        <span class="text-[10px] px-2 py-0.5 rounded bg-brand-500/20 text-brand-300 font-mono font-bold">+20% BONUS</span>
+                    </div>
+                    <div class="text-3xl font-heading font-black text-white mt-2">600,000 <span class="text-sm font-normal text-slate-400">credits</span></div>
+                    <div class="text-xs text-slate-400 mt-1">≈ 800 Nano Banana 2 images or 27 Veo Fast clips</div>
+                </div>
+                <div class="pt-2 border-t border-white/5 flex items-center justify-between">
+                    <span class="text-xl font-black text-white">$99 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                    <a href="{% if user.is_authenticated %}{% url 'credits:wallet' %}{% else %}{% url 'account_login' %}{% endif %}" class="btn btn-xs bg-white text-black hover:bg-slate-200 border-none font-bold uppercase shadow">
+                        Add Credits
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===================================================
+         DETAILED FEATURE COMPARISON TABLE
+         =================================================== -->
+    <div class="pt-12 space-y-6">
+        <div class="text-center space-y-1.5 max-w-xl mx-auto">
+            <h2 class="text-2xl md:text-3xl font-heading font-black text-white uppercase tracking-tight">
+                Compare Plan Features
+            </h2>
+            <p class="text-xs md:text-sm text-slate-400">
+                A complete breakdown of credits, models, queues, and director capabilities.
+            </p>
+        </div>
+
+        <div class="glass-panel rounded-3xl p-4 md:p-8 overflow-x-auto border border-white/10 shadow-2xl bg-[#0c0e11]/90">
             <table class="table table-sm md:table-md w-full text-left text-xs md:text-sm">
                 <thead>
                     <tr class="border-b border-white/10 text-slate-400 font-heading">
                         <th class="py-4 font-bold text-white text-sm w-1/3">Feature / Capability</th>
-                        <th class="py-4 text-center font-bold text-slate-200">Starter</th>
+                        <th class="py-4 text-center font-bold text-slate-300">Starter</th>
                         <th class="py-4 text-center font-extrabold text-orange-400 bg-orange-500/10 rounded-t-2xl">
                             <span class="block text-[9px] uppercase tracking-widest text-orange-400">MOST POPULAR</span>
                             <span>Creator</span>
                         </th>
-                        <th class="py-4 text-center font-bold text-slate-200">Ultra</th>
+                        <th class="py-4 text-center font-bold text-slate-300">Ultra</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-white/5 text-slate-300">
-                    <!-- Unlimited & free Veo 3.1 + Fast models -->
                     <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Unlimited & free Veo 3.1 + Fast generations</td>
-                        <td class="text-center text-slate-500 text-xs">Paid access only</td>
-                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
-                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
+                        <td class="font-medium py-4 text-white">Monthly Priority Credits</td>
+                        <td class="text-center font-mono font-bold">90,000</td>
+                        <td class="text-center font-mono font-bold text-orange-300 bg-orange-500/10">400,000</td>
+                        <td class="text-center font-mono font-bold text-emerald-300">1,000,000</td>
                     </tr>
-
-                    <!-- Parallel Generations -->
                     <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Parallel generations</td>
-                        <td class="text-center font-mono text-xs">2 videos • 2 images</td>
-                        <td class="text-center font-mono text-xs text-orange-300 font-bold bg-orange-500/10">3 videos • 4 images</td>
-                        <td class="text-center font-mono text-xs text-emerald-300 font-bold">8 videos • 8 images</td>
-                    </tr>
-
-                    <!-- Video Models -->
-                    <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Video models</td>
-                        <td class="text-center text-xs text-slate-400">Standard only</td>
-                        <td class="text-center text-xs font-bold text-white bg-orange-500/10">All models</td>
-                        <td class="text-center text-xs font-bold text-white">All models</td>
-                    </tr>
-
-                    <!-- Premium Models -->
-                    <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Premium models (Seedance 2.5, Kling 2.6, Wan 2.1)</td>
+                        <td class="font-medium py-4 text-white">Unlimited Relaxed Generations (0 cr)</td>
                         <td class="text-center text-slate-500">✕</td>
                         <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
                         <td class="text-center text-emerald-400 font-bold text-base">✓</td>
                     </tr>
-
-                    <!-- Resolution & Duration -->
                     <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Every resolution & duration (1080p / 4K)</td>
-                        <td class="text-center text-slate-500">✕</td>
+                        <td class="font-medium py-4 text-white">Parallel Generation Slots</td>
+                        <td class="text-center font-mono text-xs">2 concurrent</td>
+                        <td class="text-center font-mono text-xs text-orange-300 font-bold bg-orange-500/10">4 concurrent</td>
+                        <td class="text-center font-mono text-xs text-emerald-300 font-bold">8 concurrent</td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Google Veo 3.1 Video Engine</td>
+                        <td class="text-center text-xs text-slate-300">Standard & Fast</td>
+                        <td class="text-center text-xs font-bold text-white bg-orange-500/10">Full Catalog + Relaxed</td>
+                        <td class="text-center text-xs font-bold text-white">Full Catalog + Relaxed</td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Native Audio Generation with Video</td>
+                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
                         <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
                         <td class="text-center text-emerald-400 font-bold text-base">✓</td>
                     </tr>
-
-                    <!-- All Image Models -->
                     <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">All image models (GPT Image, Flux, Recast)</td>
-                        <td class="text-center text-emerald-400 font-bold">✓</td>
-                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
-                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
-                    </tr>
-
-                    <!-- Character Builder -->
-                    <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Character builder</td>
+                        <td class="font-medium py-4 text-white">Character DNA Synthesizer Slots</td>
                         <td class="text-center text-xs">Up to 5</td>
                         <td class="text-center text-xs font-bold text-orange-300 bg-orange-500/10">Up to 15</td>
                         <td class="text-center text-xs font-bold text-emerald-300">Unlimited</td>
                     </tr>
-
-                    <!-- Studio & Apps -->
                     <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Studio & Creative Apps</td>
-                        <td class="text-center text-xs text-slate-400">Selected apps</td>
-                        <td class="text-center text-xs font-bold text-white bg-orange-500/10">All apps</td>
-                        <td class="text-center text-xs font-bold text-white">All apps</td>
+                        <td class="font-medium py-4 text-white">Super Agent Director Reasoning Suite</td>
+                        <td class="text-center text-slate-400">Standard</td>
+                        <td class="text-center text-xs font-bold text-orange-300 bg-orange-500/10">Advanced Multi-Shot</td>
+                        <td class="text-center text-xs font-bold text-emerald-300">Unlimited Studio Mode</td>
                     </tr>
-
-                    <!-- Early Access to New Trends -->
                     <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Early access to new trends & releases</td>
-                        <td class="text-center text-slate-500">✕</td>
-                        <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
+                        <td class="font-medium py-4 text-white">Queue Priority</td>
+                        <td class="text-center text-xs text-slate-400">Standard</td>
+                        <td class="text-center text-xs font-bold text-orange-300 bg-orange-500/10">Priority</td>
+                        <td class="text-center text-xs font-bold text-emerald-300">VIP Instant GPU</td>
+                    </tr>
+                    <tr class="hover:bg-white/[0.02]">
+                        <td class="font-medium py-4 text-white">Commercial Usage Rights</td>
                         <td class="text-center text-emerald-400 font-bold text-base">✓</td>
-                    </tr>
-
-                    <!-- Early Access to Advanced AI Features -->
-                    <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Early access to advanced AI features</td>
-                        <td class="text-center text-slate-500">✕</td>
                         <td class="text-center text-orange-400 font-bold bg-orange-500/10 text-base">✓</td>
-                        <td class="text-center text-emerald-400 font-bold text-base">✓</td>
-                    </tr>
-
-                    <!-- Lowest Cost Per Credit -->
-                    <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Lowest cost per credit</td>
-                        <td class="text-center text-slate-500">✕</td>
-                        <td class="text-center text-slate-500 bg-orange-500/10">✕</td>
-                        <td class="text-center">
-                            <span class="text-xs font-bold text-amber-300">30% cheaper</span>
-                            <span class="block text-[9px] font-black uppercase text-orange-400">BEST VALUE</span>
-                        </td>
-                    </tr>
-
-                    <!-- Priority Support -->
-                    <tr class="hover:bg-white/[0.02]">
-                        <td class="font-medium py-4 text-white">Priority 24/7 support</td>
-                        <td class="text-center text-slate-500">✕</td>
-                        <td class="text-center text-slate-500 bg-orange-500/10">✕</td>
                         <td class="text-center text-emerald-400 font-bold text-base">✓</td>
                     </tr>
                 </tbody>
             </table>
         </div>
     </div>
+    </div>
 </div>
 {% endblock %}
+

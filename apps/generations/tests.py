@@ -17,6 +17,10 @@ class GenerationWorkflowTests(TestCase):
     def setUp(self):
         ModelRegistry.seed_initial_catalog()
         self.user = User.objects.create_user(email="creator@cleaverloop.ai", username="creator", password="password123")
+        wallet = CreditWallet.objects.get(user=self.user)
+        wallet.subscription_tier = 'starter'
+        wallet.balance = 90000
+        wallet.save()
         self.model = AIModel.objects.get(model_id="cleaverloop-mock-video")
         self.provider = self.model.provider
 

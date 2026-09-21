@@ -5,29 +5,90 @@
 
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-8 relative" x-data="{
-    generationType: '{{ request.GET.type|default:"video" }}',
-    aspectRatio: '16:9',
-    duration: 5,
+    generationType: '{% if request.GET.type %}{{ request.GET.type|escapejs }}{% else %}video{% endif %}',
+    aspectRatio: '{% if request.GET.aspect %}{{ request.GET.aspect|escapejs }}{% elif request.GET.aspect_ratio %}{{ request.GET.aspect_ratio|escapejs }}{% else %}16:9{% endif %}',
+    duration: {% if request.GET.duration %}{{ request.GET.duration }}{% else %}5{% endif %},
     modelDropdownOpen: false,
-    selectedModel: 'automatic',
+    selectedModel: '{% if request.GET.model %}{{ request.GET.model|escapejs }}{% elif request.GET.model_id %}{{ request.GET.model_id|escapejs }}{% else %}automatic{% endif %}',
     selectedModelName: 'Automatic Smart Routing',
     selectedModelBadge: 'Smart Auto',
     selectedModelIcon: '✨',
     selectedModelDesc: 'Auto-selects optimal engine with failover protection',
-    promptText: '',
-    negativePrompt: '',
-    showNegative: false,
+    promptText: '{% if request.GET.prompt %}{{ request.GET.prompt|escapejs }}{% else %}{% endif %}',
+    negativePrompt: '{% if request.GET.negative_prompt %}{{ request.GET.negative_prompt|escapejs }}{% else %}{% endif %}',
+    showNegative: {% if request.GET.negative_prompt %}true{% else %}false{% endif %},
     hasReference: false,
     referencePreview: null,
-    quality: 'standard',
+    quality: '{% if request.GET.quality %}{{ request.GET.quality|escapejs }}{% else %}standard{% endif %}',
     characterDropdownOpen: false,
-    characterId: '{{ request.GET.character_id|default:"" }}',
+    characterId: '{% if request.GET.character_id %}{{ request.GET.character_id|escapejs }}{% else %}{% endif %}',
     selectedCharacterName: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}No Character (Standalone Scene){% endif %}',
     selectedCharacterAvatar: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" and c.avatar %}{{ c.avatar.url }}{% endif %}{% endfor %}{% endif %}',
     selectedCharacterTagline: 'Standalone Scene',
-    estimatedCredits: 300,
+    estimatedCredits: 750,
     isEnhancing: false,
     
+    init() {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('prompt') && !this.promptText) {
+            this.promptText = params.get('prompt');
+        }
+        if (params.has('type')) {
+            this.generationType = params.get('type');
+        }
+        if (params.has('aspect')) {
+            this.aspectRatio = params.get('aspect');
+        } else if (params.has('aspect_ratio')) {
+            this.aspectRatio = params.get('aspect_ratio');
+        }
+        if (params.has('duration')) {
+            this.duration = parseInt(params.get('duration')) || 5;
+        }
+        if (params.has('negative_prompt')) {
+            this.negativePrompt = params.get('negative_prompt');
+            this.showNegative = true;
+        }
+        if (params.has('character_id')) {
+            this.characterId = params.get('character_id');
+        }
+        const modelParam = params.get('model') || params.get('model_id') || this.selectedModel;
+        if (modelParam && modelParam !== 'automatic') {
+            this.selectedModel = modelParam;
+            this.updateModelMetadata(modelParam);
+        }
+        this.calculateCredits();
+        if (this.promptText) {
+            this.$nextTick(() => {
+                const el = document.getElementById('fl-prompt-textarea');
+                if (el) {
+                    el.focus();
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        }
+    },
+
+    updateModelMetadata(modelId) {
+        const modelMap = {
+            'nano-banana-2-lite': { name: 'Nano Banana 2 Lite', badge: 'GOOGLE', icon: '🌐', desc: 'Fast draft 250cr' },
+            'nano-banana-2': { name: 'Nano Banana 2 (Standard)', badge: 'GOOGLE', icon: '🌐', desc: 'Photoreal 2K 750cr' },
+            'nano-banana-pro': { name: 'Nano Banana Pro', badge: 'GOOGLE', icon: '🌐', desc: '4K Masterpiece 1,500cr' },
+            'veo-3.1-lite': { name: 'Veo 3.1 Lite', badge: 'GOOGLE', icon: '🌐', desc: 'Draft Motion 2,000cr/s' },
+            'veo-3.1-fast': { name: 'Veo 3.1 Fast', badge: 'GOOGLE', icon: '🌐', desc: 'Standard + Native Audio 4,400cr/s' },
+            'veo-3.1-standard': { name: 'Veo 3.1 Standard', badge: 'GOOGLE', icon: '🌐', desc: 'Cinema Master + Native Audio 8,500cr/s' },
+            'best_quality': { name: this.generationType === 'video' ? 'Best Cinematic Quality' : 'Best Photoreal Quality', badge: 'Ultra 4K', icon: '⭐', desc: 'Maximum visual fidelity' },
+            'fastest': { name: 'Fastest Generation', badge: 'Ultra Fast', icon: '⚡', desc: 'Low latency turnaround' },
+            'budget': { name: 'Budget Economical', badge: 'Lowest Cost', icon: '🏷️', desc: 'Conserves user credits' },
+            'automatic': { name: 'Automatic Smart Routing', badge: 'Smart Auto', icon: '✨', desc: 'Auto-selects optimal engine' }
+        };
+        if (modelMap[modelId]) {
+            this.selectedModelName = modelMap[modelId].name;
+            this.selectedModelBadge = modelMap[modelId].badge;
+            this.selectedModelIcon = modelMap[modelId].icon;
+            this.selectedModelDesc = modelMap[modelId].desc;
+        }
+    },
+
     selectCharacter(id, name, avatar, tagline) {
         this.characterId = id;
         this.selectedCharacterName = name;
@@ -38,9 +99,21 @@
     
     calculateCredits() {
         if (this.generationType === 'image') {
-            this.estimatedCredits = 50;
+            if (this.selectedModel === 'nano-banana-2-lite' || this.selectedModel === 'fastest' || this.selectedModel === 'budget') {
+                this.estimatedCredits = 250;
+            } else if (this.selectedModel === 'nano-banana-pro' || this.selectedModel === 'best_quality') {
+                this.estimatedCredits = 1500;
+            } else {
+                this.estimatedCredits = 750; // nano-banana-2 (Standard photoreal)
+            }
         } else {
-            this.estimatedCredits = 50 + (this.duration * 50);
+            if (this.selectedModel === 'veo-3.1-lite' || this.selectedModel === 'fastest' || this.selectedModel === 'budget') {
+                this.estimatedCredits = 2000 * this.duration;
+            } else if (this.selectedModel === 'veo-3.1-standard' || this.selectedModel === 'best_quality') {
+                this.estimatedCredits = 8500 * this.duration;
+            } else {
+                this.estimatedCredits = 4400 * this.duration; // veo-3.1-fast (5s = 22,000, 10s = 44,000)
+            }
         }
     },
 
@@ -51,6 +124,7 @@
         this.selectedModelIcon = icon;
         this.selectedModelDesc = desc || '';
         this.modelDropdownOpen = false;
+        this.calculateCredits();
     },
 
     setGenerationType(type) {
@@ -67,7 +141,7 @@
         this.aspectRatio = preset.aspect;
         this.duration = preset.duration;
         this.calculateCredits();
-        $nextTick(() => {
+        this.$nextTick(() => {
             const el = document.getElementById('fl-prompt-textarea');
             if (el) {
                 el.focus();
@@ -81,8 +155,12 @@
         this.generationType = type || 'video';
         this.aspectRatio = aspect || '16:9';
         this.duration = duration || 5;
+        if (modelId) {
+            this.selectedModel = modelId;
+            this.updateModelMetadata(modelId);
+        }
         this.calculateCredits();
-        $nextTick(() => {
+        this.$nextTick(() => {
             const el = document.getElementById('fl-prompt-textarea');
             if (el) {
                 el.focus();
@@ -127,7 +205,7 @@
         const input = document.getElementById('fl-ref-input');
         if (input) input.value = '';
     }
-}" x-init="calculateCredits()">
+}" x-init="init()">
 
     <!-- ===================================================
          FLASHLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE
@@ -804,34 +882,62 @@
 
             <!-- Submit Bar with Live Credit Breakdown and Radiant Orange CTA -->
             <div class="pt-4 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4">
-                <!-- Live Credit Counters -->
+                <!-- Live Credit Counters & Tier Badges -->
                 <div class="flex flex-wrap items-center gap-2.5 text-xs">
                     <div class="px-3.5 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-300 font-bold flex items-center gap-1.5 shadow-sm">
                         <span>🪙</span>
                         <span>Estimated:</span>
-                        <span class="text-white font-extrabold" x-text="estimatedCredits"></span>
+                        <span class="text-white font-extrabold" x-text="estimatedCredits.toLocaleString()"></span>
                         <span>Credits</span>
                     </div>
 
                     <div class="px-3.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-slate-300 font-medium flex items-center gap-1.5">
                         <span>💳</span>
                         <span>Wallet:</span>
-                        <span class="font-bold text-white" id="create-page-wallet-balance">{{ wallet.balance }}</span>
+                        <span class="font-bold text-white font-mono" id="create-page-wallet-balance">{{ wallet.formatted_balance|default:"500" }}</span>
                         <span>Credits</span>
                     </div>
+
+                    {% if wallet.is_unlimited_eligible %}
+                        <div class="px-3 py-1 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-[11px] flex items-center gap-1">
+                            <span>✨</span>
+                            <span>Unlimited Relaxed Active</span>
+                        </div>
+                    {% endif %}
 
                     <span class="text-[11px] text-slate-500 hidden md:inline">Auto-refund on failure</span>
                 </div>
 
-                <!-- Radiant Glowing Cleaverloop CTA Button -->
-                <button type="submit"
-                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
-                    <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
-                    <span>✨</span>
-                    <span x-text="generationType === 'video' ? 'Generate Video' : 'Generate Image'"></span>
-                    <span class="opacity-70 text-xs font-mono">•</span>
-                    <span class="text-xs font-mono opacity-90" x-text="estimatedCredits + ' cr'"></span>
-                </button>
+                <!-- Action Button: Generate / Upgrade CTA for video on free tier -->
+                <div class="w-full sm:w-auto">
+                    {% if wallet.subscription_tier == 'free' %}
+                        <div x-show="generationType === 'video'" class="flex items-center gap-2">
+                            <a href="{% url 'pricing' %}"
+                               class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-7 py-3.5 font-heading font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-2xl transition transform hover:scale-[1.02]">
+                                <span>🚀 Upgrade Plan to Generate Video (From $19/mo)</span>
+                            </a>
+                        </div>
+                        <div x-show="generationType === 'image'">
+                            <button type="submit"
+                                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
+                                <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
+                                <span>✨</span>
+                                <span>Generate Image</span>
+                                <span class="opacity-70 text-xs font-mono">•</span>
+                                <span class="text-xs font-mono opacity-90" x-text="estimatedCredits.toLocaleString() + ' cr'"></span>
+                            </button>
+                        </div>
+                    {% else %}
+                        <button type="submit"
+                                class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
+                            <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
+                            <span>✨</span>
+                            <span x-text="generationType === 'video' ? 'Generate Video' : 'Generate Image'"></span>
+                            <span class="opacity-70 text-xs font-mono">•</span>
+                            <span class="text-xs font-mono opacity-90" x-text="estimatedCredits.toLocaleString() + ' cr'"></span>
+                        </button>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </form>

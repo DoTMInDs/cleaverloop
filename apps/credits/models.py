@@ -9,6 +9,22 @@ class CreditWallet(models.Model):
         on_delete=models.CASCADE,
         related_name='wallet'
     )
+    SUBSCRIPTION_TIERS = [
+        ('free', 'Free Starter (500 Credits)'),
+        ('starter', 'Starter (90,000 Credits/mo)'),
+        ('creator', 'Creator (400,000 Credits/mo + Unlimited)'),
+        ('ultra', 'Ultra (1,000,000 Credits/mo + Unlimited)'),
+    ]
+
+    subscription_tier = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_TIERS,
+        default='free',
+        db_index=True
+    )
+    subscription_credits = models.BigIntegerField(default=500, help_text="Monthly refreshing credits")
+    purchased_credits = models.BigIntegerField(default=0, help_text="Non-expiring top-up credits")
+    subscription_renewal_date = models.DateTimeField(null=True, blank=True)
     balance = models.BigIntegerField(default=0)
     lifetime_earned = models.BigIntegerField(default=0)
     lifetime_spent = models.BigIntegerField(default=0)
@@ -19,10 +35,44 @@ class CreditWallet(models.Model):
         verbose_name_plural = 'Credit Wallets'
 
     def __str__(self):
-        return f"{self.user.email} Wallet (Balance: {self.balance})"
+        tier_label = dict(self.SUBSCRIPTION_TIERS).get(self.subscription_tier, self.subscription_tier)
+        return f"{self.user.email} Wallet [{tier_label}] (Balance: {self.balance})"
+
+    @property
+    def max_parallel_generations(self) -> int:
+        """Returns maximum simultaneous generation jobs allowed for this subscription tier."""
+        limits = {
+            'free': 1,
+            'starter': 2,
+            'creator': 4,
+            'ultra': 8,
+        }
+        return limits.get(self.subscription_tier, 1)
+
+    @property
+    def is_unlimited_eligible(self) -> bool:
+        """Returns True if the user's subscription tier provides unlimited relaxed generations."""
+        return self.subscription_tier in ('creator', 'ultra')
+
+    @property
+    def in_relaxed_mode(self) -> bool:
+        """Returns True if user has exhausted priority credits but is eligible for unlimited relaxed generations."""
+        return self.is_unlimited_eligible and self.balance <= 0
+
+    @property
+    def formatted_balance(self) -> str:
+        """Human-friendly credit balance string (e.g. '500', '90K', '400K', '1M')."""
+        bal = self.balance
+        if bal >= 1_000_000:
+            return f"{bal / 1_000_000:.1f}M".replace('.0M', 'M')
+        elif bal >= 10_000:
+            return f"{bal / 1_000:.0f}K"
+        elif bal >= 1_000:
+            return f"{bal / 1_000:.1f}K".replace('.0K', 'K')
+        return f"{bal:,}"
 
     def clean(self):
-        if self.balance < 0:
+        if self.balance < 0 and not self.is_unlimited_eligible:
             raise ValidationError("Wallet balance cannot be negative.")
 
 class CreditTransaction(models.Model):
