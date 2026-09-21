@@ -51,6 +51,79 @@ class CreditService:
 
     @classmethod
     @transaction.atomic
+    def activate_subscription(
+        cls,
+        user,
+        plan,
+        reference: str = '',
+        customer_code: str = '',
+        external_subscription_id: str = '',
+        email_token: str = '',
+        grant_monthly_credits: bool = True,
+    ):
+        """
+        Atomically activate or renew a subscription:
+        1. Updates or creates Subscription with active status and 30-day validity window.
+        2. Sets user's CreditWallet.subscription_tier = plan.slug.
+        3. Sets CreditWallet.subscription_credits = plan.credits_per_month.
+        4. Sets CreditWallet.subscription_renewal_date = now + 30 days.
+        5. Grants the plan's monthly credits idempotently with external_reference.
+        """
+        from apps.billing.models import Subscription
+        from django.utils import timezone
+        import datetime
+
+        now = timezone.now()
+        period_end = now + datetime.timedelta(days=30)
+
+        # Update or create Subscription model
+        sub_defaults = {
+            'plan': plan,
+            'provider': 'paystack',
+            'status': 'active',
+            'current_period_start': now,
+            'current_period_end': period_end,
+        }
+        if reference:
+            sub_defaults['last_payment_reference'] = reference
+        if customer_code:
+            sub_defaults['customer_code'] = customer_code
+        if external_subscription_id:
+            sub_defaults['external_subscription_id'] = external_subscription_id
+        if email_token:
+            sub_defaults['email_token'] = email_token
+
+        sub, created = Subscription.objects.update_or_create(
+            user=user,
+            defaults=sub_defaults
+        )
+
+        # Update wallet tier and allowance
+        wallet = CreditWallet.objects.select_for_update().get_or_create(user=user)[0]
+        wallet.subscription_tier = plan.slug
+        wallet.subscription_credits = plan.credits_per_month
+        wallet.subscription_renewal_date = period_end
+        wallet.save(update_fields=['subscription_tier', 'subscription_credits', 'subscription_renewal_date', 'updated_at'])
+
+        # Grant monthly credits idempotently
+        if grant_monthly_credits and plan.credits_per_month > 0:
+            external_ref = f"paystack:{reference}" if reference else ""
+            if not external_ref or not CreditTransaction.objects.filter(external_reference=external_ref).exists():
+                cls.grant_credits(
+                    user=user,
+                    amount=plan.credits_per_month,
+                    transaction_type='subscription_credit',
+                    description=f"Monthly subscription credits ({plan.name})",
+                    external_reference=external_ref
+                )
+                logger.info(f"Activated {plan.name} subscription and granted {plan.credits_per_month:,} credits to {user.email}")
+            else:
+                logger.info(f"Subscription {plan.name} tier updated for {user.email}; credits already granted for ref {reference}.")
+
+        return sub
+
+    @classmethod
+    @transaction.atomic
     def deduct_credits(
         cls,
         user,

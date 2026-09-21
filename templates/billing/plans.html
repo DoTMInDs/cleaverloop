@@ -8,8 +8,8 @@
 {% block content %}
 <div class="relative w-full overflow-hidden" x-data="{
     annual: false,
-    calcPlan: 'starter',
-    calcCredits: 90000,
+    calcPlan: '{% if current_subscription and current_subscription.status == "active" %}{{ current_subscription.plan.slug }}{% else %}starter{% endif %}',
+    calcCredits: {% if current_subscription and current_subscription.status == "active" %}{{ current_subscription.plan.credits_per_month }}{% else %}90000{% endif %},
     topUpModalOpen: false,
 
     setPlan(slug, credits) {
@@ -144,27 +144,60 @@
             </button>
         </div>
 
-        <!-- Free Trial Callout Banner -->
-        <div class="glass-panel rounded-2xl p-3.5 max-w-2xl mx-auto border border-emerald-500/30 bg-emerald-950/20 text-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-lg">
-            <div class="flex items-center gap-2.5">
-                <span class="text-lg">🎁</span>
-                <div class="text-left">
-                    <span class="font-bold text-white">Free Starter Trial:</span>
-                    <span class="text-emerald-300"> New accounts receive <strong class="text-amber-400">500 Credits</strong> on signup (yields <strong>2 Nano Banana 2 Lite images</strong>).</span>
+        <!-- Membership Status Callout Banner -->
+        {% if user.is_authenticated and current_subscription and current_subscription.status == 'active' %}
+            <div class="glass-panel rounded-2xl p-4 max-w-2xl mx-auto border border-emerald-500/40 bg-emerald-950/30 text-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-xl shadow-emerald-500/10">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-lg shrink-0 shadow">
+                        💎
+                    </div>
+                    <div class="text-left space-y-0.5">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-white text-sm">Active Subscription:</span>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-400 text-black tracking-wide shadow">
+                                {{ current_subscription.plan.name }}
+                            </span>
+                        </div>
+                        <div class="text-emerald-300 text-[11px]">
+                            <span>Monthly Allowance: <strong>{{ current_subscription.plan.credits_per_month|intcomma }} Credits</strong></span>
+                            {% if current_subscription.current_period_end %}
+                                <span class="text-slate-400">• Renews {{ current_subscription.current_period_end|date:"M d, Y" }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <span class="px-3 py-1.5 rounded-xl bg-black/50 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30 shadow-inner">
+                        ⚡ {{ wallet.formatted_balance|default:"0" }} Balance
+                    </span>
+                    <a href="{% url 'billing:portal' %}" class="btn btn-xs bg-emerald-500 hover:bg-emerald-400 border-none text-black font-bold uppercase tracking-wider px-3 shadow">
+                        Manage
+                    </a>
                 </div>
             </div>
-            {% if not user.is_authenticated %}
-                <a href="{% url 'account_signup' %}" class="btn btn-xs bg-emerald-500 hover:bg-emerald-400 border-none text-black font-bold uppercase tracking-wider px-3.5 whitespace-nowrap shadow">
-                    Claim 500 Credits
-                </a>
-            {% else %}
-                <div class="flex items-center gap-2 shrink-0">
-                    <span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30">
-                        ⚡ {{ wallet.formatted_balance|default:"500" }} Credits
-                    </span>
+        {% else %}
+            <!-- Free Trial Callout Banner -->
+            <div class="glass-panel rounded-2xl p-3.5 max-w-2xl mx-auto border border-emerald-500/30 bg-emerald-950/20 text-emerald-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs shadow-lg">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-lg">🎁</span>
+                    <div class="text-left">
+                        <span class="font-bold text-white">Free Starter Trial:</span>
+                        <span class="text-emerald-300"> New accounts receive <strong class="text-amber-400">500 Credits</strong> on signup (yields <strong>2 Nano Banana 2 Lite images</strong>).</span>
+                    </div>
                 </div>
-            {% endif %}
-        </div>
+                {% if not user.is_authenticated %}
+                    <a href="{% url 'account_signup' %}" class="btn btn-xs bg-emerald-500 hover:bg-emerald-400 border-none text-black font-bold uppercase tracking-wider px-3.5 whitespace-nowrap shadow">
+                        Claim 500 Credits
+                    </a>
+                {% else %}
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs border border-emerald-500/30">
+                            ⚡ {{ wallet.formatted_balance|default:"500" }} Credits
+                        </span>
+                    </div>
+                {% endif %}
+            </div>
+        {% endif %}
     </div>
 
     <!-- ===================================================
@@ -363,6 +396,14 @@
                                 {% endif %}
                             </form>
                         {% endif %}
+
+                        <!-- Mobile Money & Card Payment Method Pills -->
+                        <div class="pt-2 flex flex-wrap items-center justify-center gap-1.5 text-[9px] text-slate-400">
+                            <span class="px-2 py-0.5 rounded bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 font-bold">📱 MTN MoMo</span>
+                            <span class="px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20 font-bold">📱 Telecel Cash</span>
+                            <span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">📱 M-Pesa</span>
+                            <span class="px-2 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-bold">💳 Cards</span>
+                        </div>
                     </div>
 
                     <!-- Feature Checklist -->
@@ -574,11 +615,26 @@
                     <div class="text-3xl font-heading font-black text-white mt-2">50,000 <span class="text-sm font-normal text-slate-400">credits</span></div>
                     <div class="text-xs text-slate-400 mt-1">≈ 66 Nano Banana 2 images or 2 Veo Fast clips</div>
                 </div>
-                <div class="pt-2 border-t border-white/5 flex items-center justify-between">
-                    <span class="text-xl font-black text-white">$10 <span class="text-xs text-slate-500 font-normal">USD</span></span>
-                    <a href="{% if user.is_authenticated %}{% url 'credits:wallet' %}{% else %}{% url 'account_login' %}{% endif %}" class="btn btn-xs bg-white/10 hover:bg-white/20 text-white border-none font-bold uppercase">
-                        Add Credits
-                    </a>
+                <div class="pt-2 border-t border-white/5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xl font-black text-white">$10 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                        {% if user.is_authenticated %}
+                            <form method="POST" action="{% url 'billing:checkout_topup' 'pack-50k' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs bg-white/10 hover:bg-white/20 text-white border-none font-bold uppercase">
+                                    Buy 50K Pack →
+                                </button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'account_login' %}" class="btn btn-xs bg-white/10 hover:bg-white/20 text-white border-none font-bold uppercase">
+                                Buy 50K Pack →
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center justify-between text-[9px] text-slate-400">
+                        <span>📱 MoMo & Cards</span>
+                        <span class="font-mono">Instant Top-Up</span>
+                    </div>
                 </div>
             </div>
 
@@ -592,11 +648,26 @@
                     <div class="text-3xl font-heading font-black text-white mt-2">250,000 <span class="text-sm font-normal text-slate-400">credits</span></div>
                     <div class="text-xs text-slate-400 mt-1">≈ 330 Nano Banana 2 images or 11 Veo Fast clips</div>
                 </div>
-                <div class="pt-2 border-t border-white/5 flex items-center justify-between">
-                    <span class="text-xl font-black text-white">$45 <span class="text-xs text-slate-500 font-normal">USD</span></span>
-                    <a href="{% if user.is_authenticated %}{% url 'credits:wallet' %}{% else %}{% url 'account_login' %}{% endif %}" class="btn btn-xs fl-gradient-orange-btn text-white border-none font-bold uppercase shadow">
-                        Add Credits
-                    </a>
+                <div class="pt-2 border-t border-white/5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xl font-black text-white">$45 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                        {% if user.is_authenticated %}
+                            <form method="POST" action="{% url 'billing:checkout_topup' 'pack-250k' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs fl-gradient-orange-btn text-white border-none font-bold uppercase shadow">
+                                    Buy 250K Pack →
+                                </button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'account_login' %}" class="btn btn-xs fl-gradient-orange-btn text-white border-none font-bold uppercase shadow">
+                                Buy 250K Pack →
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center justify-between text-[9px] text-orange-300/80">
+                        <span>📱 MoMo (MTN / Telecel / M-Pesa)</span>
+                        <span class="font-mono">+10% Bonus</span>
+                    </div>
                 </div>
             </div>
 
@@ -610,11 +681,26 @@
                     <div class="text-3xl font-heading font-black text-white mt-2">600,000 <span class="text-sm font-normal text-slate-400">credits</span></div>
                     <div class="text-xs text-slate-400 mt-1">≈ 800 Nano Banana 2 images or 27 Veo Fast clips</div>
                 </div>
-                <div class="pt-2 border-t border-white/5 flex items-center justify-between">
-                    <span class="text-xl font-black text-white">$99 <span class="text-xs text-slate-500 font-normal">USD</span></span>
-                    <a href="{% if user.is_authenticated %}{% url 'credits:wallet' %}{% else %}{% url 'account_login' %}{% endif %}" class="btn btn-xs bg-white text-black hover:bg-slate-200 border-none font-bold uppercase shadow">
-                        Add Credits
-                    </a>
+                <div class="pt-2 border-t border-white/5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xl font-black text-white">$99 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                        {% if user.is_authenticated %}
+                            <form method="POST" action="{% url 'billing:checkout_topup' 'pack-600k' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs bg-white text-black hover:bg-slate-200 border-none font-bold uppercase shadow">
+                                    Buy 600K Pack →
+                                </button>
+                            </form>
+                        {% else %}
+                            <a href="{% url 'account_login' %}" class="btn btn-xs bg-white text-black hover:bg-slate-200 border-none font-bold uppercase shadow">
+                                Buy 600K Pack →
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="flex items-center justify-between text-[9px] text-brand-300/80">
+                        <span>📱 MoMo & Cards</span>
+                        <span class="font-mono">+20% Bonus</span>
+                    </div>
                 </div>
             </div>
         </div>

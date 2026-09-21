@@ -13,11 +13,22 @@ class WalletDetailView(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         wallet = CreditService.get_or_create_wallet(self.request.user)
-        return wallet.transactions.all()
+        qs = wallet.transactions.all()
+        tx_type = self.request.GET.get('type', 'all')
+        if tx_type == 'generation':
+            qs = qs.filter(transaction_type__in=['generation_hold', 'generation_consume'])
+        elif tx_type == 'grants':
+            qs = qs.filter(transaction_type__in=['bonus', 'topup', 'subscription'])
+        elif tx_type == 'refund':
+            qs = qs.filter(transaction_type='generation_refund')
+        return qs
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['wallet'] = CreditService.get_or_create_wallet(self.request.user)
+        ctx['subscription'] = getattr(self.request.user, 'subscription', None)
+        ctx['current_type'] = self.request.GET.get('type', 'all')
+        ctx['total_transactions_count'] = ctx['wallet'].transactions.count()
         return ctx
 
 def live_credit_badge(request):

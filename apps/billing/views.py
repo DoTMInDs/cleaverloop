@@ -85,6 +85,36 @@ class InitializeCheckoutView(LoginRequiredMixin, View):
             messages.error(request, f"Payment error: {err_msg}")
             return redirect('billing:plans')
 
+class InitializeTopupCheckoutView(LoginRequiredMixin, View):
+    """Initiate Paystack Mobile Money / Card checkout for top-up credit packs."""
+    TOPUP_PACKS = {
+        'pack-50k': {'credits': 50000, 'price_usd': 10.00, 'name': 'Starter Pack (50K)'},
+        'pack-250k': {'credits': 250000, 'price_usd': 45.00, 'name': 'Creator Pack (250K)'},
+        'pack-600k': {'credits': 600000, 'price_usd': 99.00, 'name': 'Studio Pack (600K)'},
+    }
+
+    def post(self, request, pack_id):
+        pack = self.TOPUP_PACKS.get(pack_id)
+        if not pack:
+            messages.error(request, "Invalid credit pack selected.")
+            return redirect('billing:plans')
+
+        callback_url = request.build_absolute_uri(reverse('billing:callback'))
+        res = PaystackService.initialize_topup_transaction(
+            user=request.user,
+            pack_id=pack_id,
+            credits_amount=pack['credits'],
+            price_usd=pack['price_usd'],
+            callback_url=callback_url
+        )
+
+        if res.get('status') and res.get('data', {}).get('authorization_url'):
+            return redirect(res['data']['authorization_url'])
+        else:
+            err = res.get('message', 'Unable to initiate Mobile Money / Card checkout.')
+            messages.error(request, f"Payment error: {err}")
+            return redirect('billing:plans')
+
 class PaymentCallbackView(LoginRequiredMixin, View):
     """Handle redirect back from Paystack checkout, verify transaction, and grant credits."""
     def get(self, request):
@@ -103,15 +133,34 @@ class PaymentCallbackView(LoginRequiredMixin, View):
             return redirect('billing:plans')
 
         v_data = verification.get('data', {})
+        metadata = v_data.get('metadata', {}) if isinstance(v_data.get('metadata'), dict) else {}
+
+        # Check for top-up credit pack purchase
+        if metadata.get('payment_type') == 'topup' or request.GET.get('topup_credits'):
+            credits_to_grant = int(metadata.get('credits_amount') or request.GET.get('topup_credits') or 50000)
+            external_ref = f"paystack:topup:{reference}"
+
+            if not CreditTransaction.objects.filter(external_reference=external_ref).exists():
+                CreditService.grant_credits(
+                    user=request.user,
+                    amount=credits_to_grant,
+                    transaction_type='purchase',
+                    description=f"Top-up credit pack purchase ({credits_to_grant:,} credits)",
+                    external_reference=external_ref
+                )
+                messages.success(request, f"🎉 Added {credits_to_grant:,} top-up credits to your wallet via Mobile Money / Card!")
+            else:
+                messages.info(request, "Top-up credits already applied to your account.")
+            return redirect('credits:wallet')
 
         # Resolve plan
         plan = SubscriptionPlan.resolve_plan(
             plan_id=plan_id,
-            slug=v_data.get('metadata', {}).get('plan_slug') if isinstance(v_data.get('metadata'), dict) else None,
+            slug=metadata.get('plan_slug'),
             paystack_code=v_data.get('plan')
         )
-        if not plan and isinstance(v_data.get('metadata'), dict) and v_data.get('metadata', {}).get('plan_id'):
-            plan = SubscriptionPlan.resolve_plan(plan_id=v_data['metadata']['plan_id'])
+        if not plan and metadata.get('plan_id'):
+            plan = SubscriptionPlan.resolve_plan(plan_id=metadata['plan_id'])
         if not plan:
             # Fallback to Creator plan if unspecified
             plan = SubscriptionPlan.objects.filter(slug='creator').first() or SubscriptionPlan.objects.filter(price_monthly__gt=0).first()
@@ -137,35 +186,19 @@ class PaymentCallbackView(LoginRequiredMixin, View):
 
         external_ref = f"paystack:{reference}"
 
-        # Idempotent credit grant: check if already processed
-        if not CreditTransaction.objects.filter(external_reference=external_ref).exists():
-            # Activate or update subscription
-            sub, _ = Subscription.objects.update_or_create(
-                user=request.user,
-                defaults={
-                    'plan': plan,
-                    'provider': 'paystack',
-                    'status': 'active',
-                    'last_payment_reference': reference,
-                    'customer_code': v_data.get('customer', {}).get('customer_code', ''),
-                    'external_subscription_id': v_data.get('plan', '') or v_data.get('subscription_code', ''),
-                }
-            )
-
-            # Atomically grant credits to wallet
-            CreditService.grant_credits(
-                user=request.user,
-                amount=plan.credits_per_month,
-                transaction_type='subscription_credit',
-                description=f"Paystack monthly subscription credits ({plan.name})",
-                external_reference=external_ref
-            )
-            messages.success(
-                request,
-                f"🎉 Welcome to {plan.name}! {plan.credits_per_month:,} credits have been added to your wallet."
-            )
-        else:
-            messages.info(request, "Payment already verified and credits applied.")
+        # Atomically activate subscription, update wallet tier, and grant credits
+        CreditService.activate_subscription(
+            user=request.user,
+            plan=plan,
+            reference=reference,
+            customer_code=v_data.get('customer', {}).get('customer_code', ''),
+            external_subscription_id=v_data.get('plan', '') or v_data.get('subscription_code', ''),
+            grant_monthly_credits=True
+        )
+        messages.success(
+            request,
+            f"🎉 Welcome to {plan.name}! {plan.credits_per_month:,} credits have been added to your wallet."
+        )
 
         return redirect('billing:portal')
 
@@ -181,6 +214,7 @@ class SubscriptionPortalView(LoginRequiredMixin, TemplateView):
             wallet=ctx['wallet']
         ).order_by('-created_at')[:10]
         ctx['plans'] = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly')
+        ctx['usd_to_ghs_rate'] = CurrencyService.get_usd_to_ghs_rate()
         return ctx
 
 @method_decorator(require_POST, name='dispatch')

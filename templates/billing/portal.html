@@ -1,161 +1,522 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static humanize %}
 
-{% block title %}Billing & Subscription Portal — CleaverLoop AI{% endblock %}
+{% block title %}Billing & Subscription Portal — CleaverLoop AI (Flashloop Edition){% endblock %}
+
+{% block main_classes %}flex-1 w-full max-w-full px-0 py-0 pb-24 relative overflow-hidden{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-8 pb-16">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-500/10 text-brand-300 border border-brand-500/20 mb-1">
-                Account Billing
-            </div>
-            <h1 class="text-2xl md:text-3xl font-heading font-extrabold text-white">Subscription & Wallet</h1>
+<div class="relative w-full overflow-hidden" x-data="{
+    cancelModalOpen: false,
+    copyFeedback: false,
+    copyText(text) {
+        navigator.clipboard.writeText(text);
+        this.copyFeedback = true;
+        setTimeout(() => this.copyFeedback = false, 2000);
+    }
+}">
+
+    <!-- ===================================================
+         ATMOSPHERIC BACKGROUND DESIGNS & AMBIENT SCI-FI GLOWS
+         =================================================== -->
+    <div class="pointer-events-none select-none absolute inset-0 overflow-hidden z-0">
+        <!-- Top Horizon Arch Corona Flare (Flashloop Eclipse Glow) -->
+        <div class="absolute -top-48 left-1/2 -translate-x-1/2 w-[1200px] h-[650px] rounded-full opacity-65 filter blur-[100px] pointer-events-none"
+             style="background: radial-gradient(circle, rgba(251,146,60,0.38) 0%, rgba(234,88,12,0.22) 35%, rgba(99,102,241,0.18) 60%, transparent 75%);"></div>
+
+        <!-- Glowing Horizon Beam Line -->
+        <div class="absolute top-24 left-0 right-0 h-px bg-gradient-to-r from-transparent via-orange-500/40 via-indigo-500/40 to-transparent opacity-50"></div>
+
+        <!-- Perspective Cyber Grid Floor with Radial Vignette Fade -->
+        <div class="absolute top-0 inset-x-0 h-[800px] opacity-20"
+             style="background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+                background-size: 48px 48px;
+                mask-image: radial-gradient(ellipse 85% 70% at 50% 15%, black 30%, transparent 80%);
+                -webkit-mask-image: radial-gradient(ellipse 85% 70% at 50% 15%, black 30%, transparent 80%);">
         </div>
 
-        <a href="{% url 'billing:plans' %}" class="btn btn-sm btn-primary bg-brand-600 hover:bg-brand-500 text-white text-xs border-none gap-1.5 shadow-lg shadow-brand-500/20">
-            <span>⚡</span>
-            <span>View All Plans</span>
-        </a>
+        <!-- Ambient Depth Orbs -->
+        <div class="absolute top-24 -left-32 w-[600px] h-[600px] bg-indigo-600/20 rounded-full filter blur-[140px] opacity-70"></div>
+        <div class="absolute top-40 -right-32 w-[650px] h-[650px] bg-orange-500/20 rounded-full filter blur-[150px] opacity-65"></div>
+        <div class="absolute top-[800px] left-1/2 -translate-x-1/2 w-[900px] h-[450px] bg-cyan-500/10 rounded-full filter blur-[160px] opacity-50"></div>
     </div>
 
-    <!-- Active Subscription Card -->
-    <div class="glass-panel rounded-3xl p-6 md:p-8 space-y-6 border border-white/10 relative overflow-hidden">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
-            <div class="space-y-2">
-                <span class="text-xs uppercase font-bold text-slate-400 block tracking-wider">Active Plan</span>
-                <div class="flex items-center gap-3">
-                    <h2 class="text-2xl md:text-3xl font-heading font-extrabold text-white">
-                        {% if subscription and subscription.plan %}
-                            {{ subscription.plan.name }}
-                        {% else %}
-                            Free Starter
-                        {% endif %}
-                    </h2>
-                    {% if subscription and subscription.status == 'active' %}
-                        <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                            Active
-                        </span>
-                    {% elif subscription and subscription.status == 'canceled' %}
-                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                            Canceled
-                        </span>
-                    {% else %}
-                        <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase bg-white/10 text-slate-300 border border-white/10">
-                            Default Free Tier
-                        </span>
-                    {% endif %}
-                </div>
+    <!-- MAIN CONTAINER -->
+    <div class="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 space-y-10">
 
-                <p class="text-xs text-slate-400">
-                    {% if subscription and subscription.plan %}
-                        ${{ subscription.plan.price_monthly|floatformat:0 }} / month • Grants {{ subscription.plan.credits_per_month }} credits every renewal.
-                    {% else %}
-                        Starter account with 500 bonus onboarding credits. Upgrade for high-volume video workflows.
-                    {% endif %}
+        <!-- ===================================================
+             PAGE HEADER & BREADCRUMB
+             =================================================== -->
+        <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-2 border-b border-white/5">
+            <div class="space-y-2">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-orange-500/10 text-orange-400 border border-orange-500/20 shadow-sm shadow-orange-500/10">
+                    <span class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
+                    <span>Billing & Subscription Hub</span>
+                </div>
+                <h1 class="text-3xl md:text-4xl lg:text-5xl font-heading font-black text-white tracking-tight uppercase">
+                    Portfolio & Membership
+                </h1>
+                <p class="text-xs md:text-sm text-slate-400 max-w-xl">
+                    Manage your active generation tier, credit allowances, renewal cycles, and invoice audit trails.
                 </p>
             </div>
 
-            <!-- Wallet Balance Display -->
-            <div class="rounded-2xl bg-black/40 border border-white/10 p-5 flex flex-col items-start md:items-end justify-center min-w-[200px]">
-                <span class="text-[11px] font-bold uppercase text-slate-400">Current Balance</span>
-                <div class="text-3xl font-extrabold text-amber-400 mt-0.5 font-mono">
-                    {{ wallet.balance|default:0 }}
-                </div>
-                <span class="text-[10px] text-slate-500">Credits available for generations</span>
+            <!-- Header Quick Action Buttons -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <a href="{% url 'credits:wallet' %}" 
+                   class="btn btn-sm bg-white/5 hover:bg-white/10 text-slate-200 border border-white/10 hover:border-white/20 font-bold text-xs gap-2 rounded-xl transition">
+                    <span>🪙</span>
+                    <span>Credit Ledger</span>
+                </a>
+                <a href="{% url 'billing:plans' %}" 
+                   class="btn btn-sm fl-gradient-orange-btn text-black font-extrabold text-xs border-none gap-2 rounded-xl shadow-lg shadow-orange-500/20 transition">
+                    <span>⚡</span>
+                    <span>All Plans & Pricing</span>
+                </a>
             </div>
         </div>
 
-        <!-- Plan Actions -->
-        <div class="pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
-            <div class="text-xs text-slate-400">
-                {% if subscription and subscription.last_payment_reference %}
-                    <span class="font-mono text-[11px] text-slate-500">Last Ref: {{ subscription.last_payment_reference }}</span>
-                {% else %}
-                    <span>Payments secured via Paystack</span>
+        <!-- ===================================================
+             ACTIVE MEMBERSHIP HERO CARD
+             =================================================== -->
+        <div class="relative rounded-3xl p-6 md:p-8 border overflow-hidden backdrop-blur-xl transition
+                    {% if subscription and subscription.status == 'active' and subscription.plan.slug == 'ultra' %}
+                        bg-gradient-to-br from-purple-950/40 via-black/80 to-indigo-950/40 border-purple-500/30 shadow-[0_0_40px_rgba(168,85,247,0.15)]
+                    {% elif subscription and subscription.status == 'active' and subscription.plan.slug == 'creator' %}
+                        bg-gradient-to-br from-orange-950/40 via-black/80 to-amber-950/40 border-orange-500/30 shadow-[0_0_40px_rgba(249,115,22,0.15)]
+                    {% elif subscription and subscription.status == 'active' and subscription.plan.slug == 'starter' %}
+                        bg-gradient-to-br from-cyan-950/40 via-black/80 to-blue-950/40 border-cyan-500/30 shadow-[0_0_40px_rgba(6,182,212,0.15)]
+                    {% else %}
+                        bg-gradient-to-br from-slate-900/60 via-black/80 to-slate-950/60 border-white/10
+                    {% endif %}">
+
+            <!-- Decorative Ambient Glow inside Card -->
+            <div class="absolute -top-24 -right-24 w-72 h-72 rounded-full filter blur-[70px] pointer-events-none opacity-40
+                        {% if subscription and subscription.status == 'active' and subscription.plan.slug == 'ultra' %}bg-purple-500
+                        {% elif subscription and subscription.status == 'active' and subscription.plan.slug == 'creator' %}bg-orange-500
+                        {% elif subscription and subscription.status == 'active' and subscription.plan.slug == 'starter' %}bg-cyan-500
+                        {% else %}bg-slate-500{% endif %}"></div>
+
+            <div class="relative z-10 space-y-6">
+                <!-- Top Row: Plan Name, Status Badge & Balance -->
+                <div class="flex flex-col md:flex-row md:items-start justify-between gap-6">
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Current Subscription</span>
+                            <span class="text-slate-600">•</span>
+                            <span class="text-[11px] text-slate-400 font-mono">ID: {{ user.id|stringformat:"s"|slice:":8" }}</span>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3">
+                            <h2 class="text-2xl md:text-4xl font-heading font-black text-white tracking-tight uppercase flex items-center gap-2.5">
+                                {% if subscription and subscription.plan and subscription.plan.slug == 'ultra' %}
+                                    <span>👑</span> <span>{{ subscription.plan.name }}</span>
+                                {% elif subscription and subscription.plan and subscription.plan.slug == 'creator' %}
+                                    <span>🔥</span> <span>{{ subscription.plan.name }}</span>
+                                {% elif subscription and subscription.plan and subscription.plan.slug == 'starter' %}
+                                    <span>⚡</span> <span>{{ subscription.plan.name }}</span>
+                                {% elif subscription and subscription.plan %}
+                                    <span>✨</span> <span>{{ subscription.plan.name }}</span>
+                                {% else %}
+                                    <span>🌱</span> <span>Free Starter Explorer</span>
+                                {% endif %}
+                            </h2>
+
+                            <!-- Status Pill -->
+                            {% if subscription and subscription.status == 'active' %}
+                                <span class="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm shadow-emerald-500/20">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    <span>Active Subscription</span>
+                                </span>
+                            {% elif subscription and subscription.status == 'canceled' %}
+                                <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/30 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-rose-400"></span>
+                                    <span>Canceled (Retains Unspent Credits)</span>
+                                </span>
+                            {% else %}
+                                <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-white/10 text-slate-300 border border-white/10 flex items-center gap-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+                                    <span>Standard Free Tier</span>
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Price / Details -->
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-300 pt-1">
+                            {% if subscription and subscription.plan and subscription.plan.price_monthly > 0 %}
+                                <div class="font-bold text-white flex items-center gap-1.5">
+                                    <span class="text-sm">${{ subscription.plan.price_monthly|floatformat:0 }} USD</span>
+                                    <span class="text-slate-400 font-normal">/ month</span>
+                                </div>
+                                <span class="text-slate-600">•</span>
+                                <div class="text-slate-400">
+                                    Grants <span class="font-bold text-orange-400 font-mono">{{ subscription.plan.credits_per_month|intcomma }}</span> monthly credits
+                                </div>
+                                <span class="text-slate-600">•</span>
+                                <div class="text-slate-400">
+                                    Secured via <strong class="text-slate-200">Paystack (MoMo & Cards)</strong>
+                                </div>
+                            {% else %}
+                                <div class="text-slate-400">
+                                    Free Starter account with onboarding credits. Upgrade for priority Veo video & Nano Banana rendering.
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Available Wallet Balance Counter Box -->
+                    <div class="rounded-2xl bg-black/60 border border-white/10 p-5 flex flex-col items-start md:items-end justify-center min-w-[220px] shadow-inner">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <span>🪙</span>
+                            <span>Available Balance</span>
+                        </span>
+                        <div class="text-3xl md:text-4xl font-heading font-black text-amber-400 mt-1 font-mono tracking-tight">
+                            {{ wallet.balance|default:0|intcomma }}
+                        </div>
+                        <span class="text-[10px] text-slate-400 mt-0.5">
+                            ≈ {% widthratio wallet.balance 750 1 %} Nano Banana images
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Middle Row: Quota Progress & Renewal Metrics -->
+                {% if subscription and subscription.status == 'active' and subscription.plan.price_monthly > 0 %}
+                    <div class="p-4 rounded-2xl bg-white/[0.03] border border-white/5 space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-white">Monthly Allocation Usage</span>
+                                <span class="text-slate-400 font-mono">({{ wallet.balance|intcomma }} / {{ subscription.plan.credits_per_month|intcomma }} credits)</span>
+                            </div>
+                            <div class="text-slate-400 text-[11px]">
+                                {% if wallet.subscription_renewal_date %}
+                                    <span>Next Auto-Refill: <strong class="text-slate-200 font-mono">{{ wallet.subscription_renewal_date|date:"M d, Y" }}</strong></span>
+                                {% else %}
+                                    <span>Monthly cycle renews every 30 days</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Meter Bar -->
+                        <div class="w-full bg-black/50 rounded-full h-2.5 overflow-hidden border border-white/5">
+                            <div class="h-full rounded-full transition-all duration-500
+                                        {% if subscription.plan.slug == 'ultra' %}bg-gradient-to-r from-purple-500 to-indigo-400
+                                        {% elif subscription.plan.slug == 'creator' %}bg-gradient-to-r from-orange-500 to-amber-400
+                                        {% else %}bg-gradient-to-r from-cyan-500 to-blue-400{% endif %}"
+                                 style="width: {% if wallet.subscription_credits > 0 %}{% widthratio wallet.balance wallet.subscription_credits 100 %}{% else %}100{% endif %}%; max-width: 100%;"></div>
+                        </div>
+                    </div>
                 {% endif %}
+
+                <!-- Unlimited Relaxed Queue Callout (for Creator and Ultra) -->
+                {% if subscription and subscription.status == 'active' and subscription.plan.slug == 'creator' or subscription.plan.slug == 'ultra' %}
+                    <div class="rounded-2xl p-4 bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-transparent border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">✨</span>
+                            <div>
+                                <span class="text-xs font-bold text-white block">Unlimited Relaxed Generations Active</span>
+                                <span class="text-[11px] text-slate-400">When your fast credits run out, continue generating unlimited Nano Banana and Veo creations for 0 credits in relaxed queue!</span>
+                            </div>
+                        </div>
+                        <span class="px-3 py-1 rounded-full text-xs font-black uppercase bg-orange-500 text-black shrink-0 tracking-wider">
+                            INFINITE YIELD
+                        </span>
+                    </div>
+                {% endif %}
+
+                <!-- Bottom Row: Payment Reference & Actions -->
+                <div class="pt-4 border-t border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3 text-xs text-slate-400">
+                        {% if subscription and subscription.last_payment_reference %}
+                            <span class="text-[11px] text-slate-400">Last Reference:</span>
+                            <button @click="copyText('{{ subscription.last_payment_reference }}')"
+                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-black/40 border border-white/10 hover:border-white/20 font-mono text-[11px] text-slate-300 transition">
+                                <span>{{ subscription.last_payment_reference|slice:":18" }}...</span>
+                                <span x-show="!copyFeedback" class="text-slate-500 text-[10px]">📋</span>
+                                <span x-show="copyFeedback" class="text-emerald-400 text-[10px] font-bold">✓ Copied</span>
+                            </button>
+                        {% else %}
+                            <div class="flex items-center gap-2 text-[11px] text-slate-400">
+                                <span>📱 MTN MoMo • Telecel Cash • M-Pesa • 💳 Cards</span>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <a href="{% url 'billing:plans' %}" 
+                           class="btn btn-xs bg-white/10 hover:bg-white/20 text-white font-bold border-none rounded-lg px-3 py-1.5 transition">
+                            Switch / Upgrade Plan →
+                        </a>
+                        {% if subscription and subscription.status == 'active' and subscription.plan.price_monthly > 0 %}
+                            <button type="button"
+                                    @click="cancelModalOpen = true"
+                                    class="btn btn-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/20 rounded-lg px-3 py-1.5 transition font-bold">
+                                Cancel Plan
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================
+             INSTANT TOP-UP NON-EXPIRING CREDIT PACKS
+             =================================================== -->
+        <div class="space-y-6 pt-4">
+            <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                    <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-white/5 text-slate-400 border border-white/10 mb-1">
+                        Instant Refills
+                    </div>
+                    <h2 class="text-2xl font-heading font-black text-white uppercase tracking-tight">
+                        Non-Expiring Credit Packs
+                    </h2>
+                    <p class="text-xs text-slate-400">
+                        Top up anytime without changing your monthly subscription. Pay via Mobile Money or Card.
+                    </p>
+                </div>
+                <div class="text-xs text-slate-400 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span>Instant Credit Delivery</span>
+                </div>
             </div>
 
-            <div class="flex items-center gap-3">
-                <a href="{% url 'billing:plans' %}" class="btn btn-xs btn-outline border-white/10 text-slate-300 hover:bg-white/5 text-xs">
-                    Switch Plan
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <!-- Pack 1: 50K -->
+                <div class="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between space-y-4 hover:border-white/25 transition">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase text-slate-400">Starter Pack</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono">Never Expires</span>
+                        </div>
+                        <div class="text-3xl font-heading font-black text-white mt-2 font-mono">
+                            50,000 <span class="text-xs font-normal text-slate-400">credits</span>
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1">≈ 66 Nano Banana 2 images or 2 Veo Fast clips</div>
+                    </div>
+                    <div class="pt-3 border-t border-white/5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xl font-black text-white">$10 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                            <form method="POST" action="{% url 'billing:checkout_topup' 'pack-50k' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs bg-white/10 hover:bg-white/20 text-white border-none font-bold uppercase rounded-lg">
+                                    Buy 50K Pack →
+                                </button>
+                            </form>
+                        </div>
+                        <div class="flex items-center justify-between text-[9px] text-slate-400">
+                            <span>📱 MoMo & Cards</span>
+                            <span class="font-mono">Instant Top-Up</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pack 2: 250K -->
+                <div class="glass-panel rounded-2xl p-6 border border-orange-500/30 flex flex-col justify-between space-y-4 relative overflow-hidden hover:border-orange-500/50 transition">
+                    <div class="absolute top-0 right-0 bg-gradient-to-l from-orange-500 to-amber-500 text-black text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-lg">
+                        Best Value Top-Up
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase text-orange-400">Creator Pack</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-orange-500/10 text-orange-300 font-mono">Never Expires</span>
+                        </div>
+                        <div class="text-3xl font-heading font-black text-orange-300 mt-2 font-mono">
+                            250,000 <span class="text-xs font-normal text-slate-400">credits</span>
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1">≈ 333 Nano Banana 2 images or 11 Veo Fast clips</div>
+                    </div>
+                    <div class="pt-3 border-t border-white/5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xl font-black text-white">$45 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                            <form method="POST" action="{% url 'billing:checkout_topup' 'pack-250k' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs fl-gradient-orange-btn text-black font-extrabold uppercase rounded-lg">
+                                    Buy 250K Pack →
+                                </button>
+                            </form>
+                        </div>
+                        <div class="flex items-center justify-between text-[9px] text-slate-400">
+                            <span>📱 MoMo & Cards</span>
+                            <span class="font-mono">Instant Top-Up</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pack 3: 600K -->
+                <div class="glass-panel rounded-2xl p-6 border border-white/10 flex flex-col justify-between space-y-4 hover:border-white/25 transition">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase text-slate-400">Studio Pack</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-white/5 text-slate-300 font-mono">Never Expires</span>
+                        </div>
+                        <div class="text-3xl font-heading font-black text-purple-300 mt-2 font-mono">
+                            600,000 <span class="text-xs font-normal text-slate-400">credits</span>
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1">≈ 800 Nano Banana 2 images or 27 Veo Fast clips</div>
+                    </div>
+                    <div class="pt-3 border-t border-white/5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xl font-black text-white">$99 <span class="text-xs text-slate-500 font-normal">USD</span></span>
+                            <form method="POST" action="{% url 'billing:checkout_topup' 'pack-600k' %}">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-xs bg-white/10 hover:bg-white/20 text-white border-none font-bold uppercase rounded-lg">
+                                    Buy 600K Pack →
+                                </button>
+                            </form>
+                        </div>
+                        <div class="flex items-center justify-between text-[9px] text-slate-400">
+                            <span>📱 MoMo & Cards</span>
+                            <span class="font-mono">Instant Top-Up</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===================================================
+             RECENT CREDIT HISTORY & INVOICE LEDGER
+             =================================================== -->
+        <div class="glass-panel rounded-3xl p-6 md:p-8 space-y-5 border border-white/10">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-lg md:text-xl font-heading font-bold text-white uppercase tracking-tight">
+                        Recent Billing & Generation Activity
+                    </h3>
+                    <p class="text-xs text-slate-400">Latest 10 transactional ledger records for your account.</p>
+                </div>
+
+                <a href="{% url 'credits:wallet' %}" class="btn btn-xs bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 rounded-lg text-xs font-bold gap-1.5 transition">
+                    <span>Full Ledger Audit ({{ wallet.transactions.count }})</span>
+                    <span>→</span>
                 </a>
-                {% if subscription and subscription.status == 'active' and subscription.plan.price_monthly > 0 %}
-                    <button type="button"
-                            onclick="document.getElementById('cancel-sub-modal').showModal()"
-                            class="btn btn-xs btn-outline border-rose-500/30 text-rose-300 hover:bg-rose-500/10 text-xs">
-                        Cancel Subscription
-                    </button>
-                {% endif %}
+            </div>
+
+            <div class="overflow-x-auto rounded-2xl border border-white/5 bg-black/40">
+                <table class="table table-sm w-full text-left">
+                    <thead>
+                        <tr class="text-[10px] uppercase font-bold text-slate-400 border-b border-white/5 bg-white/[0.02]">
+                            <th class="py-3 px-4">Date & Time</th>
+                            <th class="py-3 px-4">Transaction Type</th>
+                            <th class="py-3 px-4">Description</th>
+                            <th class="py-3 px-4 text-right">Amount</th>
+                            <th class="py-3 px-4 text-right">Balance After</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white/5 text-xs text-slate-300">
+                        {% for tx in recent_transactions %}
+                            <tr class="hover:bg-white/[0.02] transition">
+                                <td class="py-3 px-4 text-slate-400 font-mono text-[11px] whitespace-nowrap">
+                                    {{ tx.created_at|date:"M d, Y H:i" }}
+                                </td>
+                                <td class="py-3 px-4 whitespace-nowrap">
+                                    {% if tx.transaction_type == 'bonus' or tx.transaction_type == 'subscription' or tx.transaction_type == 'topup' %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                            {{ tx.get_transaction_type_display }}
+                                        </span>
+                                    {% elif tx.transaction_type == 'generation_refund' %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
+                                            Refund
+                                        </span>
+                                    {% elif tx.transaction_type == 'generation_hold' %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                            Hold
+                                        </span>
+                                    {% else %}
+                                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                            Settled
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-4 text-slate-200 max-w-sm truncate">
+                                    {{ tx.description }}
+                                </td>
+                                <td class="py-3 px-4 font-mono font-bold text-right whitespace-nowrap
+                                           {% if tx.amount > 0 %}text-emerald-400{% elif tx.amount < 0 %}text-rose-400{% else %}text-slate-400{% endif %}">
+                                    {% if tx.amount > 0 %}+{% endif %}{{ tx.amount|intcomma }}
+                                </td>
+                                <td class="py-3 px-4 font-mono text-right text-slate-300 whitespace-nowrap">
+                                    {{ tx.balance_after|intcomma }}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center py-8 text-slate-400 text-xs">
+                                    No transaction activity recorded yet.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===================================================
+             SECURITY & COMPLIANCE FOOTER CALLOUT
+             =================================================== -->
+        <div class="p-5 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-slate-400">
+            <div class="flex items-center gap-3">
+                <span class="text-lg">🔒</span>
+                <div>
+                    <span class="font-bold text-slate-300 block">Bank-Grade PCI-DSS Level 1 Encryption</span>
+                    <span class="text-[11px]">All subscription and MoMo checkouts are tokenized through Paystack's redundant global gateway.</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <span class="px-2.5 py-1 rounded bg-black/40 border border-white/10 font-mono text-[10px] text-slate-300">📱 MTN MoMo</span>
+                <span class="px-2.5 py-1 rounded bg-black/40 border border-white/10 font-mono text-[10px] text-slate-300">📱 Telecel</span>
+                <span class="px-2.5 py-1 rounded bg-black/40 border border-white/10 font-mono text-[10px] text-slate-300">💳 Visa / MC</span>
             </div>
         </div>
     </div>
 
-    <!-- Recent Credit Ledger Transactions -->
-    <div class="glass-panel rounded-3xl p-6 space-y-4 border border-white/10">
-        <h3 class="text-lg font-heading font-bold text-white">Recent Credit History</h3>
+    <!-- ===================================================
+         MODAL: CANCEL SUBSCRIPTION CONFIRMATION
+         =================================================== -->
+    <div x-show="cancelModalOpen" 
+         x-cloak 
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+         @keydown.escape.window="cancelModalOpen = false">
+        <div class="relative w-full max-w-md rounded-3xl bg-[#0e131f] border border-rose-500/30 p-6 md:p-8 space-y-5 text-white shadow-2xl shadow-rose-950/50"
+             @click.away="cancelModalOpen = false">
+            <div class="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-2xl text-rose-400">
+                ⚠️
+            </div>
+            <div class="space-y-2">
+                <h3 class="text-xl font-heading font-black text-rose-400 uppercase tracking-tight">
+                    Cancel Subscription?
+                </h3>
+                <p class="text-xs text-slate-300 leading-relaxed">
+                    Are you sure you want to discontinue your active plan?
+                </p>
+                <div class="p-3.5 rounded-xl bg-black/40 border border-white/10 space-y-1.5 text-[11px] text-slate-400">
+                    <div class="flex items-center gap-1.5 text-emerald-400 font-bold">
+                        <span>✓</span>
+                        <span>You will retain all {{ wallet.balance|intcomma }} unspent credits in your wallet.</span>
+                    </div>
+                    <div class="flex items-center gap-1.5 text-rose-300">
+                        <span>✕</span>
+                        <span>Monthly auto-refill quota and unlimited relaxed queue access will end.</span>
+                    </div>
+                </div>
+            </div>
 
-        <div class="overflow-x-auto">
-            <table class="table table-xs w-full text-left">
-                <thead>
-                    <tr class="text-[10px] uppercase text-slate-500 border-b border-white/5">
-                        <th>Date</th>
-                        <th>Type</th>
-                        <th>Amount</th>
-                        <th>Description</th>
-                        <th>Balance After</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-white/5 text-xs text-slate-300">
-                    {% for tx in recent_transactions %}
-                        <tr class="hover:bg-white/[0.02]">
-                            <td class="text-slate-400 font-mono text-[11px]">{{ tx.created_at|date:"M d, Y H:i" }}</td>
-                            <td>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase
-                                             {% if tx.amount > 0 %}bg-emerald-500/10 text-emerald-300 border border-emerald-500/20
-                                             {% else %}bg-rose-500/10 text-rose-300 border border-rose-500/20{% endif %}">
-                                    {{ tx.get_transaction_type_display }}
-                                </span>
-                            </td>
-                            <td class="font-bold {% if tx.amount > 0 %}text-emerald-400{% else %}text-rose-400{% endif %}">
-                                {% if tx.amount > 0 %}+{% endif %}{{ tx.amount }}
-                            </td>
-                            <td class="text-slate-300 max-w-xs truncate">{{ tx.description }}</td>
-                            <td class="font-mono text-slate-400">{{ tx.balance_after }}</td>
-                        </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="5" class="text-center py-6 text-slate-400 text-xs">
-                                No credit transactions recorded yet.
-                            </td>
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <form method="POST" action="{% url 'billing:cancel' %}">
+                {% csrf_token %}
+                <div class="flex items-center justify-end gap-3 pt-2">
+                    <button type="button" 
+                            @click="cancelModalOpen = false" 
+                            class="btn btn-sm bg-white/10 hover:bg-white/15 text-slate-200 border-none rounded-xl text-xs font-bold">
+                        Keep My Plan
+                    </button>
+                    <button type="submit" 
+                            class="btn btn-sm bg-rose-600 hover:bg-rose-500 text-white border-none rounded-xl text-xs font-extrabold shadow-lg shadow-rose-600/30">
+                        Confirm Cancellation
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
-
-<!-- Modal: Cancel Subscription Confirmation -->
-<dialog id="cancel-sub-modal" class="modal">
-    <div class="modal-box bg-card border border-white/10 text-white rounded-3xl p-6 max-w-md space-y-4">
-        <h3 class="font-bold text-lg text-rose-400">Cancel Membership?</h3>
-        <p class="text-xs text-slate-300 leading-relaxed">
-            Are you sure you want to cancel your active subscription? You will still keep all your unspent wallet credits, but your monthly renewal quota and premium model access will discontinue.
-        </p>
-
-        <form method="POST" action="{% url 'billing:cancel' %}">
-            {% csrf_token %}
-            <div class="modal-action pt-2 flex items-center justify-end gap-2">
-                <button type="button" onclick="document.getElementById('cancel-sub-modal').close()" class="btn btn-ghost btn-sm text-xs">
-                    Keep Plan
-                </button>
-                <button type="submit" class="btn btn-error btn-sm text-white text-xs">
-                    Confirm Cancellation
-                </button>
-            </div>
-        </form>
-    </div>
-</dialog>
 {% endblock %}

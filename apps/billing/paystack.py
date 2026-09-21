@@ -204,16 +204,18 @@ class PaystackService:
         payload = {
             "email": user.email,
             "amount": amount_subunit,
-            "plan": plan_code,
             "callback_url": callback_url,
+            "channels": ["mobile_money", "card", "bank", "ussd", "qr", "eft", "bank_transfer"],
             "metadata": {
                 "user_id": str(user.id),
                 "user_email": user.email,
                 "plan_id": str(plan.id),
                 "plan_slug": plan.slug,
+                "plan_code": plan_code,
                 "credits_per_month": plan.credits_per_month,
                 "usd_price": f"${plan.price_monthly:.2f} USD",
                 "exchange_rate": f"1 USD = {rate:.2f} GHS",
+                "payment_type": "subscription",
                 "custom_fields": [
                     {
                         "display_name": "Selected Plan",
@@ -254,6 +256,73 @@ class PaystackService:
         except Exception as e:
             logger.error(f"Paystack transaction initialize exception: {e}")
             return {"status": False, "message": f"Connection error: {str(e)}"}
+
+    @classmethod
+    def initialize_topup_transaction(cls, user, pack_id: str, credits_amount: int, price_usd: float, callback_url: str) -> dict:
+        """Initialize payment for one-off non-expiring credit packs with Mobile Money and Card channels."""
+        if cls.is_mock_mode():
+            mock_ref = f"mock_topup_{uuid.uuid4().hex[:14]}"
+            mock_checkout_url = f"{callback_url}?reference={mock_ref}&topup_credits={credits_amount}&pack_id={pack_id}"
+            return {
+                "status": True,
+                "data": {
+                    "authorization_url": mock_checkout_url,
+                    "reference": mock_ref,
+                    "access_code": f"access_{mock_ref}",
+                }
+            }
+
+        currency = getattr(settings, 'PAYSTACK_CURRENCY', 'GHS')
+        if currency.upper() == 'GHS':
+            ghs_amount, rate = CurrencyService.convert_usd_to_ghs(price_usd)
+            amount_subunit = int(round(ghs_amount * 100))
+        else:
+            ghs_amount = float(price_usd)
+            rate = 1.0
+            amount_subunit = int(price_usd * 100)
+
+        payload = {
+            "email": user.email,
+            "amount": amount_subunit,
+            "callback_url": callback_url,
+            "channels": ["mobile_money", "card", "bank", "ussd", "qr", "eft", "bank_transfer"],
+            "metadata": {
+                "user_id": str(user.id),
+                "user_email": user.email,
+                "pack_id": pack_id,
+                "credits_amount": credits_amount,
+                "price_usd": price_usd,
+                "payment_type": "topup",
+                "custom_fields": [
+                    {
+                        "display_name": "Credit Pack",
+                        "variable_name": "credit_pack",
+                        "value": f"{credits_amount:,} Non-Expiring Top-Up Credits"
+                    },
+                    {
+                        "display_name": "Total in Cedis",
+                        "variable_name": "total_in_cedis",
+                        "value": f"GHS {ghs_amount:,.2f}"
+                    }
+                ]
+            }
+        }
+        if currency and currency.upper() != 'USD':
+            payload["currency"] = currency.upper()
+
+        try:
+            resp = requests.post(f"{cls.BASE_URL}/transaction/initialize", headers=cls._headers(), json=payload, timeout=15)
+            data = resp.json()
+            if resp.status_code == 200 and data.get('status'):
+                return data
+            else:
+                msg = data.get('message', 'Failed to initialize credit pack checkout with Paystack.')
+                logger.error(f"Paystack topup initialize failed: {msg}")
+                return {"status": False, "message": msg}
+        except Exception as e:
+            logger.error(f"Paystack topup transaction exception: {e}")
+            return {"status": False, "message": f"Connection error: {str(e)}"}
+
 
     @classmethod
     def verify_transaction(cls, reference: str) -> dict:

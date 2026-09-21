@@ -28,9 +28,9 @@ class PaystackBillingTests(TestCase):
         self.starter_plan = SubscriptionPlan.objects.create(
             name="Starter",
             slug="starter",
-            price_monthly=15.00,
-            credits_per_month=3000,
-            features=["Access to Character builder", "Up to 5 custom characters"],
+            price_monthly=19.00,
+            credits_per_month=90000,
+            features=["90,000 credits/mo", "Up to 5 custom characters"],
             max_parallel_videos=2,
             max_parallel_images=2,
             is_active=True
@@ -38,24 +38,24 @@ class PaystackBillingTests(TestCase):
         self.creator_plan = SubscriptionPlan.objects.create(
             name="Creator",
             slug="creator",
-            price_monthly=45.00,
-            credits_per_month=10000,
-            tagline="For creators making real AI videos",
-            badge_text="MOST POPULAR",
-            features=["Full access to all models", "Up to 15 custom characters"],
+            price_monthly=59.00,
+            credits_per_month=400000,
+            tagline="For power creators producing viral stories & campaigns",
+            badge_text="MOST POPULAR • UNLIMITED",
+            features=["400,000 priority credits", "Unlimited Relaxed Generations"],
             can_access_premium_models=True,
-            max_parallel_videos=3,
+            max_parallel_videos=4,
             max_parallel_images=4,
             is_active=True
         )
         self.ultra_plan = SubscriptionPlan.objects.create(
-            name="Ultra",
+            name="Ultra / Pro",
             slug="ultra",
-            price_monthly=75.00,
-            credits_per_month=25000,
-            tagline="For creators building AI projects",
-            badge_text="BEST VALUE",
-            features=["Unlimited custom characters", "4K Rendering"],
+            price_monthly=129.00,
+            credits_per_month=1000000,
+            tagline="For studios, agencies, and high-velocity directors",
+            badge_text="STUDIO PRO • BEST VALUE",
+            features=["1,000,000 priority credits", "Unlimited Relaxed + VIP Instant GPU"],
             can_access_premium_models=True,
             max_parallel_videos=8,
             max_parallel_images=8,
@@ -63,29 +63,24 @@ class PaystackBillingTests(TestCase):
         )
 
     def test_pricing_page_renders_exact_tiers_and_comparison_table(self):
-        """Verify the pricing page renders $15, $45, $75 cards, 500 free credits, and comparison matrix."""
+        """Verify the pricing page renders $19, $59, $129 cards, 500 free credits, and comparison matrix."""
         response = self.client.get(reverse('billing:plans'))
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
 
         # Check pricing and credits
-        self.assertIn("$15", content)
-        self.assertIn("3000 credits/mo", content)
-        self.assertIn("$45", content)
-        self.assertIn("10000 credits/mo", content)
-        self.assertIn("$75", content)
-        self.assertIn("25000 credits/mo", content)
-        self.assertIn("500 Starter Credits", content)
-
-        # Check badges
-        self.assertIn("MOST POPULAR", content)
-        self.assertIn("BEST VALUE", content)
+        self.assertIn("$19", content)
+        self.assertIn("90,000", content)
+        self.assertIn("$59", content)
+        self.assertIn("400,000", content)
+        self.assertIn("$129", content)
+        self.assertIn("1,000,000", content)
+        self.assertIn("500 Credits", content)
 
         # Check comparison table
-        self.assertIn("Compare every plan", content)
-        self.assertIn("Unlimited & free Veo 3.1 + Fast generations", content)
-        self.assertIn("Parallel generations", content)
-        self.assertIn("Character builder", content)
+        self.assertIn("Compare Plan Features", content)
+        self.assertIn("Unlimited Relaxed Generations", content)
+        self.assertIn("Parallel Generation Slots", content)
 
     def test_checkout_initialization_requires_login(self):
         """Verify anonymous user is redirected to login when attempting checkout."""
@@ -103,7 +98,7 @@ class PaystackBillingTests(TestCase):
         self.assertIn('reference=mock_ref_', response.url)
 
     def test_payment_callback_activates_subscription_and_grants_credits(self):
-        """Verify returning from Paystack grants monthly credits and marks subscription active."""
+        """Verify returning from Paystack grants monthly credits, marks subscription active, and syncs wallet tier."""
         self.client.force_login(self.user)
         initial_balance = self.wallet.balance
         ref = "mock_ref_test_success_123"
@@ -113,8 +108,10 @@ class PaystackBillingTests(TestCase):
         self.assertEqual(response.url, reverse('billing:portal'))
 
         self.wallet.refresh_from_db()
-        # Verify 10,000 credits granted
-        self.assertEqual(self.wallet.balance, initial_balance + 10000)
+        # Verify 400,000 credits granted and wallet tier set to creator
+        self.assertEqual(self.wallet.balance, initial_balance + 400000)
+        self.assertEqual(self.wallet.subscription_tier, 'creator')
+        self.assertEqual(self.wallet.subscription_credits, 400000)
 
         # Verify active subscription
         sub = Subscription.objects.get(user=self.user)
@@ -193,7 +190,9 @@ class PaystackBillingTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.wallet.refresh_from_db()
-        self.assertEqual(self.wallet.balance, initial_balance + 10000)
+        self.assertEqual(self.wallet.balance, initial_balance + 400000)
+        self.assertEqual(self.wallet.subscription_tier, 'creator')
+
 
     @override_settings(PAYMENT_PROVIDER='paystack', PAYSTACK_SECRET_KEY='test_sk_secret_999')
     def test_live_mode_webhook_signature_enforcement(self):

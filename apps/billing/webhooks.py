@@ -67,27 +67,15 @@ def paystack_webhook_view(request):
         )
 
         if user and plan:
-            # Activate or update user's Subscription
-            sub, _ = Subscription.objects.update_or_create(
+            CreditService.activate_subscription(
                 user=user,
-                defaults={
-                    'plan': plan,
-                    'provider': 'paystack',
-                    'status': 'active',
-                    'last_payment_reference': reference,
-                    'customer_code': data.get('customer', {}).get('customer_code', ''),
-                }
+                plan=plan,
+                reference=reference,
+                customer_code=data.get('customer', {}).get('customer_code', ''),
+                external_subscription_id=data.get('plan', '') or data.get('subscription_code', ''),
+                grant_monthly_credits=True
             )
-
-            # Atomically ledger monthly credits to the user's wallet
-            CreditService.grant_credits(
-                user=user,
-                amount=plan.credits_per_month,
-                transaction_type='subscription_credit',
-                description=f"Paystack monthly subscription credits ({plan.name})",
-                external_reference=external_ref
-            )
-            logger.info(f"Granted {plan.credits_per_month} credits to {user.email} via Paystack charge {reference}.")
+            logger.info(f"Activated {plan.name} subscription and synced wallet for {user.email} via Paystack webhook charge {reference}.")
 
     elif event == 'subscription.create':
         sub_code = data.get('subscription_code')
