@@ -376,7 +376,7 @@
                              })">
                             {% if gen.output_media %}
                                 {% if gen.generation_type == 'video' %}
-                                    <video class="w-full h-full object-cover" poster="{{ gen.output_media.thumbnail_url }}" preload="none">
+                                    <video autoplay loop muted playsinline class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" poster="{{ gen.output_media.thumbnail_url }}" preload="auto">
                                         <source src="{{ gen.output_media.url }}" type="video/mp4">
                                     </video>
                                     <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
@@ -384,9 +384,29 @@
                                             ▶
                                         </span>
                                     </div>
+                                {% elif gen.generation_type == 'audio' %}
+                                    <div class="w-full h-full bg-gradient-to-br from-[#121418] via-[#090a0c] to-[#181a20] p-4 flex flex-col justify-between items-center relative overflow-hidden" @click.stop>
+                                        <div class="flex items-center gap-1.5 py-3 pointer-events-none">
+                                            <span class="w-1 h-3.5 bg-orange-500 rounded-full animate-pulse"></span>
+                                            <span class="w-1 h-7 bg-orange-400 rounded-full animate-pulse" style="animation-delay: 150ms;"></span>
+                                            <span class="w-1 h-5 bg-amber-400 rounded-full animate-pulse" style="animation-delay: 300ms;"></span>
+                                            <span class="w-1 h-8 bg-orange-500 rounded-full animate-pulse" style="animation-delay: 75ms;"></span>
+                                            <span class="w-1 h-4 bg-orange-400 rounded-full animate-pulse" style="animation-delay: 220ms;"></span>
+                                        </div>
+                                        <audio controls class="w-full h-8 max-w-[90%] opacity-90 hover:opacity-100 transition z-10">
+                                            <source src="{{ gen.output_media.url }}" type="audio/mpeg">
+                                            Your browser does not support audio playback.
+                                        </audio>
+                                    </div>
                                 {% else %}
                                     <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" loading="lazy" decoding="async" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                                 {% endif %}
+                            {% elif gen.status == 'failed' %}
+                                <div class="absolute inset-0 bg-gradient-to-b from-rose-950/40 via-black/80 to-black flex flex-col items-center justify-center gap-1.5 p-4 text-center">
+                                    <span class="text-xl">⚠️</span>
+                                    <span class="text-xs font-bold text-rose-300">Generation Failed</span>
+                                    <span class="text-[10px] text-emerald-400 font-semibold">Credits Restored ✓</span>
+                                </div>
                             {% else %}
                                 <div class="absolute inset-0 skeleton-shimmer opacity-40"></div>
                                 <div class="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-orange-400/60 to-transparent animate-scanline"></div>
@@ -398,12 +418,12 @@
                             {% endif %}
 
                             <!-- Badges -->
-                            <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                            <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 pointer-events-none">
                                 <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-black/80 backdrop-blur-md text-orange-400 border border-orange-500/30">
-                                    {{ gen.generation_type }}
+                                    {% if gen.generation_type == 'audio' %}🔊 Audio{% else %}{{ gen.generation_type }}{% endif %}
                                 </span>
                                 <span class="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/80 backdrop-blur-md text-slate-300 border border-white/10">
-                                    {{ gen.aspect_ratio }}
+                                    {% if gen.generation_type == 'audio' %}Audio Track{% else %}{{ gen.aspect_ratio }}{% endif %}
                                 </span>
                             </div>
                         </div>

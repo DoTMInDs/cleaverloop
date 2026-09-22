@@ -182,11 +182,18 @@ def add_scene_view(request, project_id):
     except (ValueError, TypeError):
         duration = 5
 
+    camera_direction = request.POST.get('camera_direction', '').strip()
+    visual_style = request.POST.get('visual_style', '').strip()
+    dialogue = request.POST.get('dialogue', '').strip()
+
     Scene.objects.create(
         project=project,
         order=next_order,
         title=title,
         prompt=prompt,
+        camera_direction=camera_direction,
+        visual_style=visual_style,
+        dialogue=dialogue,
         duration=max(1, min(duration, 10))
     )
     messages.success(request, f"Added Scene {next_order} to {project.name}.")
@@ -202,3 +209,74 @@ def delete_scene_view(request, scene_id):
     scene.delete()
     messages.success(request, f"Scene {scene_order} deleted.")
     return redirect('projects:detail', pk=project_pk)
+
+@login_required
+def scene_status_view(request, scene_id):
+    """HTMX polling endpoint returning updated scene item card."""
+    scene = get_object_or_404(Scene, id=scene_id, project__owner=request.user)
+    return render(request, 'partials/scene_item.html', {'scene': scene, 'project': scene.project})
+
+@login_required
+@require_POST
+def generate_scene_audio_view(request, scene_id):
+    """Trigger AI foley sound effects or voiceover synthesis for a storyboard scene."""
+    scene = get_object_or_404(Scene, id=scene_id, project__owner=request.user)
+    project = scene.project
+    audio_type = request.POST.get('audio_type', 'foley')  # 'foley' or 'tts'
+    requested_model = request.POST.get('model')
+
+    if requested_model:
+        target_model_id = requested_model
+    else:
+        target_model_id = 'eleven-sound-effects' if audio_type == 'foley' else 'eleven-multilingual-v2'
+    
+    # Find active audio model
+    from apps.providers.models import AIModel
+    model = AIModel.objects.filter(model_id=target_model_id, is_enabled=True).first()
+    if not model:
+        # Fallback to secondary audio models
+        fallback_id = 'fal-mmaudio-v2' if audio_type == 'foley' else 'fal-kokoro'
+        model = AIModel.objects.filter(model_id=fallback_id, is_enabled=True).first()
+        if not model:
+            model = AIModel.objects.filter(modality='audio', is_enabled=True).first()
+
+    credit_cost = model.calculate_credit_cost(scene.duration) if model else 25
+    is_allowed, eff_cost, msg = CreditService.can_generate(request.user, credit_cost, modality='audio')
+    if not is_allowed:
+        return HttpResponse(f"<div class='text-rose-400 p-2 text-xs font-mono'>{msg}</div>", status=400)
+
+    prompt = scene.dialogue if (audio_type == 'tts' and scene.dialogue) else (scene.audio_direction or f"Cinematic atmospheric sound effects and foley for: {scene.prompt}")
+    voice = request.POST.get('voice', 'adam')
+
+    generation = Generation.objects.create(
+        user=request.user,
+        project=project,
+        scene=scene,
+        generation_type='audio',
+        provider=model.provider,
+        model=model,
+        model_id_snapshot=model.model_id,
+        prompt=prompt,
+        quality=voice if audio_type == 'tts' else 'standard',
+        duration=scene.duration,
+        status='queued'
+    )
+
+    if scene.generated_media:
+        generation.reference_media.add(scene.generated_media)
+
+    try:
+        CreditService.reserve_credits(request.user, credit_cost, generation)
+    except Exception as e:
+        generation.status = 'failed'
+        generation.error_message = str(e)
+        generation.save(update_fields=['status', 'error_message'])
+        return HttpResponse(f"<div class='text-rose-400 p-2 text-xs font-mono'>Failed: {e}</div>", status=400)
+
+    scene.status = 'processing'
+    scene.save(update_fields=['status'])
+
+    # Dispatch task
+    dispatch_generation_task.delay(str(generation.id))
+
+    return render(request, 'partials/scene_item.html', {'scene': scene, 'project': project})

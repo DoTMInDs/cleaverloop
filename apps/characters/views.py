@@ -1,6 +1,9 @@
 import os
 import json
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
+
+logger = logging.getLogger(__name__)
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
@@ -92,15 +95,49 @@ class CharacterDeleteView(LoginRequiredMixin, DeleteView):
 @login_required
 @require_POST
 def generate_character_ai_view(request):
-    """Synthesizes complete Character DNA + AI Avatar from a brief prompt."""
+    """
+    Synthesizes complete Character DNA + Avatar portrait.
+    Supports either:
+    1. Multimodal Face Photo upload: extracts visual features & biometric cues using Gemini Vision
+    2. Text Concept Brief: decomposes text into rich character blueprint
+    """
     brief = request.POST.get('brief', '').strip()
     style_preset = request.POST.get('style_preset', 'cinematic').strip()
+    uploaded_photo = request.FILES.get('photo') or request.FILES.get('avatar')
 
-    if not brief:
-        return JsonResponse({'error': 'Please provide a character concept brief.'}, status=400)
+    MAX_PHOTO_SIZE = 15 * 1024 * 1024 # 15MB
+    ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
 
     try:
+        if uploaded_photo:
+            ext = uploaded_photo.name.split('.')[-1].lower() if '.' in uploaded_photo.name else ''
+            if ext not in ALLOWED_EXTENSIONS:
+                return JsonResponse(
+                    {'error': f"Unsupported image format (.{ext}). Allowed: JPEG, PNG, WEBP."},
+                    status=400
+                )
+            if uploaded_photo.size > MAX_PHOTO_SIZE:
+                return JsonResponse({'error': 'Uploaded photo exceeds 15MB limit.'}, status=400)
+
+            image_bytes = uploaded_photo.read()
+            mime_type = uploaded_photo.content_type or f"image/{ext if ext != 'jpg' else 'jpeg'}"
+
+            dna = CharacterGeneratorService.synthesize_character_from_image(
+                image_bytes=image_bytes,
+                mime_type=mime_type,
+                style_preset=style_preset,
+                extra_brief=brief
+            )
+            return JsonResponse(dna.model_dump())
+
+        if not brief:
+            return JsonResponse(
+                {'error': 'Please provide a character concept brief or upload a face photo to forge.'},
+                status=400
+            )
+
         dna = CharacterGeneratorService.synthesize_character(brief=brief, style_preset=style_preset)
         return JsonResponse(dna.model_dump())
     except Exception as exc:
+        logger.exception("Character synthesis error")
         return JsonResponse({'error': str(exc)}, status=500)

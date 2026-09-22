@@ -14,11 +14,19 @@
     generatedAvatarUrl: '',
     
     // AI Magic Forge state
+    forgeTab: 'photo', // 'photo' or 'prompt'
     magicPrompt: '',
     stylePreset: 'cinematic',
     isSynthesizing: false,
+    isAnalyzingPhoto: false,
     aiSuccessNotice: false,
+    photoAnalysisNotice: false,
     errorMessage: '',
+    photoFile: null,
+    photoFileName: '',
+    photoPreview: '',
+    isDragging: false,
+    extraLore: '',
 
     archetypes: [
         {
@@ -55,12 +63,90 @@
     handleFileSelect(event) {
         const file = event.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                this.avatarPreview = e.target.result;
-                this.generatedAvatarUrl = ''; // Clear generated if manual file uploaded
-            };
-            reader.readAsDataURL(file);
+            this.processSelectedPhoto(file);
+            this.generatedAvatarUrl = ''; // Clear generated if manual file uploaded
+        }
+    },
+
+    handlePhotoDrop(e) {
+        this.isDragging = false;
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+            this.processSelectedPhoto(e.dataTransfer.files[0]);
+        }
+    },
+
+    handlePhotoInput(e) {
+        if (e.target.files && e.target.files[0]) {
+            this.processSelectedPhoto(e.target.files[0]);
+        }
+    },
+
+    processSelectedPhoto(file) {
+        this.photoFile = file;
+        this.photoFileName = file.name;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            this.photoPreview = ev.target.result;
+            this.avatarPreview = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    },
+
+    async forgeFromPhoto() {
+        if (!this.photoFile) {
+            this.errorMessage = 'Please select or drop a face photo first.';
+            return;
+        }
+        this.isSynthesizing = true;
+        this.isAnalyzingPhoto = true;
+        this.errorMessage = '';
+        this.aiSuccessNotice = false;
+        this.photoAnalysisNotice = false;
+
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const formData = new FormData();
+        formData.append('photo', this.photoFile);
+        formData.append('style_preset', this.stylePreset);
+        if (this.extraLore && this.extraLore.trim()) {
+            formData.append('brief', this.extraLore.trim());
+        }
+
+        try {
+            const res = await fetch('{% url 'characters:generate_ai' %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                },
+                body: formData
+            });
+
+            if (!res.ok) {
+                const errData = await res.json();
+                throw new Error(errData.error || 'Failed to analyze face and synthesize character');
+            }
+
+            const data = await res.json();
+            this.charName = data.name;
+            this.appearance = data.appearance_description;
+            this.clothing = data.clothing_description;
+            this.personality = data.personality;
+            this.description = data.description;
+            if (data.avatar_url) {
+                this.avatarPreview = data.avatar_url;
+                this.generatedAvatarUrl = data.avatar_url;
+                this.photoPreview = data.avatar_url;
+            }
+            this.photoAnalysisNotice = true;
+            this.aiSuccessNotice = true;
+            setTimeout(() => {
+                this.aiSuccessNotice = false;
+                this.photoAnalysisNotice = false;
+            }, 6000);
+        } catch (err) {
+            this.errorMessage = err.message;
+        } finally {
+            this.isSynthesizing = false;
+            this.isAnalyzingPhoto = false;
         }
     },
 
@@ -174,73 +260,202 @@
     </div>
 
     <!-- ===================================================
-         AI MAGIC CHARACTER FORGE PROMPT BAR
+         AI DUAL-MODE CHARACTER FORGE (FACE PHOTO + PROMPT)
          =================================================== -->
-    <div class="fl-composer-card rounded-3xl p-5 sm:p-6 space-y-4 shadow-2xl relative border-orange-500/40">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-                <span class="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500/25 to-amber-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 text-sm font-bold shadow-sm">
-                    ✨
+    <div class="fl-composer-card rounded-3xl p-5 sm:p-6 space-y-5 shadow-2xl relative border-orange-500/40">
+        
+        <!-- Header & Mode Switcher Tabs -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
+            <div class="flex items-center gap-2.5">
+                <span class="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500/30 to-amber-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 text-base font-bold shadow-md">
+                    <span x-text="forgeTab === 'photo' ? '📸' : '✨'"></span>
                 </span>
                 <div>
                     <h2 class="text-sm font-bold text-white flex items-center gap-2">
-                        <span>AI Magic Character Generator</span>
-                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30 uppercase tracking-wider">1-Click Synthesis</span>
+                        <span>Autonomous Character Forge</span>
+                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30 uppercase tracking-wider">Multimodal AI</span>
                     </h2>
-                    <p class="text-[11px] text-slate-400">Describe your character idea in simple natural words</p>
+                    <p class="text-[11px] text-slate-400" x-text="forgeTab === 'photo' ? 'Upload any human face photo to extract bone structure, demeanor, and persona' : 'Describe your character idea in simple natural words'"></p>
                 </div>
             </div>
 
-            <!-- Quick Preset Archetypes (Pill Buttons) -->
-            <div class="hidden md:flex items-center gap-2 text-xs">
-                <span class="text-[10px] text-slate-500 font-mono">Quick Sparks:</span>
-                <template x-for="a in archetypes" :key="a.title">
-                    <button type="button"
-                            @click="applyArchetype(a)"
-                            class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.08] hover:border-orange-500/40 text-[11px] text-slate-300 hover:text-orange-300 transition"
-                            x-text="a.title">
-                    </button>
-                </template>
-            </div>
-        </div>
-
-        <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div class="relative flex-1">
-                <input type="text"
-                       x-model="magicPrompt"
-                       @keydown.enter.prevent="synthesizeWithAI()"
-                       placeholder="e.g. A cyberpunk street samurai with silver hair, glowing blue katana, and matte carbon-fiber trenchcoat..."
-                       class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.1] focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 text-sm text-white px-4 py-3.5 outline-none transition placeholder-slate-500">
-            </div>
-
-            <!-- Style Selector -->
-            <select x-model="stylePreset"
-                    class="rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3 py-3.5 outline-none focus:border-orange-500/50">
-                <option value="cinematic">Cinematic 8K Photoreal</option>
-                <option value="anime">Modern Anime / Manga</option>
-                <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
-                <option value="fantasy">Dark High Fantasy</option>
-                <option value="pixar_3d">Stylized 3D Animation</option>
-                <option value="vintage_cartoon">1930s Rubber-Hose</option>
-            </select>
-
-            <!-- Generate Button -->
-            <button type="button"
-                    @click="synthesizeWithAI()"
-                    :disabled="isSynthesizing || !magicPrompt.trim()"
-                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
-                <template x-if="isSynthesizing">
-                    <span class="loading loading-spinner loading-xs"></span>
-                </template>
-                <template x-if="!isSynthesizing">
+            <!-- Mode Selector Tabs -->
+            <div class="flex items-center gap-1 p-1 bg-[#090a0c] border border-white/[0.08] rounded-2xl shrink-0 self-start sm:self-auto">
+                <button type="button"
+                        @click="forgeTab = 'photo'"
+                        :class="forgeTab === 'photo' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
+                        class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
+                    <span>📸</span>
+                    <span>Photo Face Forge</span>
+                    <span class="px-1.5 py-0.2 rounded text-[8px] bg-black/30 font-mono text-orange-200">NEW</span>
+                </button>
+                <button type="button"
+                        @click="forgeTab = 'prompt'"
+                        :class="forgeTab === 'prompt' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
+                        class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
                     <span>✨</span>
-                </template>
-                <span x-text="isSynthesizing ? 'Synthesizing DNA...' : 'Generate Character & Avatar'"></span>
-            </button>
+                    <span>Text Prompt Forge</span>
+                </button>
+            </div>
         </div>
 
-        <!-- Notification / Error Banners -->
-        <div x-show="aiSuccessNotice" x-transition class="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 font-mono">
+        <!-- TAB 1: PHOTO FACE FORGE (Multimodal Biometric Extraction) -->
+        <div x-show="forgeTab === 'photo'" x-transition class="space-y-4">
+            <!-- Drag & Drop Upload Zone -->
+            <div @dragover.prevent="isDragging = true"
+                 @dragleave.prevent="isDragging = false"
+                 @drop.prevent="handlePhotoDrop($event)"
+                 :class="isDragging ? 'border-orange-500 bg-orange-500/10 scale-[1.01]' : 'border-white/[0.12] bg-[#090b0d] hover:border-orange-500/40'"
+                 class="relative rounded-2xl border-2 border-dashed p-4 sm:p-5 text-center transition-all cursor-pointer group">
+                
+                <input type="file"
+                       accept="image/jpeg,image/png,image/webp"
+                       @change="handlePhotoInput"
+                       class="absolute inset-0 opacity-0 cursor-pointer z-10">
+
+                <template x-if="!photoPreview">
+                    <div class="space-y-2 py-2">
+                        <div class="w-12 h-12 mx-auto rounded-2xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-orange-400 text-xl group-hover:scale-110 transition shadow-inner">
+                            <span>📸</span>
+                        </div>
+                        <div>
+                            <p class="text-xs font-bold text-white">
+                                Drop face portrait photo here, or <span class="text-orange-400 underline decoration-orange-400/50 underline-offset-2">browse files</span>
+                            </p>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Supports JPG, PNG, WEBP up to 15MB</p>
+                        </div>
+                        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.04] border border-white/[0.06] text-[10px] text-slate-300 font-mono">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            <span>Gemini Multimodal Vision • Automatic Jawline, Eyes, Wardrobe & Demeanor Extraction</span>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="photoPreview">
+                    <div class="flex items-center justify-between gap-4 text-left">
+                        <div class="flex items-center gap-3.5 min-w-0">
+                            <!-- Photo Preview with Scanning Laser Line Effect -->
+                            <div class="w-16 h-16 rounded-xl bg-black border border-orange-500/40 overflow-hidden relative shrink-0 shadow-lg">
+                                <img :src="photoPreview" alt="Face preview" class="w-full h-full object-cover">
+                                <!-- Animated Scanning Laser Bar -->
+                                <template x-if="isAnalyzingPhoto">
+                                    <div class="absolute inset-0 bg-gradient-to-b from-transparent via-orange-500/50 to-transparent animate-bounce opacity-80 pointer-events-none"></div>
+                                </template>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-bold text-white truncate" x-text="photoFileName || 'Attached Face Photo'"></span>
+                                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300 font-mono">Ready to Analyze</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-0.5" x-text="isAnalyzingPhoto ? 'Analyzing facial geometry & traits with Gemini Vision...' : 'Click Forge below to synthesize persona from this face.'"></p>
+                            </div>
+                        </div>
+
+                        <span class="text-xs text-orange-400 font-bold hover:underline shrink-0 z-20">
+                            Replace Photo
+                        </span>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Optional Lore & Style Row -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div class="relative flex-1">
+                    <input type="text"
+                           x-model="extraLore"
+                           placeholder="Optional: Add creative lore or character vibe (e.g. Victorian detective, cybernetic rogue, CEO)..."
+                           class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.1] focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 text-xs text-white px-4 py-3 outline-none transition placeholder-slate-500">
+                </div>
+
+                <!-- Style Preset Selector -->
+                <select x-model="stylePreset"
+                        class="rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3 py-3 outline-none focus:border-orange-500/50">
+                    <option value="cinematic">Cinematic 8K Photoreal</option>
+                    <option value="anime">Modern Anime / Manga</option>
+                    <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
+                    <option value="fantasy">Dark High Fantasy</option>
+                    <option value="pixar_3d">Stylized 3D Animation</option>
+                    <option value="vintage_cartoon">1930s Rubber-Hose</option>
+                </select>
+
+                <!-- Forge Action Button -->
+                <button type="button"
+                        @click="forgeFromPhoto()"
+                        :disabled="isSynthesizing || !photoFile"
+                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-3 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                    <template x-if="isAnalyzingPhoto">
+                        <span class="loading loading-spinner loading-xs"></span>
+                    </template>
+                    <template x-if="!isAnalyzingPhoto">
+                        <span>⚡</span>
+                    </template>
+                    <span x-text="isAnalyzingPhoto ? 'Analyzing Face Geometry...' : 'Analyze Face & Forge Character'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- TAB 2: TEXT PROMPT FORGE (Classic Natural Language Synthesis) -->
+        <div x-show="forgeTab === 'prompt'" x-transition class="space-y-4">
+            <div class="flex items-center justify-between">
+                <p class="text-[11px] text-slate-400">Describe character archetype or choose a quick spark:</p>
+                <!-- Quick Preset Archetypes (Pill Buttons) -->
+                <div class="hidden md:flex items-center gap-2 text-xs">
+                    <span class="text-[10px] text-slate-500 font-mono">Quick Sparks:</span>
+                    <template x-for="a in archetypes" :key="a.title">
+                        <button type="button"
+                                @click="applyArchetype(a)"
+                                class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.08] hover:border-orange-500/40 text-[11px] text-slate-300 hover:text-orange-300 transition"
+                                x-text="a.title">
+                        </button>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div class="relative flex-1">
+                    <input type="text"
+                           x-model="magicPrompt"
+                           @keydown.enter.prevent="synthesizeWithAI()"
+                           placeholder="e.g. A cyberpunk street samurai with silver hair, glowing blue katana, and matte carbon-fiber trenchcoat..."
+                           class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.1] focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 text-sm text-white px-4 py-3.5 outline-none transition placeholder-slate-500">
+                </div>
+
+                <!-- Style Selector -->
+                <select x-model="stylePreset"
+                        class="rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3 py-3.5 outline-none focus:border-orange-500/50">
+                    <option value="cinematic">Cinematic 8K Photoreal</option>
+                    <option value="anime">Modern Anime / Manga</option>
+                    <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
+                    <option value="fantasy">Dark High Fantasy</option>
+                    <option value="pixar_3d">Stylized 3D Animation</option>
+                    <option value="vintage_cartoon">1930s Rubber-Hose</option>
+                </select>
+
+                <!-- Generate Button -->
+                <button type="button"
+                        @click="synthesizeWithAI()"
+                        :disabled="isSynthesizing || !magicPrompt.trim()"
+                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <template x-if="isSynthesizing">
+                        <span class="loading loading-spinner loading-xs"></span>
+                    </template>
+                    <template x-if="!isSynthesizing">
+                        <span>✨</span>
+                    </template>
+                    <span x-text="isSynthesizing ? 'Synthesizing DNA...' : 'Generate Character & Avatar'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Notification / Success / Error Banners -->
+        <div x-show="photoAnalysisNotice" x-transition class="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5 font-mono shadow-sm">
+            <span class="text-base">✨</span>
+            <div>
+                <strong class="text-white block font-sans">Face Biometrics Analyzed!</strong>
+                <span>Character DNA, physical traits, wardrobe, and demeanor were extracted from your photo. Review and customize details below before saving.</span>
+            </div>
+        </div>
+        <div x-show="aiSuccessNotice && !photoAnalysisNotice" x-transition class="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 font-mono">
             <span>✅</span>
             <span>Character DNA and AI Avatar Portrait synthesized successfully! Review traits below and save.</span>
         </div>
@@ -383,7 +598,15 @@
                                    accept="image/*"
                                    @change="handleFileSelect"
                                    class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-orange-500/20 file:text-orange-400 hover:file:bg-orange-500/30 cursor-pointer">
-                            <p class="text-[10px] text-slate-500">Auto-generated via AI or upload custom photo to replace.</p>
+                            <div class="flex items-center justify-between pt-0.5">
+                                <p class="text-[10px] text-slate-500">Auto-generated via AI or upload custom photo to replace.</p>
+                                <button type="button"
+                                        x-show="photoFile && !isSynthesizing"
+                                        @click="forgeFromPhoto()"
+                                        class="text-[10px] text-orange-400 hover:text-orange-300 font-bold flex items-center gap-1 underline decoration-orange-500/50">
+                                    <span>⚡ Analyze face to auto-fill DNA</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

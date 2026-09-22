@@ -13,7 +13,7 @@ env = environ.Env(
     DEFAULT_STARTER_CREDITS=(int, 500),
     CREDIT_COST_IMAGE_STANDARD=(int, 50),
     CREDIT_COST_VIDEO_PER_SEC=(int, 50),
-    MAX_AGENT_CREDITS_PER_REQUEST=(int, 2500),
+    MAX_AGENT_CREDITS_PER_REQUEST=(int, 500000),
     MAX_SCENES_PER_REQUEST=(int, 6),
     PAYMENT_PROVIDER=(str, 'mock'),
     PAYSTACK_PUBLIC_KEY=(str, ''),
@@ -272,6 +272,7 @@ OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
 FLUX_API_KEY = env('FLUX_API_KEY', default='')
 MINIMAX_API_KEY = env('MINIMAX_API_KEY', default='')
 FAL_KEY = env('FAL_KEY', default='')
+ELEVENLABS_API_KEY = env('ELEVENLABS_API_KEY', default='') or env('ELEVEN_API_KEY', default='')
 
 # Payment & Billing Configuration (Paystack)
 PAYMENT_PROVIDER = env('PAYMENT_PROVIDER', default='mock')
@@ -315,10 +316,10 @@ SUBSCRIPTION_PLANS = {
         'max_concurrency': 4,
     },
 }
-CREDIT_COST_IMAGE_STANDARD = env('CREDIT_COST_IMAGE_STANDARD', default=50)
-CREDIT_COST_VIDEO_PER_SEC = env('CREDIT_COST_VIDEO_PER_SEC', default=50)
-MAX_AGENT_CREDITS_PER_REQUEST = env('MAX_AGENT_CREDITS_PER_REQUEST', default=2500)
-MAX_SCENES_PER_REQUEST = env('MAX_SCENES_PER_REQUEST', default=6)
+CREDIT_COST_IMAGE_STANDARD = env.int('CREDIT_COST_IMAGE_STANDARD', default=50)
+CREDIT_COST_VIDEO_PER_SEC = env.int('CREDIT_COST_VIDEO_PER_SEC', default=50)
+MAX_AGENT_CREDITS_PER_REQUEST = env.int('MAX_AGENT_CREDITS_PER_REQUEST', default=500000)
+MAX_SCENES_PER_REQUEST = env.int('MAX_SCENES_PER_REQUEST', default=6)
 
 # Login / Logout Redirects
 LOGIN_URL = 'accounts:login'

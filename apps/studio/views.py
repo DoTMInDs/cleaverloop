@@ -6,6 +6,7 @@ from apps.projects.models import Project
 from apps.providers.models import AIModel
 from apps.credits.services import CreditService
 from apps.characters.models import Character
+from apps.generations.tasks import reap_stale_generations
 
 class HomeView(TemplateView):
     template_name = 'home.html'
@@ -68,9 +69,10 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
+        reap_stale_generations(user=user, timeout_minutes=15)
         ctx['wallet'] = getattr(self.request, '_cached_wallet', None) or getattr(user, 'wallet', None) or CreditService.get_or_create_wallet(user)
         ctx['subscription'] = getattr(user, 'subscription', None)
-        ctx['recent_generations'] = Generation.objects.filter(user=user).select_related('output_media', 'model', 'provider', 'character')[:12]
+        ctx['recent_generations'] = Generation.objects.filter(user=user, parent_generation__isnull=True).select_related('output_media', 'model', 'provider', 'character')[:12]
         ctx['projects'] = list(Project.objects.filter(owner=user).select_related('owner')[:6])
         ctx['projects_count'] = Project.objects.filter(owner=user).count()
         ctx['characters'] = list(Character.objects.filter(owner=user)[:6])
@@ -164,12 +166,16 @@ class CreateStudioView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user
+        reap_stale_generations(user=user, timeout_minutes=15)
         ctx['wallet'] = getattr(self.request, '_cached_wallet', None) or getattr(user, 'wallet', None) or CreditService.get_or_create_wallet(user)
         ctx['image_models'] = AIModel.objects.filter(modality='image', is_enabled=True, provider__is_enabled=True).order_by('-priority')
         ctx['video_models'] = AIModel.objects.filter(modality='video', is_enabled=True, provider__is_enabled=True).order_by('-priority')
+        ctx['audio_models'] = AIModel.objects.filter(modality='audio', is_enabled=True, provider__is_enabled=True).order_by('-priority')
+        from apps.providers.adapters.elevenlabs import ElevenLabsProvider
+        ctx['available_voices'] = ElevenLabsProvider.get_available_voices()
         ctx['characters'] = Character.objects.filter(owner=user)
         ctx['projects'] = Project.objects.filter(owner=user)
-        ctx['recent_generations'] = Generation.objects.filter(user=user).select_related('output_media', 'model', 'provider')[:4]
+        ctx['recent_generations'] = Generation.objects.filter(user=user, parent_generation__isnull=True).select_related('output_media', 'model', 'provider')[:4]
         ctx['trending_presets'] = [
             {
                 'id': 'vintage_cartoon',

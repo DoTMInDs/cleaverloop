@@ -11,6 +11,7 @@ from apps.providers.adapters.openai_adapter import OpenAIProvider
 from apps.providers.adapters.flux import FluxProvider
 from apps.providers.adapters.minimax import MiniMaxProvider
 from apps.providers.adapters.fal_ai import FalAIProvider
+from apps.providers.adapters.elevenlabs import ElevenLabsProvider
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ class ModelRegistry:
         cls._adapters["flux"] = FluxProvider()
         cls._adapters["minimax"] = MiniMaxProvider()
         cls._adapters["fal"] = FalAIProvider()
+        cls._adapters["elevenlabs"] = ElevenLabsProvider()
 
     @classmethod
     def get_provider_adapter(cls, provider_slug: str) -> BaseAIProvider:
@@ -91,6 +93,19 @@ class ModelRegistry:
                         "supports_image_reference": True,
                         "credit_cost_fixed": 30,
                         "credit_cost_per_second": 0,
+                        "priority": 10,
+                    },
+                    {
+                        "model_id": "cleaverloop-mock-audio",
+                        "display_name": "Mock Foley & Audio Generator",
+                        "modality": "audio",
+                        "capabilities": ["audio", "foley", "tts"],
+                        "max_duration": 30,
+                        "supported_resolutions": [],
+                        "supported_aspect_ratios": [],
+                        "supports_audio": True,
+                        "credit_cost_fixed": 10,
+                        "credit_cost_per_second": 2,
                         "priority": 10,
                     }
                 ]
@@ -308,6 +323,78 @@ class ModelRegistry:
                         "credit_cost_fixed": 45,
                         "credit_cost_per_second": 0,
                         "priority": 82,
+                    },
+                    {
+                        "model_id": "fal-mmaudio-v2",
+                        "display_name": "MMAudio Foley & Sound FX (via Fal.ai)",
+                        "modality": "audio",
+                        "capabilities": ["audio", "foley", "video_to_audio"],
+                        "max_duration": 15,
+                        "supported_resolutions": [],
+                        "supported_aspect_ratios": [],
+                        "supports_audio": True,
+                        "credit_cost_fixed": 25,
+                        "credit_cost_per_second": 5,
+                        "priority": 95,
+                    },
+                    {
+                        "model_id": "fal-kokoro",
+                        "display_name": "Kokoro Voice & Dialogue TTS (via Fal.ai)",
+                        "modality": "audio",
+                        "capabilities": ["audio", "tts", "dialogue"],
+                        "max_duration": 30,
+                        "supported_resolutions": [],
+                        "supported_aspect_ratios": [],
+                        "supports_audio": True,
+                        "credit_cost_fixed": 10,
+                        "credit_cost_per_second": 2,
+                        "priority": 95,
+                    }
+                ]
+            },
+            # ElevenLabs Neural Voice & Audio Hub
+            {
+                "provider": {"slug": "elevenlabs", "name": "ElevenLabs Studio", "is_enabled": True},
+                "models": [
+                    {
+                        "model_id": "eleven-multilingual-v2",
+                        "display_name": "ElevenLabs Multilingual V2 (Cinematic Voice & Dialogue)",
+                        "modality": "audio",
+                        "capabilities": ["audio", "tts", "dialogue", "voice"],
+                        "max_duration": 30,
+                        "supported_resolutions": [],
+                        "supported_aspect_ratios": [],
+                        "supports_audio": True,
+                        "credit_cost_fixed": 15,
+                        "credit_cost_per_second": 2,
+                        "priority": 98,
+                        "is_premium": True,
+                    },
+                    {
+                        "model_id": "eleven-turbo-v2",
+                        "display_name": "ElevenLabs Flash Turbo (Ultra-Fast Speech)",
+                        "modality": "audio",
+                        "capabilities": ["audio", "tts", "voice"],
+                        "max_duration": 30,
+                        "supported_resolutions": [],
+                        "supported_aspect_ratios": [],
+                        "supports_audio": True,
+                        "credit_cost_fixed": 10,
+                        "credit_cost_per_second": 1,
+                        "priority": 96,
+                    },
+                    {
+                        "model_id": "eleven-sound-effects",
+                        "display_name": "ElevenLabs Sound Effects & Foley FX",
+                        "modality": "audio",
+                        "capabilities": ["audio", "foley", "sfx"],
+                        "max_duration": 22,
+                        "supported_resolutions": [],
+                        "supported_aspect_ratios": [],
+                        "supports_audio": True,
+                        "credit_cost_fixed": 20,
+                        "credit_cost_per_second": 3,
+                        "priority": 97,
                     }
                 ]
             }

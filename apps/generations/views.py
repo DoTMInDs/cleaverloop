@@ -1,18 +1,23 @@
+import logging
 import json
-from django.shortcuts import render, get_object_or_404, redirect
-from django.views.generic import ListView, DetailView
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST
-from django.contrib.auth.decorators import login_required
+from django.views.generic import ListView, DetailView
 
+logger = logging.getLogger(__name__)
+
+from apps.characters.models import Character
+from apps.credits.services import CreditService
 from apps.generations.models import Generation
+from apps.generations.tasks import dispatch_generation_task, reap_stale_generations
+from apps.media.models import Media
 from apps.providers.models import AIModel
 from apps.providers.router import ModelRouter
-from apps.credits.services import CreditService
-from apps.generations.tasks import dispatch_generation_task
-from apps.media.models import Media
-from apps.characters.models import Character
 
 ALLOWED_REF_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'mp4', 'mov'}
 MAX_REF_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
@@ -24,10 +29,13 @@ class GenerationHistoryView(LoginRequiredMixin, ListView):
     paginate_by = 24
 
     def get_queryset(self):
-        qs = Generation.objects.filter(user=self.request.user).select_related('output_media', 'model', 'provider')
+        reap_stale_generations(user=self.request.user, timeout_minutes=15)
+        qs = Generation.objects.filter(user=self.request.user, parent_generation__isnull=True).select_related('output_media', 'model', 'provider')
         filter_type = self.request.GET.get('type')
         if filter_type in ('image', 'video'):
             qs = qs.filter(generation_type=filter_type)
+        elif filter_type == 'audio':
+            qs = Generation.objects.filter(user=self.request.user, generation_type='audio').select_related('output_media', 'model', 'provider')
         elif filter_type == 'failed':
             qs = qs.filter(status='failed')
         elif filter_type == 'favorites':
@@ -42,7 +50,51 @@ class GenerationDetailView(LoginRequiredMixin, DetailView):
     def get_queryset(self):
         return Generation.objects.filter(user=self.request.user)
 
-from django.conf import settings
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.providers.adapters.elevenlabs import ElevenLabsProvider
+        from apps.generations.tasks import check_and_update_generation_status, dispatch_generation_task
+
+        # If this generation is currently queued or processing, refresh provider status
+        if self.object.status in ['queued', 'processing']:
+            try:
+                if self.object.status == 'queued' and not self.object.external_job_id:
+                    dispatch_generation_task(str(self.object.id))
+                else:
+                    self.object = check_and_update_generation_status(self.object)
+            except Exception as e:
+                logger.warning(f"Error updating generation {self.object.id} status: {e}")
+            self.object.refresh_from_db()
+
+        # Process any pending child audio synthesis jobs
+        if self.object.is_synthesizing_audio:
+            for child in self.object.child_generations.filter(generation_type='audio', status__in=['queued', 'processing']):
+                try:
+                    if child.status == 'queued':
+                        dispatch_generation_task(str(child.id))
+                    else:
+                        check_and_update_generation_status(child)
+                except Exception as e:
+                    logger.warning(f"Error checking child audio generation {child.id}: {e}")
+            self.object.refresh_from_db()
+
+        ctx['available_voices'] = ElevenLabsProvider.get_available_voices()
+        duration = self.object.duration or 5
+        audio_model = AIModel.objects.filter(modality='audio', is_enabled=True).order_by('-priority').first()
+        ctx['audio_credit_cost'] = audio_model.calculate_credit_cost(duration=duration) if audio_model else 25
+        return ctx
+
+
+def _get_generation_partial_context(generation: Generation) -> dict:
+    from apps.providers.adapters.elevenlabs import ElevenLabsProvider
+    duration = generation.duration or 5
+    audio_model = AIModel.objects.filter(modality='audio', is_enabled=True).order_by('-priority').first()
+    credit_cost = audio_model.calculate_credit_cost(duration=duration) if audio_model else 25
+    return {
+        'generation': generation,
+        'available_voices': ElevenLabsProvider.get_available_voices(),
+        'audio_credit_cost': credit_cost,
+    }
 
 def _render_error_card(message: str, is_credit_error: bool = False, is_staff_or_debug: bool = False) -> str:
     action_html = ""
@@ -92,16 +144,28 @@ def create_generation_view(request):
     negative_prompt = request.POST.get('negative_prompt', '').strip()[:1000]
     model_choice = request.POST.get('model', 'automatic')
     aspect_ratio = request.POST.get('aspect_ratio', '16:9')
-    quality = request.POST.get('quality', 'standard')
+    voice_choice = request.POST.get('voice', 'adam')
     character_id = request.POST.get('character_id')
+    quality = voice_choice if gen_type == 'audio' else request.POST.get('quality', 'standard')
 
     try:
         duration_raw = request.POST.get('duration', '5')
-        duration = int(duration_raw) if gen_type == 'video' else 0
-        if duration < 1 and gen_type == 'video':
-            duration = 5
+        if gen_type == 'video':
+            duration = int(duration_raw)
+            if duration < 3:
+                duration = 3
+            elif duration > 15:
+                duration = 15
+        elif gen_type == 'audio':
+            duration = int(duration_raw)
+            if duration < 1:
+                duration = 5
+            elif duration > 30:
+                duration = 30
+        else:
+            duration = 0
     except (ValueError, TypeError):
-        duration = 5 if gen_type == 'video' else 0
+        duration = 5 if gen_type in ('video', 'audio') else 0
 
     if not prompt:
         return HttpResponse(_render_error_card("Please enter a prompt describing your vision in detail.", is_staff_or_debug=is_staff_or_debug), status=400)
@@ -202,17 +266,21 @@ def create_generation_view(request):
     dispatch_generation_task.delay(str(generation.id))
 
     # Return initial status pill / card for HTMX polling
-    return render(request, 'partials/generation_status.html', {'generation': generation})
+    return render(request, 'partials/generation_status.html', _get_generation_partial_context(generation))
 
 @login_required
 def generation_status_partial(request, generation_id):
     """HTMX polling endpoint returning live status and media preview when finished."""
     generation = get_object_or_404(
-        Generation.objects.select_related('output_media', 'model', 'provider'),
+        Generation.objects.select_related('output_media', 'model', 'provider', 'project'),
         id=generation_id,
         user=request.user
     )
-    return render(request, 'partials/generation_status.html', {'generation': generation})
+    if generation.status in ('queued', 'processing'):
+        from apps.generations.tasks import check_and_update_generation_status
+        generation = check_and_update_generation_status(generation)
+
+    return render(request, 'partials/generation_status.html', _get_generation_partial_context(generation))
 
 @login_required
 @require_POST
@@ -221,3 +289,194 @@ def toggle_favorite_view(request, generation_id):
     gen.is_favorite = not gen.is_favorite
     gen.save(update_fields=['is_favorite'])
     return JsonResponse({"is_favorite": gen.is_favorite})
+
+from apps.ai.dialogue import AIDialogueDirector
+
+@login_required
+@require_POST
+def deduce_dialogue_api_view(request):
+    """
+    AJAX / JSON API endpoint to deduce in-character dialogue or foley dynamically using AI.
+    """
+    try:
+        if request.content_type == 'application/json':
+            data = json.loads(request.body.decode('utf-8'))
+        else:
+            data = request.POST
+
+        prompt = data.get('prompt', '').strip()
+        char_name = data.get('character_name', '').strip()
+        duration = int(data.get('duration', 5))
+        style = data.get('style', 'dialogue')
+        gender = data.get('character_gender', '').strip()
+
+        result = AIDialogueDirector.deduce_dialogue(
+            prompt=prompt,
+            character_name=char_name,
+            duration=duration,
+            style=style,
+            character_gender=gender
+        )
+        return JsonResponse(result)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+@login_required
+@require_POST
+def synthesize_video_audio_view(request, generation_id):
+    """
+    Generate and attach an AI Foley soundtrack or Voiceover to an already generated video.
+    """
+    parent_gen = get_object_or_404(
+        Generation.objects.select_related('output_media', 'model', 'provider', 'project', 'character'),
+        id=generation_id,
+        user=request.user
+    )
+    
+    audio_type = request.POST.get('audio_type', 'foley')  # 'foley' or 'tts'
+    raw_prompt = request.POST.get('audio_prompt', '').strip()
+    voice = request.POST.get('voice', 'adam')
+    requested_model = request.POST.get('model', 'eleven-sound-effects' if audio_type == 'foley' else 'eleven-multilingual-v2')
+    duration = parent_gen.duration or 5
+    char_name = parent_gen.character.name if parent_gen.character else ""
+    char_gender = getattr(parent_gen.character, 'gender', '')
+
+    if audio_type == 'tts':
+        # If user did not provide a bespoke script, dynamically deduce in-character line via AI
+        if not raw_prompt or raw_prompt == parent_gen.prompt or any(w in raw_prompt.lower() for w in ['photorealistic', '8k', 'cinematic', 'tracking shot']):
+            deduction = AIDialogueDirector.deduce_dialogue(
+                prompt=parent_gen.prompt,
+                character_name=char_name,
+                duration=duration,
+                style='dialogue',
+                character_gender=char_gender
+            )
+            audio_prompt = deduction.get('dialogue', '')
+            if not voice or voice == 'adam':
+                voice = deduction.get('suggested_voice', 'adam')
+        else:
+            audio_prompt = raw_prompt
+    else:
+        if not raw_prompt:
+            audio_prompt = f"Cinematic atmospheric sound effects, foley, footsteps, and score for: {parent_gen.prompt}"
+        else:
+            audio_prompt = raw_prompt
+
+    # Resolve audio model
+    selected_model = AIModel.objects.filter(model_id=requested_model, is_enabled=True).first()
+    if not selected_model:
+        selected_model = ModelRouter.select_model(modality='audio', user_preference='automatic', duration=duration)
+
+    credit_cost = selected_model.calculate_credit_cost(duration=duration) if selected_model else 25
+
+    # Check and reserve credits
+    try:
+        audio_gen = Generation.objects.create(
+            user=request.user,
+            project=parent_gen.project,
+            parent_generation=parent_gen,
+            generation_type='audio',
+            provider=selected_model.provider,
+            model=selected_model,
+            model_id_snapshot=selected_model.model_id,
+            prompt=audio_prompt,
+            quality=voice if audio_type == 'tts' else 'standard',
+            duration=duration,
+            status='queued'
+        )
+        if parent_gen.output_media:
+            audio_gen.reference_media.add(parent_gen.output_media)
+
+        CreditService.reserve_credits(request.user, credit_cost, audio_gen)
+        try:
+            dispatch_generation_task(str(audio_gen.id))
+        except Exception:
+            dispatch_generation_task.delay(str(audio_gen.id))
+        parent_gen.refresh_from_db()
+    except Exception as exc:
+        if request.headers.get('HX-Request'):
+            return HttpResponse(_render_error_card(f"Could not synthesize audio: {exc}"), status=400)
+        messages.error(request, f"Could not synthesize audio: {exc}")
+        return redirect('generations:detail', pk=parent_gen.id)
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'partials/generation_status.html', _get_generation_partial_context(parent_gen))
+    return redirect('generations:detail', pk=parent_gen.id)
+
+@login_required
+@require_POST
+def lipsync_video_view(request, generation_id):
+    """
+    1-Click Neural Lip-Sync: Animates character facial movements and mouth to synchronize with the attached audio.
+    """
+    parent_gen = get_object_or_404(
+        Generation.objects.select_related('output_media', 'audio_track', 'model', 'provider', 'project'),
+        id=generation_id,
+        user=request.user
+    )
+
+    audio_media = parent_gen.latest_audio
+    if not audio_media or not parent_gen.output_media:
+        err_msg = "Please synthesize or attach an audio track before running Neural Lip-Sync."
+        if request.headers.get('HX-Request'):
+            return HttpResponse(_render_error_card(err_msg), status=400)
+        messages.error(request, err_msg)
+        return redirect('generations:detail', pk=parent_gen.id)
+
+    # Resolve or create Lip-Sync AI Model entry
+    fal_provider_obj = parent_gen.provider
+    lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
+    if not lipsync_model:
+        # Fallback to general video model or create on-the-fly
+        from apps.providers.models import AIProviderConfig
+        fal_cfg = AIProviderConfig.objects.filter(slug='fal').first() or fal_provider_obj
+        lipsync_model, _ = AIModel.objects.get_or_create(
+            model_id='fal-sync-lipsync',
+            defaults={
+                'provider': fal_cfg,
+                'display_name': 'SyncLabs LipSync 1.7 (Neural)',
+                'modality': 'video',
+                'credit_cost_fixed': 15,
+                'credit_cost_per_second': 3,
+                'is_enabled': True
+            }
+        )
+
+    duration = parent_gen.duration or 5
+    credit_cost = lipsync_model.calculate_credit_cost(duration=duration)
+
+    try:
+        lipsync_gen = Generation.objects.create(
+            user=request.user,
+            project=parent_gen.project,
+            parent_generation=parent_gen,
+            generation_type='video',
+            provider=lipsync_model.provider,
+            model=lipsync_model,
+            model_id_snapshot=lipsync_model.model_id,
+            prompt=f"👄 Neural Lip-Sync: {parent_gen.prompt}",
+            aspect_ratio=parent_gen.aspect_ratio,
+            duration=duration,
+            quality=parent_gen.quality,
+            character=parent_gen.character,
+            audio_track=audio_media,
+            status='queued'
+        )
+        lipsync_gen.reference_media.add(parent_gen.output_media)
+        lipsync_gen.reference_media.add(audio_media)
+
+        CreditService.reserve_credits(request.user, credit_cost, lipsync_gen)
+        try:
+            dispatch_generation_task(str(lipsync_gen.id))
+        except Exception:
+            dispatch_generation_task.delay(str(lipsync_gen.id))
+    except Exception as exc:
+
+        if request.headers.get('HX-Request'):
+            return HttpResponse(_render_error_card(f"Could not start Neural Lip-Sync: {exc}"), status=400)
+        messages.error(request, f"Could not start Neural Lip-Sync: {exc}")
+        return redirect('generations:detail', pk=parent_gen.id)
+
+    if request.headers.get('HX-Request'):
+        return render(request, 'partials/generation_status.html', _get_generation_partial_context(lipsync_gen))
+    return redirect('generations:detail', pk=lipsync_gen.id)

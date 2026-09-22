@@ -15,14 +15,15 @@ from apps.providers.base import GenerationRequest, ProviderJobResult, is_safe_ex
 
 logger = logging.getLogger(__name__)
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=5, time_limit=180, soft_time_limit=150)
-def dispatch_generation_task(self, generation_id: str):
+@shared_task(max_retries=3, default_retry_delay=5, time_limit=180, soft_time_limit=150)
+def dispatch_generation_task(generation_id: str):
+
     """
     Asynchronously dispatch a generation job to the designated AI provider adapter.
     Handles immediate completion, async queueing, and automatic failure refunding.
     """
     try:
-        generation = Generation.objects.select_related('user', 'provider', 'model', 'scene', 'project').get(id=generation_id)
+        generation = Generation.objects.select_related('user', 'provider', 'model', 'scene', 'project', 'character').get(id=generation_id)
     except Generation.DoesNotExist:
         logger.error(f"Generation with ID {generation_id} not found.")
         return
@@ -37,8 +38,56 @@ def dispatch_generation_task(self, generation_id: str):
         # Collect reference media URLs if any
         ref_urls = [m.url for m in generation.reference_media.all() if m.url]
 
+        # If character is selected and no reference image was provided, attach character avatar
+        if not ref_urls and generation.character and generation.character.avatar:
+            try:
+                avatar_url = generation.character.avatar.url
+                if avatar_url:
+                    ref_urls.append(avatar_url)
+            except Exception as e:
+                logger.debug(f"Could not read character avatar URL: {e}")
+
+        # Directorial character prompt injection
+        effective_prompt = generation.prompt
+        if generation.character:
+            char_cue = generation.character.build_prompt_cue()
+            if char_cue and generation.character.name.lower() not in effective_prompt.lower():
+                effective_prompt = f"{char_cue}. {effective_prompt}"
+
+        extra_params = {}
+        if generation.generation_type == 'audio' and generation.quality:
+            extra_params['voice'] = generation.quality
+
+        # For video lipsync/latentsync tasks, explicitly isolate video and audio reference assets
+        if generation.generation_type == 'video' and any(k in generation.model.model_id.lower() for k in ('lipsync', 'latentsync')):
+            video_ref = generation.reference_media.filter(media_type='video').first()
+            if not video_ref and generation.parent_generation and generation.parent_generation.output_media:
+                video_ref = generation.parent_generation.output_media
+
+            audio_ref = generation.audio_track
+            if not audio_ref:
+                audio_ref = generation.reference_media.filter(media_type='audio').first()
+            if not audio_ref and generation.parent_generation:
+                audio_ref = generation.parent_generation.latest_audio
+
+            if video_ref and video_ref.url:
+                extra_params['video_url'] = video_ref.url
+            if audio_ref and audio_ref.url:
+                extra_params['audio_url'] = audio_ref.url
+
+            # Ensure ref_urls has video first, audio second
+            ordered_refs = []
+            if video_ref and video_ref.url:
+                ordered_refs.append(video_ref.url)
+            if audio_ref and audio_ref.url:
+                ordered_refs.append(audio_ref.url)
+            for u in ref_urls:
+                if u not in ordered_refs:
+                    ordered_refs.append(u)
+            ref_urls = ordered_refs
+
         req = GenerationRequest(
-            prompt=generation.prompt,
+            prompt=effective_prompt,
             negative_prompt=generation.negative_prompt,
             aspect_ratio=generation.aspect_ratio,
             duration=generation.duration,
@@ -46,11 +95,14 @@ def dispatch_generation_task(self, generation_id: str):
             seed=generation.seed,
             reference_image_urls=ref_urls,
             correlation_id=str(generation.correlation_id),
+            extra_params=extra_params,
         )
 
         # Call provider adapter based on type
         if generation.generation_type == 'image':
             result: ProviderJobResult = adapter.generate_image(generation.model.model_id, req)
+        elif generation.generation_type == 'audio':
+            result: ProviderJobResult = adapter.generate_audio(generation.model.model_id, req)
         else:
             result: ProviderJobResult = adapter.generate_video(generation.model.model_id, req)
 
@@ -110,6 +162,8 @@ def dispatch_generation_task(self, generation_id: str):
                 fallback_adapter = ModelRegistry.get_provider_adapter(fallback_model.provider.slug)
                 if generation.generation_type == 'image':
                     fb_result = fallback_adapter.generate_image(fallback_model.model_id, req)
+                elif generation.generation_type == 'audio':
+                    fb_result = fallback_adapter.generate_audio(fallback_model.model_id, req)
                 else:
                     fb_result = fallback_adapter.generate_video(fallback_model.model_id, req)
 
@@ -138,65 +192,100 @@ def dispatch_generation_task(self, generation_id: str):
             _finalize_failed_generation(generation, combined_err)
 
     except Exception as exc:
-        logger.exception(f"Unhandled exception during generation {generation_id}: {exc}")
+        logger.error(f"Unhandled exception during generation {generation_id}: {exc}", exc_info=True)
         _finalize_failed_generation(generation, str(exc))
 
-@shared_task(bind=True, time_limit=120, soft_time_limit=90)
-def poll_generation_task(self, generation_id: str, attempt: int = 1):
-    """Poll upstream provider for async video/image task completion."""
-    try:
-        generation = Generation.objects.select_related('user', 'provider', 'model', 'scene', 'project').get(id=generation_id)
-    except Generation.DoesNotExist:
-        return
-
-    if generation.status in ('completed', 'failed', 'refunded', 'cancelled'):
-        return
-
-    MAX_ATTEMPTS = 40  # Max ~3 minutes polling
+def check_and_update_generation_status(generation: Generation) -> Generation:
+    """
+    Check the upstream provider job status and finalize if complete or failed.
+    Safe to call from HTMX polling views or background workers.
+    """
+    if generation.status in ('completed', 'failed', 'refunded', 'cancelled') or not generation.external_job_id:
+        return generation
 
     try:
         adapter = ModelRegistry.get_provider_adapter(generation.provider.slug)
-        result = adapter.get_status(generation.external_job_id)
+        result: ProviderJobResult = adapter.get_status(generation.external_job_id)
 
         if result.status == 'completed':
             _finalize_successful_generation(generation, result)
+            generation.refresh_from_db()
         elif result.status == 'failed':
-            _finalize_failed_generation(generation, result.error_message or "Generation failed upstream")
-        else:
-            if attempt >= MAX_ATTEMPTS:
-                _finalize_failed_generation(generation, "Generation timed out waiting for provider response.")
-            else:
-                if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
-                    import time
-                    time.sleep(4)
-                # Re-queue next poll attempt with 4-second backoff
-                poll_generation_task.apply_async(
-                    args=[str(generation.id), attempt + 1],
-                    countdown=4
-                )
+            logger.warning(f"Async generation job failed at provider: {result.error_message}")
+            _finalize_failed_generation(generation, result.error_message or "Upstream generation job failed.")
+            generation.refresh_from_db()
+    except Exception as exc:
+        logger.error(f"Error checking status for generation {generation.id}: {exc}")
+
+    return generation
+
+@shared_task(max_retries=None)
+def poll_generation_task(generation_id: str, attempt: int = 1):
+
+    """
+    Periodic poller for asynchronous generation jobs.
+    Evaluates provider status with backoff and finishes or fails over as needed.
+    """
+    try:
+        generation = Generation.objects.get(id=generation_id)
+        if generation.status in ('completed', 'failed', 'refunded', 'cancelled'):
+            return
+
+        check_and_update_generation_status(generation)
+        generation.refresh_from_db()
+
+        if generation.status in ('completed', 'failed', 'refunded', 'cancelled'):
+            return
+
+        # In eager development mode, avoid recursive blocking loops.
+        # Browser HTMX polling will drive the live status checks.
+        if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+            return
+
+        MAX_ATTEMPTS = 120  # ~8-10 minutes max wait for heavy video models (Wan 2.1 / Luma)
+        if attempt >= MAX_ATTEMPTS:
+            _finalize_failed_generation(generation, "Generation timed out waiting for provider response.")
+            return
+
+        # Re-schedule poller with adaptive backoff
+        countdown = min(4 + (attempt // 10) * 2, 12)
+        poll_generation_task.apply_async(args=[str(generation.id), attempt + 1], countdown=countdown)
+
     except Exception as exc:
         logger.error(f"Error polling generation {generation_id}: {exc}")
+        MAX_ATTEMPTS = 120
         if attempt >= MAX_ATTEMPTS:
             _finalize_failed_generation(generation, f"Polling error: {str(exc)}")
         else:
-            if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
-                import time
-                time.sleep(4)
-            poll_generation_task.apply_async(args=[str(generation.id), attempt + 1], countdown=5)
+            if not getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+                poll_generation_task.apply_async(args=[str(generation.id), attempt + 1], countdown=6)
 
 def _finalize_successful_generation(generation: Generation, result: ProviderJobResult):
     """Create Media asset, link to generation/scene/project, commit credits, and mark complete."""
     with transaction.atomic():
-        media_type = 'image' if generation.generation_type == 'image' else 'video'
+        if generation.generation_type == 'image':
+            media_type = 'image'
+            ext = 'png' if result.output_media_url and '.png' in result.output_media_url.lower() else 'jpg'
+        elif generation.generation_type == 'audio':
+            media_type = 'audio'
+            if result.output_media_url and '.mp3' in result.output_media_url.lower():
+                ext = 'mp3'
+            elif result.output_media_url and '.ogg' in result.output_media_url.lower():
+                ext = 'ogg'
+            else:
+                ext = 'wav'
+        else:
+            media_type = 'video'
+            ext = 'mp4'
         
         media = Media.objects.create(
             owner=generation.user,
             project=generation.project,
             generation=generation,
             media_type=media_type,
-            width=generation.width,
-            height=generation.height,
-            duration=generation.duration if media_type == 'video' else None,
+            width=generation.width if media_type != 'audio' else None,
+            height=generation.height if media_type != 'audio' else None,
+            duration=generation.duration if media_type in ('video', 'audio') else None,
             storage_key=result.output_media_url or "",
         )
 
@@ -207,7 +296,6 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
                 try:
                     req = urllib.request.Request(result.output_media_url, headers={'User-Agent': 'CleaverLoop-Engine/1.0'})
                     with urllib.request.urlopen(req, timeout=30) as resp:
-                        ext = "mp4" if media_type == 'video' else "jpg"
                         chunks = []
                         total_bytes = 0
                         while True:
@@ -240,9 +328,15 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
 
         # If attached to a project scene, link it
         if generation.scene:
-            generation.scene.generated_media = media
+            if generation.generation_type != 'audio' or not generation.scene.generated_media:
+                generation.scene.generated_media = media
             generation.scene.status = 'completed'
             generation.scene.save(update_fields=['generated_media', 'status'])
+
+        # If attached to a parent video generation, link audio_track
+        if generation.parent_generation and generation.generation_type == 'audio':
+            generation.parent_generation.audio_track = media
+            generation.parent_generation.save(update_fields=['audio_track'])
 
         # Commit credits
         CreditService.commit_credits(generation)
@@ -280,24 +374,40 @@ def _finalize_failed_generation(generation: Generation, raw_error: str):
         )
 
 
+def reap_stale_generations(user=None, timeout_minutes: int = 15):
+    """
+    Identifies stuck generations older than timeout_minutes, marks them as failed,
+    and automatically refunds any held credits to the user.
+    """
+    cutoff = timezone.now() - timezone.timedelta(minutes=timeout_minutes)
+    qs = Generation.objects.filter(
+        status__in=['queued', 'processing'],
+        created_at__lte=cutoff
+    ).select_related('user', 'provider', 'model', 'scene')
+    
+    if user and user.is_authenticated:
+        qs = qs.filter(user=user)
+
+    reaped_count = 0
+    for gen in qs:
+        try:
+            logger.warning(f"Reaping stale generation {gen.id} (created at {gen.created_at})")
+            _finalize_failed_generation(gen, f"Generation timed out after {timeout_minutes} minutes without completion.")
+            reaped_count += 1
+        except Exception as e:
+            logger.warning(f"Could not reap stale generation {gen.id}: {e}")
+
+    if reaped_count > 0:
+        logger.info(f"Stale generation reaper finished: {reaped_count} jobs cleaned and refunded.")
+    return reaped_count
+
+
 @shared_task
 def reap_stale_generations_task(timeout_minutes: int = 15):
     """
     Scheduled / worker maintenance task: Identifies stuck generations older than timeout_minutes,
     marks them as timed out/failed, and automatically refunds any held credits to the user.
     """
-    cutoff = timezone.now() - timezone.timedelta(minutes=timeout_minutes)
-    stale_generations = Generation.objects.filter(
-        status__in=['queued', 'processing'],
-        created_at__lte=cutoff
-    ).select_related('user', 'provider', 'model', 'scene')
+    return reap_stale_generations(timeout_minutes=timeout_minutes)
 
-    reaped_count = 0
-    for gen in stale_generations:
-        logger.warning(f"Reaping stale generation {gen.id} (created at {gen.created_at})")
-        _finalize_failed_generation(gen, f"Generation timed out after {timeout_minutes} minutes without completion.")
-        reaped_count += 1
-
-    logger.info(f"Stale generation reaper finished: {reaped_count} jobs cleaned and refunded.")
-    return reaped_count
 

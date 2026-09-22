@@ -35,7 +35,7 @@ def plan_agent_brief_view(request):
     character_id = request.POST.get('character_id', '').strip()
 
     if not prompt:
-        return HttpResponse("<div class='text-rose-400 p-3'>Please provide a description of what you want to create.</div>", status=400)
+        return HttpResponse("<div class='p-4 bg-rose-500/20 border border-rose-500/30 text-rose-300 rounded-2xl text-sm'>Please provide a description of what you want to create.</div>")
 
     character = None
     if character_id:
@@ -47,12 +47,17 @@ def plan_agent_brief_view(request):
     try:
         plan = SuperAgent.decompose_idea(prompt=prompt, target_aspect_ratio=aspect_ratio, character=character)
         wallet = CreditService.get_or_create_wallet(request.user)
-        AgentSafetyValidator.validate_plan(plan, wallet)
+        AgentSafetyValidator.validate_plan(plan, wallet, strict_balance=False)
     except Exception as exc:
-        return HttpResponse(f"<div class='p-3 bg-rose-500/20 text-rose-300 rounded-lg text-sm'>{exc}</div>", status=400)
+        return HttpResponse(f"<div class='p-4 bg-rose-500/20 border border-rose-500/30 text-rose-300 rounded-2xl text-sm flex items-center justify-between'><span>⚠️ {exc}</span></div>")
 
     # Return structured storyboard review card
-    return render(request, 'partials/agent_plan_card.html', {'plan': plan, 'plan_json': plan.model_dump_json()})
+    return render(request, 'partials/agent_plan_card.html', {
+        'plan': plan,
+        'plan_json': plan.model_dump_json(),
+        'wallet': wallet,
+        'has_sufficient_balance': wallet.balance >= plan.estimated_total_credits
+    })
 
 @login_required
 @require_POST

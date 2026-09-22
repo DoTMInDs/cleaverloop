@@ -2,6 +2,7 @@ import os
 import io
 import uuid
 import json
+import base64
 import logging
 import httpx
 from PIL import Image, ImageDraw, ImageFont
@@ -46,6 +47,143 @@ class CharacterGeneratorService:
         return dna
 
     @classmethod
+    def synthesize_character_from_image(
+        cls,
+        image_bytes: bytes,
+        mime_type: str = "image/jpeg",
+        style_preset: str = "cinematic",
+        extra_brief: str = ""
+    ) -> CharacterDNASchema:
+        """
+        Multimodal Character DNA Synthesis: Analyzes an uploaded photo face/person
+        using Gemini 1.5 Flash Vision, extracts physical features, clothing, and persona,
+        and saves the uploaded photo directly as the Character Avatar.
+        """
+        gemini_key = getattr(settings, 'GEMINI_API_KEY', '') or getattr(settings, 'GOOGLE_AI_API_KEY', '')
+        
+        dna = None
+        if gemini_key and getattr(settings, 'AGENT_LLM_PROVIDER', 'mock') != 'mock':
+            try:
+                dna = cls._call_gemini_dna_from_image(image_bytes, mime_type, style_preset, extra_brief, gemini_key)
+            except Exception as e:
+                logger.warning(f"Gemini Vision photo-to-character synthesis failed ({e}), falling back to vision rule engine.")
+
+        if not dna:
+            dna = cls._rule_based_dna_from_image(extra_brief, style_preset)
+
+        # Save the uploaded face photo directly into default_storage as the character avatar
+        ext = "jpg"
+        if "png" in mime_type.lower():
+            ext = "png"
+        elif "webp" in mime_type.lower():
+            ext = "webp"
+        
+        filename = f"characters/avatars/face_{uuid.uuid4().hex[:12]}.{ext}"
+        saved_path = default_storage.save(filename, ContentFile(image_bytes))
+        avatar_url = default_storage.url(saved_path)
+        dna.avatar_url = avatar_url
+
+        return dna
+
+    @classmethod
+    def _call_gemini_dna_from_image(
+        cls,
+        image_bytes: bytes,
+        mime_type: str,
+        style_preset: str,
+        extra_brief: str,
+        api_key: str
+    ) -> CharacterDNASchema:
+        """Invokes Gemini 1.5 Flash Vision for multimodal photo face to Character DNA analysis."""
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+        style_desc = cls.STYLE_PRESETS.get(style_preset, cls.STYLE_PRESETS['cinematic'])
+
+        system_prompt = (
+            "You are CleaverLoop AI Biometric Character Architect. You are given a photo of a person's face. "
+            "Analyze their visual likeness in exhaustive anatomical and artistic detail so AI video and image models can perfectly reproduce this exact individual across different scenes.\n"
+            "Specifically examine and document:\n"
+            "1. Facial bone structure, jawline, cheekbones, nose shape, lips, skin tone, approximate age\n"
+            "2. Eye shape, eye color, eyebrow arch\n"
+            "3. Hair color, texture, cut, hairstyle\n"
+            "4. Demeanor, gaze intensity, facial expression, charismatic attitude\n"
+            "5. Signature clothing, aesthetic wardrobe cues, accessories visible or inferred\n"
+            "6. A fitting realistic full name, captivating tagline, and short creative lore\n"
+            f"Visual Style Direction: {style_desc}.\n"
+            "Output strictly valid JSON with this exact schema:\n"
+            '{"name": "...", "tagline": "...", "description": "...", "appearance_description": "...", '
+            '"clothing_description": "...", "personality": "...", "portrait_prompt": "..."}'
+        )
+
+        b64_image = base64.b64encode(image_bytes).decode('utf-8')
+        user_prompt_text = "Analyze this face photo and forge a complete, consistent character persona."
+        if extra_brief:
+            user_prompt_text += f"\nAdditional creative direction / lore: {extra_brief}"
+        user_prompt_text += f"\nTarget aesthetic style: {style_preset}"
+
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": user_prompt_text},
+                        {
+                            "inlineData": {
+                                "mimeType": mime_type,
+                                "data": b64_image
+                            }
+                        }
+                    ]
+                }
+            ],
+            "systemInstruction": {"parts": [{"text": system_prompt}]},
+            "generationConfig": {"responseMimeType": "application/json"}
+        }
+
+        with httpx.Client(timeout=35.0) as client:
+            headers = {"x-goog-api-key": api_key}
+            resp = client.post(endpoint, json=payload, headers=headers)
+            if resp.status_code == 200:
+                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                if text.startswith("```json"):
+                    text = text[7:]
+                elif text.startswith("```"):
+                    text = text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                text = text.strip()
+                data = json.loads(text)
+                return CharacterDNASchema(**data)
+            raise RuntimeError(f"Gemini Vision API returned status {resp.status_code}: {resp.text[:200]}")
+
+    @classmethod
+    def _rule_based_dna_from_image(cls, extra_brief: str, style_preset: str) -> CharacterDNASchema:
+        """Fallback character DNA generator when offline or Vision API key is unconfigured."""
+        name = "Kaelen Mercer"
+        if extra_brief:
+            words = [w for w in extra_brief.split() if len(w) > 2]
+            if words:
+                name = f"{words[0].title()} Vance"
+        tagline = "Autonomous Visual Persona"
+        desc = "A photorealistic character synthesized directly from reference face geometry."
+        appearance = (
+            "Striking natural facial contours, sharp defined jawline, expressive focused eyes, "
+            "subtle natural skin texture, textured contemporary styled hair, balanced proportions, "
+            "warm cinematic portrait lighting with zero visual drift."
+        )
+        clothing = "Modern minimalist tailored jacket with high-neck dark shirt and subtle architectural seams."
+        personality = "Intense captivating gaze, confident composure, observant demeanor, natural screen magnetism."
+        style_desc = cls.STYLE_PRESETS.get(style_preset, cls.STYLE_PRESETS['cinematic'])
+        portrait_prompt = f"Cinematic 8K portrait of {name}, {appearance}, wearing {clothing}, {style_desc}."
+        return CharacterDNASchema(
+            name=name,
+            tagline=tagline,
+            description=desc,
+            appearance_description=appearance,
+            clothing_description=clothing,
+            personality=personality,
+            portrait_prompt=portrait_prompt
+        )
+
+    @classmethod
     def _call_gemini_dna(cls, brief: str, style_preset: str, api_key: str) -> CharacterDNASchema:
         """Invokes Gemini LLM for structured character DNA generation."""
         endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
@@ -66,7 +204,8 @@ class CharacterGeneratorService:
         }
 
         with httpx.Client(timeout=25.0) as client:
-            resp = client.post(endpoint, json=payload)
+            headers = {"x-goog-api-key": api_key}
+            resp = client.post(endpoint, json=payload, headers=headers)
             if resp.status_code == 200:
                 text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                 if text.startswith("```json"):

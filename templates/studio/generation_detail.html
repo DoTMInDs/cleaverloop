@@ -1,108 +1,358 @@
 {% extends 'base.html' %}
+{% load static %}
 
-{% block title %}Generation Detail — CleaverLoop AI{% endblock %}
+{% block title %}Generation Inspector — CleaverLoop AI{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-        <div>
-            <span class="text-[10px] uppercase font-bold tracking-wider text-slate-500">Generation Job</span>
-            <h1 class="text-xl md:text-2xl font-heading font-extrabold text-white">Job Inspector</h1>
+<div class="max-w-5xl mx-auto space-y-8"
+     x-data="generationDetailInspector({{ generation.duration|default:5 }}, '{{ generation.prompt|default:""|escapejs }}', '{{ generation.character.name|default:""|escapejs }}')">
+
+    <!-- Top Navigation Header -->
+    <div class="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+        <div class="flex items-center gap-3">
+            <a href="{% url 'generations:history' %}" class="w-9 h-9 rounded-2xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 flex items-center justify-center text-slate-300 hover:text-white transition shadow-sm">
+                ←
+            </a>
+            <div>
+                <span class="text-[10px] font-mono uppercase tracking-wider text-orange-400 font-bold">Generative Asset Inspector</span>
+                <h1 class="text-xl md:text-2xl font-heading font-black text-white">Media Asset & Sound Studio</h1>
+            </div>
         </div>
-        <a href="{% url 'generations:history' %}" class="btn btn-ghost btn-sm text-xs">← Back to Library</a>
+
+        <div class="flex items-center gap-2">
+            <a href="{% url 'studio:create' %}?prompt={{ generation.prompt|urlencode }}&type={{ generation.generation_type }}&aspect={{ generation.aspect_ratio }}{% if generation.character %}&character_id={{ generation.character.id }}{% endif %}"
+               class="fl-gradient-orange-btn text-white rounded-xl px-4 py-2 font-heading font-black text-xs uppercase tracking-wider transition hover:scale-105 flex items-center gap-1.5 shadow-md shadow-orange-500/20">
+                <span>✨</span>
+                <span>Remake in Studio</span>
+            </a>
+        </div>
     </div>
 
-    <div class="glass-panel-glow rounded-3xl p-6 md:p-8 space-y-6">
-        <!-- Media Preview in True Aspect Ratio -->
-        <div class="{% if generation.aspect_ratio == '9:16' %}aspect-[9/16] max-w-sm{% elif generation.aspect_ratio == '1:1' %}aspect-square max-w-md{% elif generation.aspect_ratio == '21:9' %}aspect-[21/9] max-w-3xl{% else %}aspect-video max-w-2xl{% endif %} mx-auto rounded-2xl overflow-hidden bg-black/80 border border-white/10 flex items-center justify-center shadow-2xl relative">
-            {% if generation.output_media %}
-                {% if generation.generation_type == 'video' %}
-                    <video controls class="w-full h-full object-contain" poster="{{ generation.output_media.thumbnail_url }}">
-                        <source src="{{ generation.output_media.url }}" type="video/mp4">
-                    </video>
-                {% else %}
-                    <img src="{{ generation.output_media.url }}" alt="{{ generation.prompt }}" class="w-full h-full object-contain">
-                {% endif %}
-            {% else %}
-                <div class="relative w-full h-full skeleton-box flex flex-col items-center justify-center p-6 text-center">
-                    <div class="absolute inset-0 skeleton-shimmer opacity-40"></div>
-                    <div class="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-brand-400/50 to-transparent animate-scanline"></div>
-                    <div class="relative z-10 space-y-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-brand-400 animate-ping inline-block"></span>
-                        <div class="text-sm font-bold text-white">Rendering Media Output...</div>
-                        <p class="text-xs text-slate-400">Diffusion pipeline is generating asset frames.</p>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <!-- Left 7 Cols: Media Player Stage & Synchronized Audio Track -->
+        <div class="lg:col-span-7 space-y-6">
+            <!-- Media Player Container -->
+            <div class="fl-composer-card rounded-3xl p-4 sm:p-5 shadow-2xl relative border-white/[0.08] overflow-hidden">
+                <div class="{% if generation.aspect_ratio == '9:16' %}aspect-[9/16] max-w-sm{% elif generation.aspect_ratio == '1:1' %}aspect-square max-w-md{% elif generation.aspect_ratio == '21:9' %}aspect-[21/9] max-w-3xl{% else %}aspect-video w-full{% endif %} mx-auto rounded-2xl overflow-hidden bg-black/90 border border-white/10 flex items-center justify-center shadow-2xl relative">
+                    {% if generation.output_media %}
+                        {% if generation.generation_type == 'video' %}
+                            <video x-ref="videoPlayer"
+                                   controls
+                                   {% if not generation.latest_audio %}autoplay muted{% endif %}
+                                   loop
+                                   playsinline
+                                   preload="auto"
+                                   class="w-full h-full object-contain"
+                                   poster="{{ generation.output_media.thumbnail_url }}">
+                                <source src="{{ generation.output_media.url }}" type="video/mp4">
+                                <source src="{{ generation.output_media.url }}" type="image/webp">
+                                Your browser does not support the video tag.
+                            </video>
+                        {% elif generation.generation_type == 'audio' %}
+                            <div class="p-8 text-center space-y-4 w-full">
+                                <div class="w-16 h-16 rounded-3xl bg-orange-500/20 border border-orange-500/40 text-orange-400 text-3xl flex items-center justify-center mx-auto shadow-xl shadow-orange-500/10">
+                                    🔊
+                                </div>
+                                <div>
+                                    <h3 class="text-base font-bold text-white">Audio Asset</h3>
+                                    <p class="text-xs text-slate-400 font-mono">{{ generation.model.display_name }} • {{ generation.duration }}s</p>
+                                </div>
+                                <audio controls class="w-full accent-orange-500 bg-black/60 rounded-xl" preload="auto">
+                                    <source src="{{ generation.output_media.url }}" type="audio/mpeg">
+                                    <source src="{{ generation.output_media.url }}" type="audio/wav">
+                                </audio>
+                            </div>
+                        {% else %}
+                            <img src="{{ generation.output_media.url }}" alt="{{ generation.prompt }}" class="w-full h-full object-contain">
+                        {% endif %}
+                    {% else %}
+                        {% if generation.is_in_progress %}
+                            <div hx-get="{% url 'generations:detail' generation.id %}"
+                                 hx-trigger="load delay:3s"
+                                 hx-target="body"
+                                 hx-swap="outerHTML"
+                                 class="relative w-full h-full skeleton-box flex flex-col items-center justify-center p-6 text-center">
+                                <div class="absolute inset-0 skeleton-shimmer opacity-40"></div>
+                                <div class="relative z-10 space-y-3">
+                                    <div class="w-12 h-12 mx-auto rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 shadow-lg shadow-orange-500/10">
+                                        <span class="w-3 h-3 rounded-full bg-orange-400 animate-ping"></span>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <div class="text-sm font-bold text-white tracking-wide">Processing Asset...</div>
+                                        <p class="text-xs text-orange-400/90 font-mono">Neural rendering in progress • Auto-syncing</p>
+                                    </div>
+                                </div>
+                            </div>
+                        {% elif generation.status == 'failed' %}
+                            <div class="relative w-full h-full bg-rose-950/20 border border-rose-500/30 rounded-2xl flex flex-col items-center justify-center p-6 text-center space-y-3">
+                                <div class="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 text-2xl flex items-center justify-center">
+                                    ⚠️
+                                </div>
+                                <div class="space-y-1 max-w-md">
+                                    <h4 class="text-sm font-bold text-rose-200">Generation Unsuccessful</h4>
+                                    <p class="text-xs text-rose-300/80 font-mono">{{ generation.error_message|default:"Upstream provider encountered an error. Your credits have been refunded." }}</p>
+                                </div>
+                                <a href="{% url 'generations:create' %}" class="btn btn-xs bg-rose-600 hover:bg-rose-500 text-white border-none text-[11px] rounded-lg">
+                                    Try New Generation
+                                </a>
+                            </div>
+                        {% else %}
+                            <div class="relative w-full h-full skeleton-box flex flex-col items-center justify-center p-6 text-center">
+                                <div class="text-sm font-bold text-slate-400">No media available</div>
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+
+                <!-- Media Action Bar -->
+                <div class="flex items-center justify-between gap-3 pt-4 mt-4 border-t border-white/[0.06]">
+                    <div class="flex items-center gap-2 text-xs text-slate-400 font-mono">
+                        <span class="px-2.5 py-1 rounded-lg bg-white/[0.04] text-orange-300 font-bold border border-white/5">
+                            {{ generation.generation_type|upper }}
+                        </span>
+                        <span>{{ generation.aspect_ratio }}</span>
+                        {% if generation.duration %}
+                            <span>•</span>
+                            <span>{{ generation.duration }}s</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        {% if generation.output_media %}
+                            <a href="{{ generation.output_media.url }}"
+                               download
+                               class="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-xs font-semibold text-white border border-white/10 transition flex items-center gap-1.5 shadow-sm">
+                                <span>📥</span>
+                                <span>Download {{ generation.generation_type|title }}</span>
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attached Audio Track Synchronizer (if video has audio) -->
+            {% if generation.generation_type == 'video' and generation.latest_audio %}
+                <div class="fl-composer-card rounded-3xl p-5 shadow-2xl border-orange-500/30 bg-[#0d0f12] space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 text-lg shadow-md shadow-orange-500/10">
+                                🔊
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-heading font-extrabold text-white">Attached AI Soundtrack</h4>
+                                <p class="text-[11px] text-orange-400/90 font-mono">Synchronized 48kHz Audio Track</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    @click="syncPlay()"
+                                    class="px-3.5 py-1.5 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-xs font-bold text-orange-400 transition flex items-center gap-1.5">
+                                <span x-text="isPlaying ? '⏸️' : '▶️'">▶️</span>
+                                <span x-text="isPlaying ? 'Pause Sync' : 'Play in Sync'">Play in Sync</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <audio x-ref="audioPlayer" controls class="w-full accent-orange-500 bg-black/60 rounded-xl" preload="auto">
+                        <source src="{{ generation.latest_audio.url }}" type="audio/mpeg">
+                        <source src="{{ generation.latest_audio.url }}" type="audio/wav">
+                        <source src="{{ generation.latest_audio.url }}" type="audio/ogg">
+                    </audio>
+
+                    <!-- 1-Click Neural Lip-Sync Action Banner -->
+                    <div class="pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
+                        <div class="space-y-0.5">
+                            <h5 class="text-xs font-bold text-white flex items-center gap-1.5">
+                                <span>👄</span>
+                                <span>Neural Lip-Sync Studio</span>
+                                <span class="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 text-[9px] font-mono font-bold">New</span>
+                            </h5>
+                            <p class="text-[11px] text-slate-400">Animate {{ generation.character.name|default:"character" }}'s mouth, jaw, and facial expressions in sync with this audio track.</p>
+                        </div>
+
+                        <form action="{% url 'generations:lipsync_video' generation.id %}" method="POST" class="inline">
+                            {% csrf_token %}
+                            <button type="submit"
+                                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-4 py-2 font-heading font-black text-xs uppercase tracking-wider transition hover:scale-105 flex items-center gap-1.5 shadow-lg shadow-orange-500/25">
+                                <span>👄</span>
+                                <span>Sync Lips & Video</span>
+                                <span class="opacity-80 text-[10px] font-mono">• 30 cr</span>
+                            </button>
+                        </form>
                     </div>
                 </div>
             {% endif %}
         </div>
 
-        <!-- Prompt & Details -->
-        <div class="space-y-3">
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Prompt</h3>
-            <p class="text-sm text-slate-200 bg-surface/50 p-4 rounded-xl border border-white/5 leading-relaxed">
-                {{ generation.prompt }}
-            </p>
-        </div>
+        <!-- Right 5 Cols: Sound Synthesis Studio & Metadata Inspector -->
+        <div class="lg:col-span-5 space-y-6">
+            <!-- Audio Synthesis Module for Videos -->
+            {% if generation.generation_type == 'video' %}
+                <div id="generation-card-{{ generation.id }}"
+                     class="fl-composer-card rounded-3xl p-5 shadow-2xl border-orange-500/30 bg-[#0d0f12] space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 text-sm">
+                                🎙️
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-heading font-black text-white">Audio & Foley Synthesis</h3>
+                                <p class="text-[10px] text-slate-400">Generate sound effects or speech for this video</p>
+                            </div>
+                        </div>
+                        <span class="px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                            {{ audio_credit_cost|default:25 }} Credits
+                        </span>
+                    </div>
 
-        {% if generation.negative_prompt %}
-            <div class="space-y-1">
-                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400">Negative Prompt</h3>
-                <p class="text-xs text-slate-400">{{ generation.negative_prompt }}</p>
-            </div>
-        {% endif %}
+                    {% if generation.is_synthesizing_audio %}
+                        <div class="p-4 rounded-2xl bg-orange-500/10 border border-orange-500/30 space-y-2 animate-pulse text-center"
+                             hx-get="{% url 'generations:detail' generation.id %}"
+                             hx-trigger="load delay:3s"
+                             hx-target="body">
+                            <span class="w-3 h-3 rounded-full bg-orange-400 animate-ping inline-block"></span>
+                            <h5 class="text-xs font-bold text-orange-300">Synthesizing Soundtrack in Background...</h5>
+                            <p class="text-[11px] text-slate-400">ElevenLabs neural voice & Foley engine is rendering your audio.</p>
+                        </div>
+                    {% else %}
+                        <form action="{% url 'generations:synthesize_audio' generation.id %}"
+                              method="POST"
+                              class="space-y-4">
+                            {% csrf_token %}
 
-        {% if generation.status == 'failed' %}
-            <div class="p-4 rounded-xl bg-rose-950/40 border border-rose-500/30 text-rose-200 space-y-2">
-                <div class="flex items-center justify-between text-xs">
-                    <span class="font-bold text-rose-400 flex items-center gap-1.5">
-                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        Generation Failed
-                    </span>
-                    <span class="text-emerald-400 font-semibold text-[11px]">Credits Restored ✓</span>
-                </div>
-                <p class="text-xs text-rose-200/90">{{ generation.error_message }}</p>
-                {% if user.is_superuser or user.is_staff %}
-                    {% if generation.admin_error_detail %}
-                        <details class="mt-2 text-xs bg-black/40 rounded-lg p-2.5 border border-rose-500/20" open>
-                            <summary class="cursor-pointer font-mono text-[11px] text-rose-300 font-semibold flex items-center gap-1.5">
-                                <span>🔍 Diagnostic Error Details (Superuser Log)</span>
-                            </summary>
-                            <pre class="mt-2 text-[10px] font-mono text-rose-300/90 whitespace-pre-wrap overflow-x-auto bg-black/60 p-2.5 rounded border border-white/5 max-h-48">{{ generation.admin_error_detail }}</pre>
-                        </details>
+                            <!-- Mode Selector -->
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="audio_type" value="foley" x-model="audioType" @change="setAudioType('foley')" class="sr-only">
+                                    <div class="p-3 rounded-2xl border text-center transition text-xs font-semibold"
+                                         :class="audioType === 'foley' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 shadow-md shadow-orange-500/10' : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'">
+                                        🎬 Foley & Sound FX
+                                    </div>
+                                </label>
+                                <label class="cursor-pointer">
+                                    <input type="radio" name="audio_type" value="tts" x-model="audioType" @change="setAudioType('tts')" class="sr-only">
+                                    <div class="p-3 rounded-2xl border text-center transition text-xs font-semibold"
+                                         :class="audioType === 'tts' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 shadow-md shadow-orange-500/10' : 'bg-black/30 border-white/10 text-slate-400 hover:text-white'">
+                                        🗣️ Character Voice / Speech
+                                    </div>
+                                </label>
+                            </div>
+
+                            <!-- Voice dropdown (TTS mode) - Dynamically Generated -->
+                            <div x-show="audioType === 'tts'" x-transition class="space-y-1.5">
+                                <label class="text-[11px] font-mono uppercase text-slate-300 font-bold">Voice Persona</label>
+                                <select name="voice" x-model="selectedVoice" class="w-full px-3.5 py-2.5 rounded-2xl bg-black/70 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500">
+                                    {% for v in available_voices %}
+                                        <option value="{{ v.id }}">{{ v.name }} — {{ v.desc }} ({{ v.badge }})</option>
+                                    {% empty %}
+                                        <option value="adam">Adam — Deep, Cinematic Male Narrator</option>
+                                        <option value="rachel">Rachel — Warm, Calm Female Voice</option>
+                                        <option value="nicole">Nicole — Energetic, Crisp Female Narrator</option>
+                                        <option value="antoni">Antoni — Natural, Engaging Male Storyteller</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <!-- Prompt Input -->
+                            <div class="space-y-2">
+                                <div class="flex flex-wrap items-center justify-between gap-1.5">
+                                    <label class="text-[11px] font-mono uppercase text-slate-300 font-bold" x-text="audioType === 'foley' ? 'Foley & Atmosphere Prompt' : 'Spoken Dialogue (1st Person)'"></label>
+                                    
+                                    <!-- Duration Match Indicator -->
+                                    <div x-show="audioType === 'tts'" class="flex items-center gap-1.5 text-[10px] font-mono">
+                                        <span :class="isDurationFitting ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'" x-text="`~${estimatedSpokenSeconds}s / ${videoDuration}s`"></span>
+                                        <span :class="isDurationFitting ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/40'" class="px-1.5 py-0.5 rounded border text-[9px] font-semibold">
+                                            <span x-text="isDurationFitting ? '✓ Exact Fit' : '⚠️ Long (~' + wordCount + ' words)'"></span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Quick Preset Generation Chips -->
+                                <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                    <template x-if="audioType === 'tts'">
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <button type="button" @click="generateDialogue('dialogue')" :disabled="isDeducing" class="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/30 border border-orange-500/40 text-orange-300 text-[10px] font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50">
+                                                <span x-show="!isDeducing">✨</span>
+                                                <span x-show="isDeducing" class="w-2.5 h-2.5 rounded-full border border-orange-400 border-t-transparent animate-spin inline-block"></span>
+                                                <span x-text="isDeducing ? 'AI Thinking...' : '✨ AI In-Character Voice'"></span>
+                                            </button>
+                                            <button type="button" @click="generateDialogue('monologue')" :disabled="isDeducing" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-300 text-[10px] font-semibold transition flex items-center gap-1.5 disabled:opacity-50">
+                                                <span>💭</span>
+                                                <span>AI Inner Thoughts</span>
+                                            </button>
+                                            <span x-show="deducedEmotion" x-transition class="px-2 py-0.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-300 text-[9px] font-mono">
+                                                Mood: <span x-text="deducedEmotion"></span>
+                                            </span>
+                                        </div>
+                                    </template>
+                                    <template x-if="audioType === 'foley'">
+                                        <button type="button" @click="generateDialogue('foley')" :disabled="isDeducing" class="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/30 border border-orange-500/40 text-orange-300 text-[10px] font-bold transition flex items-center gap-1 shadow-sm disabled:opacity-50">
+                                            <span>🎬</span>
+                                            <span>Auto Foley & Ambience</span>
+                                        </button>
+                                    </template>
+                                </div>
+
+                                <textarea name="audio_prompt" x-model="audioPrompt" rows="3" placeholder="Describe the sounds, background score, or character dialogue..." class="w-full px-3.5 py-2.5 rounded-2xl bg-black/70 border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500 leading-relaxed"></textarea>
+                                
+                                <p x-show="audioType === 'tts'" class="text-[10px] text-slate-400 leading-tight">
+                                    💡 <strong class="text-orange-300">Natural Flow:</strong> Speeches are automatically timed to the video's <strong class="text-white">{{ generation.duration|default:5 }}s</strong> runtime (~{% widthratio generation.duration|default:5 1 2.3 %} words max).
+                                </p>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" class="w-full fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl py-3 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] flex items-center justify-center gap-2 shadow-lg shadow-orange-500/25">
+                                <span>⚡</span>
+                                <span>Synthesize & Attach Sound</span>
+                            </button>
+                        </form>
                     {% endif %}
+                </div>
+            {% endif %}
+
+            <!-- Prompt & Meta Inspector Card -->
+            <div class="fl-composer-card rounded-3xl p-5 shadow-2xl border-white/[0.08] space-y-4">
+                <div class="space-y-1.5">
+                    <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Prompt</span>
+                    <p class="text-xs text-slate-200 bg-black/40 p-3.5 rounded-2xl border border-white/5 leading-relaxed font-sans select-all">
+                        {{ generation.prompt }}
+                    </p>
+                </div>
+
+                {% if generation.negative_prompt %}
+                    <div class="space-y-1">
+                        <span class="text-[10px] font-mono uppercase tracking-wider text-slate-400 font-bold">Negative Prompt</span>
+                        <p class="text-xs text-slate-400 bg-black/30 p-2.5 rounded-xl border border-white/5">{{ generation.negative_prompt }}</p>
+                    </div>
                 {% endif %}
-            </div>
-        {% endif %}
 
-        <!-- Metadata Grid -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 border-t border-white/5 text-xs">
-            <div>
-                <span class="text-slate-500 block">Model</span>
-                <span class="font-semibold text-brand-300">{{ generation.model.display_name }}</span>
-            </div>
-            <div>
-                <span class="text-slate-500 block">Provider</span>
-                <span class="font-semibold text-white">{{ generation.provider.name }}</span>
-            </div>
-            <div>
-                <span class="text-slate-500 block">Aspect Ratio</span>
-                <span class="font-semibold text-white">{{ generation.aspect_ratio }}</span>
-            </div>
-            <div>
-                <span class="text-slate-500 block">Credits Consumed</span>
-                <span class="font-semibold text-amber-400">{{ generation.credits_consumed|default:generation.credits_reserved }}</span>
-            </div>
-        </div>
+                <!-- Detailed Specs Grid -->
+                <div class="grid grid-cols-2 gap-3 pt-3 border-t border-white/[0.06] text-xs">
+                    <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
+                        <span class="text-[10px] font-mono text-slate-500 block">AI Model</span>
+                        <span class="font-bold text-orange-300 font-mono text-[11px]">{{ generation.model.display_name }}</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
+                        <span class="text-[10px] font-mono text-slate-500 block">Provider</span>
+                        <span class="font-bold text-white font-mono text-[11px]">{{ generation.provider.name }}</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
+                        <span class="text-[10px] font-mono text-slate-500 block">Aspect / Duration</span>
+                        <span class="font-bold text-slate-300 font-mono text-[11px]">{{ generation.aspect_ratio }}{% if generation.duration %} • {{ generation.duration }}s{% endif %}</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-white/[0.02] border border-white/5">
+                        <span class="text-[10px] font-mono text-slate-500 block">Credits Used</span>
+                        <span class="font-bold text-amber-400 font-mono text-[11px]">{{ generation.credits_consumed|default:generation.credits_reserved }}</span>
+                    </div>
+                </div>
 
-        <!-- Diagnostic Correlation ID -->
-        <div class="pt-4 border-t border-white/5 flex items-center justify-between text-[11px] text-slate-500">
-            <div class="flex items-center gap-2">
-                <span>Correlation ID:</span>
-                <span class="font-mono text-slate-400">{{ generation.correlation_id }}</span>
+                <!-- Footer Timestamp -->
+                <div class="pt-3 border-t border-white/[0.06] flex items-center justify-between text-[10px] font-mono text-slate-500">
+                    <span>ID: {{ generation.id|truncatechars:18 }}</span>
+                    <span>{{ generation.created_at|date:"M d, Y H:i" }}</span>
+                </div>
             </div>
-            <span>Completed {{ generation.created_at|date:"M d, Y H:i:s" }}</span>
         </div>
     </div>
 </div>

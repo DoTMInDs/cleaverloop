@@ -11,9 +11,9 @@ class AgentSafetyValidator:
     """Enforces safety guardrails, budget limits, and scene caps on Super Agent plans."""
 
     @classmethod
-    def validate_plan(cls, plan: StoryboardPlan, user_wallet) -> bool:
-        max_credits = getattr(settings, 'MAX_AGENT_CREDITS_PER_REQUEST', 2500)
-        max_scenes = getattr(settings, 'MAX_SCENES_PER_REQUEST', 6)
+    def validate_plan(cls, plan: StoryboardPlan, user_wallet, strict_balance: bool = True) -> bool:
+        max_credits = int(getattr(settings, 'MAX_AGENT_CREDITS_PER_REQUEST', 500000))
+        max_scenes = int(getattr(settings, 'MAX_SCENES_PER_REQUEST', 6))
 
         if len(plan.scenes) > max_scenes:
             raise SceneLimitExceededError(
@@ -33,14 +33,15 @@ class AgentSafetyValidator:
 
         plan.estimated_total_credits = max(plan.estimated_total_credits, calculated_credits)
 
-        if plan.estimated_total_credits > max_credits:
-            raise BudgetExceededError(
-                f"Agent plan estimated cost ({plan.estimated_total_credits} credits) exceeds maximum allowed safety cap of {max_credits} credits."
-            )
+        if strict_balance:
+            if plan.estimated_total_credits > max_credits:
+                raise BudgetExceededError(
+                    f"Agent plan estimated cost ({plan.estimated_total_credits} credits) exceeds maximum allowed safety cap of {max_credits} credits."
+                )
 
-        if user_wallet.balance < plan.estimated_total_credits:
-            raise BudgetExceededError(
-                f"Your credit balance ({user_wallet.balance} credits) is insufficient for this plan ({plan.estimated_total_credits} credits required)."
-            )
+            if user_wallet.balance < plan.estimated_total_credits:
+                raise BudgetExceededError(
+                    f"Your credit balance ({user_wallet.balance} credits) is insufficient for this plan ({plan.estimated_total_credits} credits required)."
+                )
 
         return True

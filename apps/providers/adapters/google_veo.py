@@ -37,6 +37,7 @@ class GoogleVeoProvider(BaseAIProvider):
                 target_model = "gemini-2.5-flash-image"
 
             with httpx.Client(timeout=30.0) as client:
+                headers = {"x-goog-api-key": self.api_key}
                 # 1. Try Gemini AI Studio generateContent endpoint
                 endpoint = f"{self.BASE_URL}/models/{target_model}:generateContent?key={self.api_key}"
                 payload = {
@@ -48,7 +49,7 @@ class GoogleVeoProvider(BaseAIProvider):
                         }
                     ]
                 }
-                resp = client.post(endpoint, json=payload)
+                resp = client.post(endpoint, json=payload, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
                     candidates = data.get("candidates", [])
@@ -87,7 +88,7 @@ class GoogleVeoProvider(BaseAIProvider):
                         "outputMimeType": "image/jpeg"
                     }
                 }
-                resp_predict = client.post(predict_endpoint, json=predict_payload)
+                resp_predict = client.post(predict_endpoint, json=predict_payload, headers=headers)
                 if resp_predict.status_code == 200:
                     data = resp_predict.json()
                     predictions = data.get("predictions", [])
@@ -171,7 +172,8 @@ class GoogleVeoProvider(BaseAIProvider):
             }
 
             with httpx.Client(timeout=30.0) as client:
-                resp = client.post(endpoint, json=payload)
+                headers = {"x-goog-api-key": self.api_key}
+                resp = client.post(endpoint, json=payload, headers=headers)
                 if resp.status_code in (200, 202):
                     data = resp.json()
                     operation_name = data.get("name", "")
@@ -196,7 +198,8 @@ class GoogleVeoProvider(BaseAIProvider):
         try:
             url = f"{self.BASE_URL}/{external_job_id}?key={self.api_key}"
             with httpx.Client(timeout=15.0) as client:
-                resp = client.get(url)
+                headers = {"x-goog-api-key": self.api_key}
+                resp = client.get(url, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
                     if data.get("done"):

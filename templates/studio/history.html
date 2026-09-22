@@ -102,6 +102,11 @@
                     <span>🖼️</span>
                     <span>Images</span>
                 </a>
+                <a href="{% url 'generations:history' %}?type=audio"
+                   class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap {% if request.GET.type == 'audio' %}fl-gradient-orange-btn text-white font-bold shadow-md{% else %}text-slate-400 hover:text-white{% endif %}">
+                    <span>🔊</span>
+                    <span>Audio Tracks</span>
+                </a>
                 <a href="{% url 'generations:history' %}?type=favorites"
                    class="px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 whitespace-nowrap {% if request.GET.type == 'favorites' %}fl-gradient-orange-btn text-white font-bold shadow-md{% else %}text-slate-400 hover:text-white{% endif %}">
                     <span>❤️</span>
@@ -135,9 +140,24 @@
                     <div class="aspect-video bg-black/80 relative overflow-hidden flex items-center justify-center">
                         {% if gen.output_media %}
                             {% if gen.generation_type == 'video' %}
-                                <video controls preload="metadata" class="w-full h-full object-contain" poster="{{ gen.output_media.thumbnail_url }}">
+                                <video autoplay loop muted playsinline controls preload="auto" class="w-full h-full object-contain" poster="{{ gen.output_media.thumbnail_url }}">
                                     <source src="{{ gen.output_media.url }}" type="video/mp4">
                                 </video>
+                            {% elif gen.generation_type == 'audio' %}
+                                <div class="w-full h-full bg-gradient-to-br from-[#121418] via-[#090a0c] to-[#181a20] p-4 flex flex-col justify-between items-center relative overflow-hidden">
+                                    <div class="absolute -right-8 -top-8 w-28 h-28 bg-orange-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                                    <div class="flex items-center gap-1.5 py-3 pointer-events-none">
+                                        <span class="w-1 h-3.5 bg-orange-500 rounded-full animate-pulse"></span>
+                                        <span class="w-1 h-7 bg-orange-400 rounded-full animate-pulse" style="animation-delay: 150ms;"></span>
+                                        <span class="w-1 h-5 bg-amber-400 rounded-full animate-pulse" style="animation-delay: 300ms;"></span>
+                                        <span class="w-1 h-8 bg-orange-500 rounded-full animate-pulse" style="animation-delay: 75ms;"></span>
+                                        <span class="w-1 h-4 bg-orange-400 rounded-full animate-pulse" style="animation-delay: 220ms;"></span>
+                                    </div>
+                                    <audio controls class="w-full h-8 max-w-[90%] opacity-90 hover:opacity-100 transition z-10">
+                                        <source src="{{ gen.output_media.url }}" type="audio/mpeg">
+                                        Your browser does not support audio playback.
+                                    </audio>
+                                </div>
                             {% else %}
                                 <img src="{{ gen.output_media.url }}" alt="{{ gen.prompt }}" loading="lazy" decoding="async" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500">
                             {% endif %}
@@ -159,7 +179,7 @@
                         <!-- Top-Left Badges: Modality & Model -->
                         <div class="absolute top-2.5 left-2.5 flex items-center gap-1.5 pointer-events-none">
                             <span class="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-black/70 backdrop-blur-md text-white border border-white/10 font-mono">
-                                {% if gen.generation_type == 'video' %}🎬 {{ gen.duration }}s{% else %}🖼️ 4K{% endif %}
+                                {% if gen.generation_type == 'video' %}🎬 {{ gen.duration }}s{% elif gen.generation_type == 'audio' %}🔊 Audio{% else %}🖼️ 4K{% endif %}
                             </span>
                             <span class="px-2 py-0.5 rounded-md text-[9px] font-bold bg-orange-500/25 backdrop-blur-md border border-orange-500/40 text-orange-300 font-mono">
                                 {{ gen.model.display_name|truncatechars:14 }}
@@ -174,30 +194,42 @@
                             ♥
                         </button>
 
-                        <!-- Bottom-Left Character Tag (if attached) -->
-                        {% if gen.character %}
-                            <div class="absolute bottom-2 left-2 pointer-events-none">
+                        <!-- Bottom-Left Character Tag or Audio Badge -->
+                        <div class="absolute bottom-2 left-2 flex items-center gap-1.5 pointer-events-none">
+                            {% if gen.character %}
                                 <span class="px-2 py-0.5 rounded bg-amber-500/20 backdrop-blur-md border border-amber-500/30 text-amber-300 text-[9px] font-mono flex items-center gap-1">
                                     <span>👤</span>
                                     <span>{{ gen.character.name }}</span>
                                 </span>
-                            </div>
-                        {% endif %}
+                            {% endif %}
+                            {% if gen.latest_audio %}
+                                <span class="px-2 py-0.5 rounded bg-orange-500/25 backdrop-blur-md border border-orange-500/40 text-orange-300 text-[9px] font-mono flex items-center gap-1">
+                                    <span>🔊</span>
+                                    <span>Sound Track</span>
+                                </span>
+                            {% endif %}
+                        </div>
                     </div>
 
                     <!-- Metadata Body -->
                     <div class="p-4 space-y-3 flex-1 flex flex-col justify-between">
                         <div class="space-y-1.5">
                             <!-- Prompt Excerpt -->
-                            <p class="text-xs font-medium text-slate-200 line-clamp-2 leading-relaxed" title="{{ gen.prompt }}">
-                                {{ gen.prompt }}
-                            </p>
+                            <a href="{% url 'generations:detail' gen.id %}" class="block group/title">
+                                <p class="text-xs font-medium text-slate-200 line-clamp-2 leading-relaxed group-hover/title:text-orange-300 transition" title="{{ gen.prompt }}">
+                                    {{ gen.prompt }}
+                                </p>
+                            </a>
 
                             <!-- Specs info -->
                             <div class="flex items-center gap-2 text-[10px] font-mono text-slate-400 pt-1">
-                                <span class="text-orange-300">{{ gen.aspect_ratio }}</span>
+                                <span class="text-orange-300">{% if gen.generation_type == 'audio' %}Audio Track{% else %}{{ gen.aspect_ratio }}{% endif %}</span>
                                 <span>•</span>
                                 <span>{{ gen.created_at|date:"M d, H:i" }}</span>
+                                {% if gen.generation_type == 'video' and not gen.latest_audio %}
+                                    <span>•</span>
+                                    <span class="text-slate-500">Silent Video</span>
+                                {% endif %}
                             </div>
                         </div>
 
@@ -212,6 +244,16 @@
                             </button>
 
                             <div class="flex items-center gap-1.5">
+                                {% if gen.generation_type == 'video' %}
+                                    <!-- Synthesize Sound or Inspector -->
+                                    <a href="{% url 'generations:detail' gen.id %}"
+                                       title="{% if gen.latest_audio %}Inspector & Audio Player{% else %}Synthesize Sound FX & Voice{% endif %}"
+                                       class="px-2.5 py-1 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-[11px] text-orange-400 font-bold border border-orange-500/30 transition flex items-center gap-1">
+                                        <span>🔊</span>
+                                        <span>{% if gen.latest_audio %}Audio{% else %}+ Sound{% endif %}</span>
+                                    </a>
+                                {% endif %}
+
                                 {% if gen.output_media %}
                                     <!-- Download Asset -->
                                     <a href="{{ gen.output_media.url }}"

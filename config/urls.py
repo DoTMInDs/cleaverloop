@@ -2,10 +2,12 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic.base import RedirectView
 from apps.studio.views import HomeView, ExploreView
 from apps.billing.views import PricingPlansView
 
 urlpatterns = [
+    path('favicon.ico', RedirectView.as_view(url='/static/images/logo/favicon.png', permanent=True)),
     path('admin/', admin.site.urls),
     
     # Dedicated Homepage, Explore Feed & Pricing

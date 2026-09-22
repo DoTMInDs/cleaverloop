@@ -46,6 +46,14 @@ class BaseAIProvider(ABC):
         """Submit text-to-video or image-to-video request."""
         pass
 
+    def generate_audio(self, model_id: str, request: GenerationRequest) -> ProviderJobResult:
+        """Submit text-to-audio / foley / TTS request."""
+        return ProviderJobResult(
+            external_job_id="",
+            status="failed",
+            error_message=f"Provider {getattr(self, 'provider_slug', 'unknown')} does not support audio generation."
+        )
+
     @abstractmethod
     def get_status(self, external_job_id: str) -> ProviderJobResult:
         """Poll the current status of an in-flight job."""
@@ -156,20 +164,41 @@ def load_image_as_base64(image_path_or_url: str) -> Optional[str]:
 
 def load_image_as_data_uri(image_path_or_url: str, default_mime: str = "image/png") -> Optional[str]:
     """Convert an image path or URL into a data:image/...;base64,... URI."""
-    if not image_path_or_url:
-        return None
-    if image_path_or_url.startswith('data:'):
-        return image_path_or_url
+    return load_media_as_data_uri(image_path_or_url, default_mime=default_mime)
 
-    b64 = load_image_as_base64(image_path_or_url)
+def load_media_as_data_uri(media_path_or_url: str, default_mime: str = "application/octet-stream") -> Optional[str]:
+    """Convert any media path or URL into a data:<mime>;base64,... URI."""
+    if not media_path_or_url:
+        return None
+    if media_path_or_url.startswith('data:'):
+        return media_path_or_url
+
+    b64 = load_image_as_base64(media_path_or_url)
     if b64:
-        ext = image_path_or_url.lower()
+        ext = media_path_or_url.lower()
         if ext.endswith(('.jpg', '.jpeg')):
             mime = "image/jpeg"
+        elif ext.endswith('.png'):
+            mime = "image/png"
         elif ext.endswith('.webp'):
             mime = "image/webp"
+        elif ext.endswith('.mp4'):
+            mime = "video/mp4"
+        elif ext.endswith('.webm'):
+            mime = "video/webm"
+        elif ext.endswith('.mov'):
+            mime = "video/quicktime"
+        elif ext.endswith('.mp3'):
+            mime = "audio/mpeg"
+        elif ext.endswith('.wav'):
+            mime = "audio/wav"
+        elif ext.endswith('.ogg'):
+            mime = "audio/ogg"
+        elif ext.endswith(('.m4a', '.aac')):
+            mime = "audio/mp4"
         else:
             mime = default_mime
         return f"data:{mime};base64,{b64}"
 
-    return image_path_or_url if image_path_or_url.startswith(('http://', 'https://')) else None
+    return media_path_or_url if media_path_or_url.startswith(('http://', 'https://')) else None
+

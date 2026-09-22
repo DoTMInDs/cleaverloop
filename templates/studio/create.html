@@ -4,60 +4,169 @@
 {% block title %}Create Studio — CleaverLoop AI (Flashloop Edition){% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-8 relative" x-data="{
-    generationType: '{% if request.GET.type %}{{ request.GET.type|escapejs }}{% else %}video{% endif %}',
-    aspectRatio: '{% if request.GET.aspect %}{{ request.GET.aspect|escapejs }}{% elif request.GET.aspect_ratio %}{{ request.GET.aspect_ratio|escapejs }}{% else %}16:9{% endif %}',
-    duration: {% if request.GET.duration %}{{ request.GET.duration }}{% else %}5{% endif %},
-    modelDropdownOpen: false,
-    selectedModel: '{% if request.GET.model %}{{ request.GET.model|escapejs }}{% elif request.GET.model_id %}{{ request.GET.model_id|escapejs }}{% else %}automatic{% endif %}',
-    selectedModelName: 'Automatic Smart Routing',
-    selectedModelBadge: 'Smart Auto',
-    selectedModelIcon: '✨',
-    selectedModelDesc: 'Auto-selects optimal engine with failover protection',
-    promptText: '{% if request.GET.prompt %}{{ request.GET.prompt|escapejs }}{% else %}{% endif %}',
-    negativePrompt: '{% if request.GET.negative_prompt %}{{ request.GET.negative_prompt|escapejs }}{% else %}{% endif %}',
-    showNegative: {% if request.GET.negative_prompt %}true{% else %}false{% endif %},
-    hasReference: false,
-    referencePreview: null,
-    quality: '{% if request.GET.quality %}{{ request.GET.quality|escapejs }}{% else %}standard{% endif %}',
-    characterDropdownOpen: false,
-    characterId: '{% if request.GET.character_id %}{{ request.GET.character_id|escapejs }}{% else %}{% endif %}',
-    selectedCharacterName: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}No Character (Standalone Scene){% endif %}',
-    selectedCharacterAvatar: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" and c.avatar %}{{ c.avatar.url }}{% endif %}{% endfor %}{% endif %}',
-    selectedCharacterTagline: 'Standalone Scene',
-    estimatedCredits: 750,
-    isEnhancing: false,
-    
-    init() {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('prompt') && !this.promptText) {
-            this.promptText = params.get('prompt');
-        }
-        if (params.has('type')) {
-            this.generationType = params.get('type');
-        }
-        if (params.has('aspect')) {
-            this.aspectRatio = params.get('aspect');
-        } else if (params.has('aspect_ratio')) {
-            this.aspectRatio = params.get('aspect_ratio');
-        }
-        if (params.has('duration')) {
-            this.duration = parseInt(params.get('duration')) || 5;
-        }
-        if (params.has('negative_prompt')) {
-            this.negativePrompt = params.get('negative_prompt');
-            this.showNegative = true;
-        }
-        if (params.has('character_id')) {
-            this.characterId = params.get('character_id');
-        }
-        const modelParam = params.get('model') || params.get('model_id') || this.selectedModel;
-        if (modelParam && modelParam !== 'automatic') {
-            this.selectedModel = modelParam;
-            this.updateModelMetadata(modelParam);
-        }
-        this.calculateCredits();
-        if (this.promptText) {
+<script>
+function createStudioApp() {
+    const dynamicModels = {
+        {% for m in image_models %}
+        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "openai" %}🤖{% elif m.provider.slug == "flux" or m.provider.slug == "fal" %}🔮{% else %}🎨{% endif %}', desc: '{{ m.provider.name|escapejs }} • {{ m.credit_cost_fixed }} credits', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'image' },
+        {% endfor %}
+        {% for m in video_models %}
+        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "kling" %}⚡{% elif m.provider.slug == "minimax" %}🪐{% elif m.provider.slug == "seedance" %}🎬{% elif m.provider.slug == "mock" %}🧪{% else %}🎥{% endif %}', desc: '{{ m.provider.name|escapejs }} • {% if m.supports_audio %}Audio FX • {% endif %}{{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'video' },
+        {% endfor %}
+        {% for m in audio_models %}
+        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "elevenlabs" %}🔊{% elif m.provider.slug == "fal" %}🎙️{% else %}🎧{% endif %}', desc: '{{ m.provider.name|escapejs }} • {{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'audio' },
+        {% endfor %}
+        'best_quality': { name: 'Best Cinematic Quality', badge: 'Ultra HQ', icon: '⭐', desc: 'Maximum fidelity' },
+        'fastest': { name: 'Fastest Generation', badge: 'Ultra Fast', icon: '⚡', desc: 'Low latency turnaround' },
+        'budget': { name: 'Budget Economical', badge: 'Lowest Cost', icon: '🏷️', desc: 'Conserves user credits' },
+        'automatic': { name: 'Automatic Smart Routing', badge: 'Smart Auto', icon: '✨', desc: 'Auto-selects optimal engine' }
+    };
+
+    return {
+        generationType: '{% if request.GET.type %}{{ request.GET.type|escapejs }}{% else %}video{% endif %}',
+        aspectRatio: '{% if request.GET.aspect %}{{ request.GET.aspect|escapejs }}{% elif request.GET.aspect_ratio %}{{ request.GET.aspect_ratio|escapejs }}{% else %}16:9{% endif %}',
+        duration: {% if request.GET.duration %}{{ request.GET.duration }}{% else %}5{% endif %},
+        voice: 'adam',
+        selectedVoiceName: 'Adam (Deep Narrator)',
+        selectedVoiceDesc: 'Authoritative, rich storytelling tone',
+        voiceDropdownOpen: false,
+        modelDropdownOpen: false,
+        selectedModel: '{% if request.GET.model %}{{ request.GET.model|escapejs }}{% elif request.GET.model_id %}{{ request.GET.model_id|escapejs }}{% else %}automatic{% endif %}',
+        selectedModelName: 'Automatic Smart Routing',
+        selectedModelBadge: 'Smart Auto',
+        selectedModelIcon: '✨',
+        selectedModelDesc: 'Auto-selects optimal engine with failover protection',
+        promptText: '{% if request.GET.prompt %}{{ request.GET.prompt|escapejs }}{% else %}{% endif %}',
+        negativePrompt: '{% if request.GET.negative_prompt %}{{ request.GET.negative_prompt|escapejs }}{% else %}{% endif %}',
+        showNegative: {% if request.GET.negative_prompt %}true{% else %}false{% endif %},
+        hasReference: false,
+        referencePreview: null,
+        quality: '{% if request.GET.quality %}{{ request.GET.quality|escapejs }}{% else %}standard{% endif %}',
+        characterDropdownOpen: false,
+        characterId: '{% if request.GET.character_id %}{{ request.GET.character_id|escapejs }}{% else %}{% endif %}',
+        selectedCharacterName: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}No Character (Standalone Scene){% endif %}',
+        selectedCharacterAvatar: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" and c.avatar %}{{ c.avatar.url }}{% endif %}{% endfor %}{% endif %}',
+        selectedCharacterTagline: 'Standalone Scene',
+        estimatedCredits: 750,
+        isEnhancing: false,
+
+        init() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('prompt') && !this.promptText) {
+                this.promptText = params.get('prompt');
+            }
+            if (params.has('type')) {
+                this.generationType = params.get('type');
+            }
+            if (params.has('aspect')) {
+                this.aspectRatio = params.get('aspect');
+            } else if (params.has('aspect_ratio')) {
+                this.aspectRatio = params.get('aspect_ratio');
+            }
+            if (params.has('duration')) {
+                this.duration = parseInt(params.get('duration')) || 5;
+            }
+            if (params.has('voice')) {
+                this.voice = params.get('voice');
+            }
+            if (params.has('negative_prompt')) {
+                this.negativePrompt = params.get('negative_prompt');
+                this.showNegative = true;
+            }
+            if (params.has('character_id')) {
+                this.characterId = params.get('character_id');
+            }
+            const modelParam = params.get('model') || params.get('model_id') || this.selectedModel;
+            if (modelParam && modelParam !== 'automatic') {
+                this.selectedModel = modelParam;
+                this.updateModelMetadata(modelParam);
+            }
+            this.calculateCredits();
+            if (this.promptText) {
+                this.$nextTick(() => {
+                    const el = document.getElementById('fl-prompt-textarea');
+                    if (el) {
+                        el.focus();
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+            }
+        },
+
+        updateModelMetadata(modelId) {
+            if (dynamicModels[modelId]) {
+                this.selectedModelName = dynamicModels[modelId].name;
+                this.selectedModelBadge = dynamicModels[modelId].badge;
+                this.selectedModelIcon = dynamicModels[modelId].icon;
+                this.selectedModelDesc = dynamicModels[modelId].desc;
+            }
+        },
+
+        selectCharacter(id, name, avatar, tagline) {
+            this.characterId = id;
+            this.selectedCharacterName = name;
+            this.selectedCharacterAvatar = avatar || '';
+            this.selectedCharacterTagline = tagline || '';
+            this.characterDropdownOpen = false;
+        },
+
+        selectVoice(id, name, desc) {
+            this.voice = id;
+            this.selectedVoiceName = name;
+            this.selectedVoiceDesc = desc || '';
+            this.voiceDropdownOpen = false;
+        },
+
+        calculateCredits() {
+            const currentModel = dynamicModels[this.selectedModel];
+            const dur = parseInt(this.duration) || 5;
+
+            if (currentModel) {
+                if (currentModel.type === 'video' || currentModel.type === 'audio') {
+                    this.estimatedCredits = currentModel.fixed + (currentModel.perSec * dur);
+                } else {
+                    this.estimatedCredits = currentModel.fixed;
+                }
+            } else {
+                if (this.generationType === 'image') {
+                    if (this.selectedModel === 'best_quality') this.estimatedCredits = 1500;
+                    else if (this.selectedModel === 'fastest' || this.selectedModel === 'budget') this.estimatedCredits = 250;
+                    else this.estimatedCredits = 750;
+                } else if (this.generationType === 'audio') {
+                    if (this.selectedModel === 'fastest' || this.selectedModel === 'budget') this.estimatedCredits = 25;
+                    else this.estimatedCredits = 15 + (2 * dur);
+                } else {
+                    if (this.selectedModel === 'best_quality') this.estimatedCredits = 8500 * dur;
+                    else if (this.selectedModel === 'fastest' || this.selectedModel === 'budget') this.estimatedCredits = 2000 * dur;
+                    else this.estimatedCredits = 4400 * dur;
+                }
+            }
+        },
+
+        selectModel(id, name, badge, icon, desc) {
+            this.selectedModel = id;
+            this.selectedModelName = name;
+            this.selectedModelBadge = badge;
+            this.selectedModelIcon = icon;
+            this.selectedModelDesc = desc || '';
+            this.modelDropdownOpen = false;
+            this.calculateCredits();
+        },
+
+        setGenerationType(type) {
+            this.generationType = type;
+            this.calculateCredits();
+            if (!['automatic', 'best_quality', 'fastest', 'budget'].includes(this.selectedModel)) {
+                this.selectModel('automatic', 'Automatic Smart Routing', 'Smart Auto', '✨', 'Auto-selects optimal engine with failover protection');
+            }
+        },
+
+        applyPreset(preset) {
+            this.promptText = preset.prompt;
+            this.generationType = preset.type;
+            this.aspectRatio = preset.aspect;
+            this.duration = preset.duration;
+            this.calculateCredits();
             this.$nextTick(() => {
                 const el = document.getElementById('fl-prompt-textarea');
                 if (el) {
@@ -65,147 +174,105 @@
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             });
-        }
-    },
+        },
 
-    updateModelMetadata(modelId) {
-        const modelMap = {
-            'nano-banana-2-lite': { name: 'Nano Banana 2 Lite', badge: 'GOOGLE', icon: '🌐', desc: 'Fast draft 250cr' },
-            'nano-banana-2': { name: 'Nano Banana 2 (Standard)', badge: 'GOOGLE', icon: '🌐', desc: 'Photoreal 2K 750cr' },
-            'nano-banana-pro': { name: 'Nano Banana Pro', badge: 'GOOGLE', icon: '🌐', desc: '4K Masterpiece 1,500cr' },
-            'veo-3.1-lite': { name: 'Veo 3.1 Lite', badge: 'GOOGLE', icon: '🌐', desc: 'Draft Motion 2,000cr/s' },
-            'veo-3.1-fast': { name: 'Veo 3.1 Fast', badge: 'GOOGLE', icon: '🌐', desc: 'Standard + Native Audio 4,400cr/s' },
-            'veo-3.1-standard': { name: 'Veo 3.1 Standard', badge: 'GOOGLE', icon: '🌐', desc: 'Cinema Master + Native Audio 8,500cr/s' },
-            'best_quality': { name: this.generationType === 'video' ? 'Best Cinematic Quality' : 'Best Photoreal Quality', badge: 'Ultra 4K', icon: '⭐', desc: 'Maximum visual fidelity' },
-            'fastest': { name: 'Fastest Generation', badge: 'Ultra Fast', icon: '⚡', desc: 'Low latency turnaround' },
-            'budget': { name: 'Budget Economical', badge: 'Lowest Cost', icon: '🏷️', desc: 'Conserves user credits' },
-            'automatic': { name: 'Automatic Smart Routing', badge: 'Smart Auto', icon: '✨', desc: 'Auto-selects optimal engine' }
-        };
-        if (modelMap[modelId]) {
-            this.selectedModelName = modelMap[modelId].name;
-            this.selectedModelBadge = modelMap[modelId].badge;
-            this.selectedModelIcon = modelMap[modelId].icon;
-            this.selectedModelDesc = modelMap[modelId].desc;
-        }
-    },
+        remakeFromGen(prompt, type, aspect, duration, modelId) {
+            this.promptText = prompt;
+            this.generationType = type || 'video';
+            this.aspectRatio = aspect || '16:9';
+            this.duration = duration || 5;
+            if (modelId) {
+                this.selectedModel = modelId;
+                this.updateModelMetadata(modelId);
+            }
+            this.calculateCredits();
+            this.$nextTick(() => {
+                const el = document.getElementById('fl-prompt-textarea');
+                if (el) {
+                    el.focus();
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            });
+        },
 
-    selectCharacter(id, name, avatar, tagline) {
-        this.characterId = id;
-        this.selectedCharacterName = name;
-        this.selectedCharacterAvatar = avatar || '';
-        this.selectedCharacterTagline = tagline || '';
-        this.characterDropdownOpen = false;
-    },
-    
-    calculateCredits() {
-        if (this.generationType === 'image') {
-            if (this.selectedModel === 'nano-banana-2-lite' || this.selectedModel === 'fastest' || this.selectedModel === 'budget') {
-                this.estimatedCredits = 250;
-            } else if (this.selectedModel === 'nano-banana-pro' || this.selectedModel === 'best_quality') {
-                this.estimatedCredits = 1500;
+        enhancePrompt() {
+            if (!this.promptText.trim()) {
+                this.promptText = 'Cinematic drone shot gliding through futuristic cyber city, wet neon reflections, 4k ultra-detailed';
+            }
+            this.isEnhancing = true;
+            setTimeout(() => {
+                const enhancements = [
+                    ', cinematic 35mm lens, atmospheric volumetric haze, photorealistic ray tracing, hyper-detailed textures, 8k resolution, dramatic color grading',
+                    ', ultra-high fidelity, masterwork lighting, Unreal Engine 5 render aesthetic, soft diffused shadows, high dynamic range, crisp depth of field',
+                    ', dynamic camera motion, natural film grain, anamorphic flare, studio quality production, trending on ArtStation, award-winning cinematography'
+                ];
+                const pick = enhancements[Math.floor(Math.random() * enhancements.length)];
+                if (!this.promptText.includes('cinematic') && !this.promptText.includes('8k')) {
+                    this.promptText = this.promptText.trim() + pick;
+                }
+                this.isEnhancing = false;
+            }, 300);
+        },
+
+        enhanceForTalking() {
+            if (!this.promptText.trim()) {
+                this.promptText = 'A person walking down a busy sunlit street looking at their documents';
+            }
+            this.isEnhancing = true;
+            setTimeout(() => {
+                let base = this.promptText.trim().replace(/\.+$/, '');
+                const talkingTags = [
+                    ', medium close-up tracking shot, speaking their inner thoughts aloud, natural mouth movements and lip articulation, expressive facial gestures, subtle thoughtful nods, authentic background motion, cinematic 8k photorealism',
+                    ', close-up portrait, talking naturally with realistic lip movement and facial expressions, believable human emotion, subtle breathing, 35mm film aesthetic, shallow depth of field',
+                    ', walking forward while speaking passionately to themselves, synchronized mouth movement, determined expression, subtle gestures, masterwork lighting, 4k ultra-realistic'
+                ];
+                const pick = talkingTags[Math.floor(Math.random() * talkingTags.length)];
+                if (!base.includes('mouth movements') && !base.includes('lip articulation') && !base.includes('speaking')) {
+                    this.promptText = base + pick;
+                }
+                this.isEnhancing = false;
+            }, 300);
+        },
+
+        formatAsSpokenThoughts() {
+            this.isEnhancing = true;
+            setTimeout(() => {
+                let text = this.promptText.trim();
+                if (!text) {
+                    text = "Alright... today's the day. Just gotta keep my head up and walk in there like I own the place.";
+                } else {
+                    if (!text.includes('...')) {
+                        text = text.replace(/([,;])\s*/g, '... ');
+                        if (!text.endsWith('.')) text += '...';
+                    }
+                }
+                this.promptText = text;
+                this.isEnhancing = false;
+            }, 250);
+        },
+
+        handleFileChange(e) {
+            const file = e.target.files[0];
+            if (file) {
+                this.hasReference = true;
+                this.referencePreview = URL.createObjectURL(file);
             } else {
-                this.estimatedCredits = 750; // nano-banana-2 (Standard photoreal)
+                this.hasReference = false;
+                this.referencePreview = null;
             }
-        } else {
-            if (this.selectedModel === 'veo-3.1-lite' || this.selectedModel === 'fastest' || this.selectedModel === 'budget') {
-                this.estimatedCredits = 2000 * this.duration;
-            } else if (this.selectedModel === 'veo-3.1-standard' || this.selectedModel === 'best_quality') {
-                this.estimatedCredits = 8500 * this.duration;
-            } else {
-                this.estimatedCredits = 4400 * this.duration; // veo-3.1-fast (5s = 22,000, 10s = 44,000)
-            }
-        }
-    },
+        },
 
-    selectModel(id, name, badge, icon, desc) {
-        this.selectedModel = id;
-        this.selectedModelName = name;
-        this.selectedModelBadge = badge;
-        this.selectedModelIcon = icon;
-        this.selectedModelDesc = desc || '';
-        this.modelDropdownOpen = false;
-        this.calculateCredits();
-    },
-
-    setGenerationType(type) {
-        this.generationType = type;
-        this.calculateCredits();
-        if (!['automatic', 'best_quality', 'fastest', 'budget'].includes(this.selectedModel)) {
-            this.selectModel('automatic', 'Automatic Smart Routing', 'Smart Auto', '✨', 'Auto-selects optimal engine with failover protection');
-        }
-    },
-
-    applyPreset(preset) {
-        this.promptText = preset.prompt;
-        this.generationType = preset.type;
-        this.aspectRatio = preset.aspect;
-        this.duration = preset.duration;
-        this.calculateCredits();
-        this.$nextTick(() => {
-            const el = document.getElementById('fl-prompt-textarea');
-            if (el) {
-                el.focus();
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        });
-    },
-
-    remakeFromGen(prompt, type, aspect, duration, modelId) {
-        this.promptText = prompt;
-        this.generationType = type || 'video';
-        this.aspectRatio = aspect || '16:9';
-        this.duration = duration || 5;
-        if (modelId) {
-            this.selectedModel = modelId;
-            this.updateModelMetadata(modelId);
-        }
-        this.calculateCredits();
-        this.$nextTick(() => {
-            const el = document.getElementById('fl-prompt-textarea');
-            if (el) {
-                el.focus();
-                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        });
-    },
-
-    enhancePrompt() {
-        if (!this.promptText.trim()) {
-            this.promptText = 'Cinematic drone shot gliding through futuristic cyber city, wet neon reflections, 4k ultra-detailed';
-        }
-        this.isEnhancing = true;
-        setTimeout(() => {
-            const enhancements = [
-                ', cinematic 35mm lens, atmospheric volumetric haze, photorealistic ray tracing, hyper-detailed textures, 8k resolution, dramatic color grading',
-                ', ultra-high fidelity, masterwork lighting, Unreal Engine 5 render aesthetic, soft diffused shadows, high dynamic range, crisp depth of field',
-                ', dynamic camera motion, natural film grain, anamorphic flare, studio quality production, trending on ArtStation, award-winning cinematography'
-            ];
-            const pick = enhancements[Math.floor(Math.random() * enhancements.length)];
-            if (!this.promptText.includes('cinematic') && !this.promptText.includes('8k')) {
-                this.promptText = this.promptText.trim() + pick;
-            }
-            this.isEnhancing = false;
-        }, 350);
-    },
-
-    handleFileChange(e) {
-        const file = e.target.files[0];
-        if (file) {
-            this.hasReference = true;
-            this.referencePreview = URL.createObjectURL(file);
-        } else {
+        clearReference() {
             this.hasReference = false;
             this.referencePreview = null;
+            const input = document.getElementById('fl-ref-input');
+            if (input) input.value = '';
         }
-    },
+    };
+}
+</script>
 
-    clearReference() {
-        this.hasReference = false;
-        this.referencePreview = null;
-        const input = document.getElementById('fl-ref-input');
-        if (input) input.value = '';
-    }
-}" x-init="init()">
+<div class="max-w-6xl mx-auto space-y-8 relative" x-data="createStudioApp()">
 
     <!-- ===================================================
          FLASHLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE
@@ -350,22 +417,30 @@
         <!-- Top Row: Mode Switcher Tabs + Inspiration Header -->
         <div class="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-white/[0.06]">
             <!-- Segmented Mode Switcher -->
-            <div class="inline-flex p-1 rounded-2xl bg-[#0e1012] border border-white/[0.08]">
+            <div class="inline-flex p-1 rounded-2xl bg-[#0e1012] border border-white/[0.08] flex-wrap sm:flex-nowrap gap-1">
                 <button type="button"
                         @click="setGenerationType('video')"
                         :class="generationType === 'video' ? 'fl-gradient-orange-btn text-white font-bold shadow-lg fl-glow-orange' : 'text-slate-400 hover:text-white'"
-                        class="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2">
+                        class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-1.5">
                     <span>🎬</span>
                     <span>AI Video</span>
-                    <span class="text-[10px] opacity-75 font-mono">5s/10s/15s</span>
+                    <span class="text-[10px] opacity-75 font-mono">3s–15s</span>
                 </button>
                 <button type="button"
                         @click="setGenerationType('image')"
                         :class="generationType === 'image' ? 'fl-gradient-orange-btn text-white font-bold shadow-lg fl-glow-orange' : 'text-slate-400 hover:text-white'"
-                        class="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2">
+                        class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-1.5">
                     <span>🎨</span>
                     <span>AI Image</span>
                     <span class="text-[10px] opacity-75 font-mono">4K HD</span>
+                </button>
+                <button type="button"
+                        @click="setGenerationType('audio')"
+                        :class="generationType === 'audio' ? 'fl-gradient-orange-btn text-white font-bold shadow-lg fl-glow-orange' : 'text-slate-400 hover:text-white'"
+                        class="px-3.5 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-1.5">
+                    <span>🔊</span>
+                    <span>AI Audio & Voice</span>
+                    <span class="text-[10px] opacity-75 font-mono">ElevenLabs</span>
                 </button>
             </div>
 
@@ -373,7 +448,7 @@
             <div class="flex items-center gap-3 text-xs text-slate-400">
                 <span class="hidden sm:inline-flex items-center gap-1.5">
                     <span class="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
-                    <span>Auto-Failover Protection Active</span>
+                    <span x-text="generationType === 'audio' ? 'ElevenLabs & Foley FX Active' : 'Auto-Failover Protection Active'"></span>
                 </span>
                 <span class="px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[11px] font-mono text-slate-300">
                     ESC to clear
@@ -404,25 +479,50 @@
 
         <!-- Central Prompt Input Box -->
         <div class="relative rounded-2xl bg-[#0f1113] border border-white/[0.08] focus-within:border-orange-500/50 focus-within:ring-1 focus-within:ring-orange-500/30 transition-all duration-200 p-4 space-y-3">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-wrap items-center justify-between gap-2">
                 <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                    <span>Prompt Specification</span>
+                    <span x-text="generationType === 'audio' ? '🎙️ Speech Script or Foley Prompt' : 'Prompt Specification'"></span>
                 </label>
 
-                <!-- Super Agent Magic Expander Button -->
-                <button type="button"
-                        @click="enhancePrompt()"
-                        :disabled="isEnhancing"
-                        class="px-2.5 py-1 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/30 text-orange-400 text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
-                    <span x-show="!isEnhancing">✨ Enhance with Super Agent</span>
-                    <span x-show="isEnhancing" class="flex items-center gap-1">
-                        <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Synthesizing...</span>
-                    </span>
-                </button>
+                <!-- Prompt Specification Quick Action Buttons -->
+                <div class="flex items-center gap-1.5">
+                    <!-- Make Character Talk & React (Video Mode) -->
+                    <button type="button"
+                            x-show="generationType === 'video'"
+                            @click="enhanceForTalking()"
+                            :disabled="isEnhancing"
+                            title="Inject natural mouth movements, acting, and talking articulation into prompt"
+                            class="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/40 text-orange-300 text-xs font-bold transition flex items-center gap-1 shadow-sm hover:scale-[1.02]">
+                        <span>🗣️</span>
+                        <span>Make Character Talk & React</span>
+                    </button>
+
+                    <!-- Format Spoken Thoughts (Audio Mode) -->
+                    <button type="button"
+                            x-show="generationType === 'audio'"
+                            @click="formatAsSpokenThoughts()"
+                            :disabled="isEnhancing"
+                            title="Format speech into natural first-person spoken thoughts with breath pauses"
+                            class="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/40 text-orange-300 text-xs font-bold transition flex items-center gap-1 shadow-sm hover:scale-[1.02]">
+                        <span>💭</span>
+                        <span>Format Spoken Thoughts</span>
+                    </button>
+
+                    <!-- Super Agent Standard Enhance -->
+                    <button type="button"
+                            @click="enhancePrompt()"
+                            :disabled="isEnhancing"
+                            class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-slate-300 hover:text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm">
+                        <span x-show="!isEnhancing">✨ Enhance</span>
+                        <span x-show="isEnhancing" class="flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Polishing...</span>
+                        </span>
+                    </button>
+                </div>
             </div>
 
             <!-- Main Prompt Textarea -->
@@ -431,7 +531,9 @@
                       rows="3"
                       required
                       x-model="promptText"
-                      placeholder="Describe your vision in rich visual detail... e.g. Cinematic wide tracking shot of a glowing neon cyber vehicle gliding through rainy Tokyo at midnight, wet reflections, authentic film grain, 4k ultra-realistic"
+                      :placeholder="generationType === 'audio' 
+                        ? 'Enter dialogue text for ElevenLabs voiceover (e.g. \'Welcome to CleaverLoop, where AI meets cinematic imagination.\') or describe sound effects (e.g. \'Heavy rain on a metal roof with distant rolling thunder\')...' 
+                        : 'Describe your vision in rich visual detail... e.g. Cinematic wide tracking shot of a glowing neon cyber vehicle gliding through rainy Tokyo at midnight, wet reflections, authentic film grain, 4k ultra-realistic'"
                       class="w-full bg-transparent border-none text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-0 resize-none leading-relaxed"></textarea>
 
             <!-- Textarea Footer: Char count & Negative Prompt Trigger -->
@@ -466,7 +568,8 @@
         </div>
 
         <!-- Optional Asset Reference & AI Character Row -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+        <!-- Row: Character & Reference Asset for Video/Image OR Voice Persona & Sound Design for Audio -->
+        <div x-show="generationType !== 'audio'" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
             <!-- Consistent Character Selector (Custom Flashloop Popover) -->
             <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] p-3.5 space-y-2 relative"
                  @click.outside="characterDropdownOpen = false">
@@ -608,6 +711,104 @@
                             </button>
                         </div>
                     </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio Modality: Voice Persona & Sound Mode Deck -->
+        <div x-show="generationType === 'audio'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+            <!-- ElevenLabs Voice Persona Picker -->
+            <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] p-3.5 space-y-2 relative"
+                 @click.outside="voiceDropdownOpen = false">
+                <input type="hidden" name="voice" :value="voice">
+                
+                <div class="flex items-center justify-between">
+                    <label class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                        <span class="text-orange-400">🎙️</span>
+                        <span>ElevenLabs Voice Persona</span>
+                    </label>
+                    <span class="text-[10px] text-orange-400 font-mono">Neural TTS</span>
+                </div>
+
+                <!-- Voice Trigger Button -->
+                <button type="button"
+                        @click="voiceDropdownOpen = !voiceDropdownOpen"
+                        :class="voiceDropdownOpen ? 'border-orange-500/70 ring-1 ring-orange-500/30 bg-[#16181c]' : 'border-white/[0.08] bg-black/50 hover:border-white/20'"
+                        class="w-full rounded-xl border text-xs text-white px-3 py-2 outline-none transition-all duration-200 flex items-center justify-between gap-2.5">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-6 h-6 rounded-lg bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-xs shrink-0 text-orange-300 font-bold">
+                            🗣️
+                        </div>
+                        <div class="text-left min-w-0">
+                            <div class="font-bold text-white text-xs truncate" x-text="selectedVoiceName"></div>
+                            <div class="text-[10px] text-slate-400 truncate" x-text="selectedVoiceDesc"></div>
+                        </div>
+                    </div>
+
+                    <svg class="w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform duration-200"
+                         :class="voiceDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+
+                <!-- Voice Popover Menu -->
+                <div x-show="voiceDropdownOpen"
+                     x-transition:enter="transition ease-out duration-150"
+                     x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
+                     x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                     x-transition:leave="transition ease-in duration-100"
+                     x-transition:leave-start="opacity-100 scale-100"
+                     x-transition:leave-end="opacity-0 scale-95"
+                     class="absolute left-3.5 right-3.5 top-full mt-1.5 rounded-2xl bg-[#0d0f12]/95 backdrop-blur-xl border border-white/[0.12] shadow-2xl p-2 space-y-1 z-50 max-h-64 overflow-y-auto">
+                    
+                    {% for v in available_voices %}
+                    <button type="button" @click="selectVoice('{{ v.id }}', '{{ v.name|escapejs }} ({{ v.badge|escapejs }})', '{{ v.desc|escapejs }}')"
+                            :class="voice === '{{ v.id }}' ? 'bg-orange-500/20 border-orange-500/40 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.04]'"
+                            class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between">
+                        <div>
+                            <div class="text-xs font-bold text-white">{{ v.name }} ({{ v.badge }})</div>
+                            <div class="text-[10px] text-slate-400">{{ v.desc }}</div>
+                        </div>
+                        <span x-show="voice === '{{ v.id }}'" class="text-orange-400 text-xs font-bold">✓</span>
+                    </button>
+                    {% empty %}
+                    <button type="button" @click="selectVoice('adam', 'Adam (Cinematic)', 'Deep, authoritative narrator')"
+                            class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between bg-orange-500/20 border-orange-500/40 text-white">
+                        <div>
+                            <div class="text-xs font-bold text-white">Adam (Cinematic)</div>
+                            <div class="text-[10px] text-slate-400">Deep, authoritative narrator</div>
+                        </div>
+                        <span class="text-orange-400 text-xs font-bold">✓</span>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Audio Design Mode Helpers -->
+            <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] p-3.5 space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <span>🎧 Audio Synthesis Mode</span>
+                    </label>
+                    <span class="text-[10px] text-orange-400 font-mono">ElevenLabs + Fal Hub</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" 
+                            @click="selectModel('eleven-multilingual-v2', 'ElevenLabs Multilingual V2', 'ELEVENLABS', '🔊', 'Cinematic Voice & Dialogue')"
+                            :class="selectedModel === 'eleven-multilingual-v2' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'bg-black/50 border-white/[0.08] text-slate-300 hover:text-white'"
+                            class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between">
+                        <span class="text-xs font-bold">🎙️ Voiceover / TTS</span>
+                        <span class="text-[10px] text-slate-400 mt-1">Multi-lingual character speech</span>
+                    </button>
+                    <button type="button" 
+                            @click="selectModel('eleven-sound-effects', 'ElevenLabs Sound Effects & Foley FX', 'ELEVENLABS', '🎧', 'Sound Effects & Ambient Foley')"
+                            :class="selectedModel === 'eleven-sound-effects' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'bg-black/50 border-white/[0.08] text-slate-300 hover:text-white'"
+                            class="p-2.5 rounded-xl border text-left transition flex flex-col justify-between">
+                        <span class="text-xs font-bold">🔊 Foley & SFX FX</span>
+                        <span class="text-[10px] text-slate-400 mt-1">Cinematic audio effects & soundscapes</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -790,86 +991,205 @@
                                 </button>
                             {% endfor %}
                         </div>
+
+                        <!-- Section 2: Specific AI Engines (Audio) -->
+                        <div x-show="generationType === 'audio'" x-cloak class="space-y-1 pt-2 border-t border-white/[0.06]">
+                            <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+                                <span>🔊 Dedicated Audio & Speech Engines</span>
+                            </div>
+
+                            {% for m in audio_models %}
+                                <button type="button"
+                                        @click="selectModel('{{ m.model_id }}', '{{ m.display_name }}', '{{ m.provider.slug|upper }}', '{% if m.provider.slug == "elevenlabs" %}🔊{% elif m.provider.slug == "fal" %}🎙️{% else %}🎧{% endif %}', '{{ m.provider.name }} • {{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s')"
+                                        :class="selectedModel === '{{ m.model_id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
+                                        class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <span class="w-6 h-6 rounded-md bg-white/[0.06] border border-white/10 text-white flex items-center justify-center text-xs shrink-0">
+                                            {% if m.provider.slug == 'elevenlabs' %}🔊{% elif m.provider.slug == 'fal' %}🎙️{% else %}🎧{% endif %}
+                                        </span>
+                                        <div class="min-w-0">
+                                            <div class="text-xs font-semibold truncate group-hover:text-orange-300">{{ m.display_name }}</div>
+                                            <div class="text-[10px] text-slate-400">{{ m.provider.name }}</div>
+                                        </div>
+                                    </div>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-300 font-mono shrink-0">
+                                        {{ m.credit_cost_fixed }}+{{ m.credit_cost_per_second }}/s
+                                    </span>
+                                </button>
+                            {% endfor %}
+                        </div>
                     </div>
                 </div>
 
-                <!-- 2. Graphic Aspect Ratio Selector Chips -->
+                <!-- 2. Graphic Aspect Ratio (Video/Image) OR Audio Format (Audio) -->
                 <div class="space-y-1.5 sm:col-span-2">
-                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Aspect Ratio</label>
-                    <input type="hidden" name="aspect_ratio" :value="aspectRatio">
-                    <div class="grid grid-cols-4 gap-2">
-                        <!-- 16:9 -->
-                        <button type="button"
-                                @click="aspectRatio = '16:9'"
-                                :class="aspectRatio === '16:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
-                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
-                            <span class="w-5 h-3 border border-current rounded-xs inline-block"></span>
-                            <span class="text-[11px]">16:9</span>
-                            <span class="text-[9px] opacity-60">Landscape</span>
-                        </button>
+                    <div x-show="generationType !== 'audio'">
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Aspect Ratio</label>
+                        <input type="hidden" name="aspect_ratio" :value="aspectRatio">
+                        <div class="grid grid-cols-4 gap-2">
+                            <!-- 16:9 -->
+                            <button type="button"
+                                    @click="aspectRatio = '16:9'"
+                                    :class="aspectRatio === '16:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                                <span class="w-5 h-3 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">16:9</span>
+                                <span class="text-[9px] opacity-60">Landscape</span>
+                            </button>
 
-                        <!-- 9:16 -->
-                        <button type="button"
-                                @click="aspectRatio = '9:16'"
-                                :class="aspectRatio === '9:16' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
-                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
-                            <span class="w-3 h-5 border border-current rounded-xs inline-block"></span>
-                            <span class="text-[11px]">9:16</span>
-                            <span class="text-[9px] opacity-60">Reels/TikTok</span>
-                        </button>
+                            <!-- 9:16 -->
+                            <button type="button"
+                                    @click="aspectRatio = '9:16'"
+                                    :class="aspectRatio === '9:16' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                                <span class="w-3 h-5 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">9:16</span>
+                                <span class="text-[9px] opacity-60">Reels/TikTok</span>
+                            </button>
 
-                        <!-- 1:1 -->
-                        <button type="button"
-                                @click="aspectRatio = '1:1'"
-                                :class="aspectRatio === '1:1' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
-                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
-                            <span class="w-3.5 h-3.5 border border-current rounded-xs inline-block"></span>
-                            <span class="text-[11px]">1:1</span>
-                            <span class="text-[9px] opacity-60">Square</span>
-                        </button>
+                            <!-- 1:1 -->
+                            <button type="button"
+                                    @click="aspectRatio = '1:1'"
+                                    :class="aspectRatio === '1:1' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                                <span class="w-3.5 h-3.5 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">1:1</span>
+                                <span class="text-[9px] opacity-60">Square</span>
+                            </button>
 
-                        <!-- 21:9 -->
-                        <button type="button"
-                                @click="aspectRatio = '21:9'"
-                                :class="aspectRatio === '21:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
-                                class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
-                            <span class="w-6 h-2.5 border border-current rounded-xs inline-block"></span>
-                            <span class="text-[11px]">21:9</span>
-                            <span class="text-[9px] opacity-60">Cinema</span>
-                        </button>
+                            <!-- 21:9 -->
+                            <button type="button"
+                                    @click="aspectRatio = '21:9'"
+                                    :class="aspectRatio === '21:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1">
+                                <span class="w-6 h-2.5 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">21:9</span>
+                                <span class="text-[9px] opacity-60">Cinema</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Audio Master Format Selector -->
+                    <div x-show="generationType === 'audio'" x-cloak>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Audio Master Output</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="p-2.5 rounded-xl bg-orange-500/15 border border-orange-500/40 text-center">
+                                <span class="text-xs font-bold text-white block">MP3 Studio</span>
+                                <span class="text-[9px] text-orange-300 opacity-90 block">320kbps High Q</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-[#141618] border border-white/[0.08] text-center">
+                                <span class="text-xs font-bold text-slate-300 block">WAV 48kHz</span>
+                                <span class="text-[9px] text-slate-400 block">Lossless Master</span>
+                            </div>
+                            <div class="p-2.5 rounded-xl bg-[#141618] border border-white/[0.08] text-center">
+                                <span class="text-xs font-bold text-slate-300 block">Foley FX</span>
+                                <span class="text-[9px] text-slate-400 block">Dynamic Range</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 3. Duration Selector (Video) or Quality (Image) -->
+                <!-- 3. Fine-Grained Duration Range Selector (3s - 15s) or Audio Duration or Image Quality -->
                 <div class="space-y-1.5">
+                    <!-- Fine-Grained Video Duration (Slider + Steppers + Preset Chips) -->
                     <div x-show="generationType === 'video'">
-                        <div class="flex items-center justify-between mb-1">
+                        <div class="flex items-center justify-between mb-1.5">
                             <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Duration</label>
-                            <span class="text-xs font-bold text-orange-400" x-text="duration + ' Seconds'"></span>
+                            <span class="text-xs font-bold text-orange-400 font-mono" x-text="duration + ' Seconds' + (duration !== 5 && duration !== 10 && duration !== 15 ? ' (Custom)' : '')"></span>
                         </div>
                         <input type="hidden" name="duration" :value="duration">
-                        <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
-                            <button type="button"
-                                    @click="duration = 5; calculateCredits()"
-                                    :class="duration === 5 ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
-                                    class="py-2.5 px-1 rounded-xl border text-center transition text-xs">
-                                5s Standard
-                            </button>
-                            <button type="button"
-                                    @click="duration = 10; calculateCredits()"
-                                    :class="duration === 10 ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
-                                    class="py-2.5 px-1 rounded-xl border text-center transition text-xs">
-                                10s Extended
-                            </button>
-                            <button type="button"
-                                    @click="duration = 15; calculateCredits()"
-                                    :class="duration === 15 ? 'bg-orange-500/20 border-orange-500 text-white font-bold' : 'bg-[#141618] border-white/[0.08] text-slate-400 hover:text-white'"
-                                    class="py-2.5 px-1 rounded-xl border text-center transition text-xs">
-                                15s Cinematic
-                            </button>
+                        
+                        <!-- Interactive Range Slider with Live Steppers -->
+                        <div class="space-y-2.5 p-2.5 rounded-xl bg-[#141618] border border-white/[0.08]">
+                            <div class="flex items-center gap-2">
+                                <button type="button" 
+                                        @click="duration = Math.max(3, duration - 1); calculateCredits()"
+                                        class="w-6 h-6 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0">
+                                    -
+                                </button>
+                                <input type="range" 
+                                       min="3" 
+                                       max="15" 
+                                       step="1" 
+                                       x-model.number="duration" 
+                                       @input="calculateCredits()"
+                                       class="flex-1 accent-orange-500 cursor-pointer h-2 bg-white/10 rounded-lg">
+                                <button type="button" 
+                                        @click="duration = Math.min(15, duration + 1); calculateCredits()"
+                                        class="w-6 h-6 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0">
+                                    +
+                                </button>
+                            </div>
+
+                            <!-- Quick Preset Duration Pills (5s, 7s, 10s, 13s, 15s) -->
+                            <div class="flex items-center justify-between gap-1 pt-1 border-t border-white/[0.04]">
+                                <button type="button" @click="duration = 5; calculateCredits()"
+                                        :class="duration === 5 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
+                                        class="px-2 py-0.5 rounded-md text-[10px] border transition">
+                                    5s
+                                </button>
+                                <button type="button" @click="duration = 7; calculateCredits()"
+                                        :class="duration === 7 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
+                                        class="px-2 py-0.5 rounded-md text-[10px] border transition">
+                                    7s
+                                </button>
+                                <button type="button" @click="duration = 10; calculateCredits()"
+                                        :class="duration === 10 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
+                                        class="px-2 py-0.5 rounded-md text-[10px] border transition">
+                                    10s
+                                </button>
+                                <button type="button" @click="duration = 13; calculateCredits()"
+                                        :class="duration === 13 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
+                                        class="px-2 py-0.5 rounded-md text-[10px] border transition">
+                                    13s
+                                </button>
+                                <button type="button" @click="duration = 15; calculateCredits()"
+                                        :class="duration === 15 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
+                                        class="px-2 py-0.5 rounded-md text-[10px] border transition">
+                                    15s
+                                </button>
+                            </div>
                         </div>
                     </div>
 
+                    <!-- Audio Duration Slider (1s - 30s) -->
+                    <div x-show="generationType === 'audio'" x-cloak>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Audio Length</label>
+                            <span class="text-xs font-bold text-orange-400 font-mono" x-text="duration + 's Duration'"></span>
+                        </div>
+                        <input type="hidden" name="duration" :value="duration">
+                        <div class="space-y-2.5 p-2.5 rounded-xl bg-[#141618] border border-white/[0.08]">
+                            <div class="flex items-center gap-2">
+                                <button type="button" 
+                                        @click="duration = Math.max(1, duration - 1); calculateCredits()"
+                                        class="w-6 h-6 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0">
+                                    -
+                                </button>
+                                <input type="range" 
+                                       min="1" 
+                                       max="30" 
+                                       step="1" 
+                                       x-model.number="duration" 
+                                       @input="calculateCredits()"
+                                       class="flex-1 accent-orange-500 cursor-pointer h-2 bg-white/10 rounded-lg">
+                                <button type="button" 
+                                        @click="duration = Math.min(30, duration + 1); calculateCredits()"
+                                        class="w-6 h-6 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0">
+                                    +
+                                </button>
+                            </div>
+                            <div class="flex items-center justify-between gap-1 pt-1 border-t border-white/[0.04]">
+                                <button type="button" @click="duration = 5; calculateCredits()" :class="duration === 5 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px]">5s</button>
+                                <button type="button" @click="duration = 10; calculateCredits()" :class="duration === 10 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px]">10s</button>
+                                <button type="button" @click="duration = 15; calculateCredits()" :class="duration === 15 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px]">15s</button>
+                                <button type="button" @click="duration = 20; calculateCredits()" :class="duration === 20 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px]">20s</button>
+                                <button type="button" @click="duration = 30; calculateCredits()" :class="duration === 30 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px]">30s</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image Quality -->
                     <div x-show="generationType === 'image'" x-cloak>
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Image Quality</label>
                         <select name="quality" class="w-full rounded-xl bg-[#141618] border border-white/[0.08] text-xs text-white px-3 py-2.5 outline-none focus:border-orange-500/50">
@@ -917,12 +1237,12 @@
                                 <span>🚀 Upgrade Plan to Generate Video (From $19/mo)</span>
                             </a>
                         </div>
-                        <div x-show="generationType === 'image'">
+                        <div x-show="generationType === 'image' || generationType === 'audio'">
                             <button type="submit"
                                     class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
                                 <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
                                 <span>✨</span>
-                                <span>Generate Image</span>
+                                <span x-text="generationType === 'audio' ? 'Synthesize Audio & Voice' : 'Generate Image'"></span>
                                 <span class="opacity-70 text-xs font-mono">•</span>
                                 <span class="text-xs font-mono opacity-90" x-text="estimatedCredits.toLocaleString() + ' cr'"></span>
                             </button>
@@ -932,7 +1252,7 @@
                                 class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-8 py-3.5 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full sm:w-auto shadow-2xl">
                             <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
                             <span>✨</span>
-                            <span x-text="generationType === 'video' ? 'Generate Video' : 'Generate Image'"></span>
+                            <span x-text="generationType === 'video' ? 'Generate Video' : (generationType === 'audio' ? 'Synthesize Audio & Voice' : 'Generate Image')"></span>
                             <span class="opacity-70 text-xs font-mono">•</span>
                             <span class="text-xs font-mono opacity-90" x-text="estimatedCredits.toLocaleString() + ' cr'"></span>
                         </button>
@@ -969,9 +1289,23 @@
                     <div class="aspect-[16/10] bg-black/90 relative overflow-hidden flex items-center justify-center">
                         {% if gen.output_media %}
                             {% if gen.generation_type == 'video' %}
-                                <video controls preload="none" class="w-full h-full object-cover" poster="{{ gen.output_media.thumbnail_url }}">
+                                <video autoplay loop muted playsinline controls preload="auto" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" poster="{{ gen.output_media.thumbnail_url }}">
                                     <source src="{{ gen.output_media.url }}" type="video/mp4">
                                 </video>
+                            {% elif gen.generation_type == 'audio' %}
+                                <div class="w-full h-full bg-gradient-to-br from-[#121418] via-[#090a0c] to-[#181a20] p-4 flex flex-col justify-between items-center relative overflow-hidden">
+                                    <div class="flex items-center gap-1 py-2 pointer-events-none">
+                                        <span class="w-1 h-3 bg-orange-500 rounded-full animate-pulse"></span>
+                                        <span class="w-1 h-6 bg-orange-400 rounded-full animate-pulse" style="animation-delay: 150ms;"></span>
+                                        <span class="w-1 h-4 bg-amber-400 rounded-full animate-pulse" style="animation-delay: 300ms;"></span>
+                                        <span class="w-1 h-7 bg-orange-500 rounded-full animate-pulse" style="animation-delay: 75ms;"></span>
+                                        <span class="w-1 h-3 bg-orange-400 rounded-full animate-pulse" style="animation-delay: 220ms;"></span>
+                                    </div>
+                                    <audio controls class="w-full h-7 max-w-[95%] opacity-90 hover:opacity-100 transition z-10">
+                                        <source src="{{ gen.output_media.url }}" type="audio/mpeg">
+                                        Your browser does not support audio.
+                                    </audio>
+                                </div>
                             {% else %}
                                 <img src="{{ gen.output_media.url }}"
                                      alt="{{ gen.prompt }}"
@@ -1002,6 +1336,9 @@
                             {% if gen.generation_type == 'video' %}
                                 <span>🎬</span>
                                 <span>{{ gen.duration }}s</span>
+                            {% elif gen.generation_type == 'audio' %}
+                                <span>🔊</span>
+                                <span>Audio</span>
                             {% else %}
                                 <span>🎨</span>
                                 <span>{{ gen.aspect_ratio }}</span>

@@ -172,6 +172,17 @@ class MockAIProvider(BaseAIProvider):
         _MOCK_JOBS[job_id] = result
         return result
 
+    def generate_audio(self, model_id: str, request: GenerationRequest) -> ProviderJobResult:
+        job_id = f"mock-aud-{uuid.uuid4().hex[:10]}"
+        result = ProviderJobResult(
+            external_job_id=job_id,
+            status="completed",
+            output_media_url="https://actions.google.com/sounds/v1/ambiences/rain_heavy.ogg",
+            raw_response={"mock": True, "model": model_id, "prompt": request.prompt}
+        )
+        _MOCK_JOBS[job_id] = result
+        return result
+
     def get_status(self, external_job_id: str) -> ProviderJobResult:
         if external_job_id in _MOCK_JOBS:
             return _MOCK_JOBS[external_job_id]

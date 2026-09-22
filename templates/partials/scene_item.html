@@ -1,65 +1,241 @@
-<div id="scene-card-{{ scene.id }}" class="glass-panel rounded-2xl p-5 border border-white/10 relative flex flex-col md:flex-row gap-5 items-start justify-between">
-    <div class="flex-1">
-        <div class="flex items-center gap-2 mb-2">
-            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">
-                Scene {{ scene.order }}
-            </span>
-            <span class="text-xs font-medium text-slate-400">• {{ scene.duration }}s</span>
-            {% if scene.camera_direction %}
-                <span class="text-xs font-medium text-cyan-400">• {{ scene.camera_direction }}</span>
+<div id="scene-card-{{ scene.id }}" 
+     class="rounded-3xl bg-[#0d0f12] border {% if scene.status == 'processing' or scene.status == 'queued' %}border-orange-500/50 shadow-lg shadow-orange-500/10{% else %}border-white/[0.08] hover:border-orange-500/40{% endif %} p-5 sm:p-6 transition-all duration-300 relative group overflow-hidden"
+     {% if scene.status == 'queued' or scene.status == 'processing' %}
+     hx-get="{% url 'projects:scene_status' scene.id %}"
+     hx-trigger="every 3s"
+     hx-swap="outerHTML"
+     {% endif %}>
+
+    <!-- Top Accent Edge -->
+    <div class="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r {% if scene.status == 'completed' %}from-emerald-500/0 via-emerald-500/40 to-emerald-500/0{% elif scene.status == 'processing' or scene.status == 'queued' %}from-orange-500 via-amber-400 to-orange-500 animate-pulse{% else %}from-transparent via-white/[0.05] to-transparent{% endif %}"></div>
+
+    <div class="flex flex-col lg:flex-row items-start justify-between gap-6">
+        <!-- Scene Meta & Narrative Content -->
+        <div class="flex-1 space-y-4 min-w-0">
+            <!-- Header Badges -->
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="px-3 py-1 rounded-xl text-xs font-black bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 border border-orange-500/30 flex items-center gap-1.5 font-mono shadow-sm">
+                    <span>🎬</span>
+                    <span>Scene 0{{ scene.order }}</span>
+                </span>
+
+                <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-slate-300">
+                    ⏱️ {{ scene.duration }}s
+                </span>
+
+                {% if scene.status == 'completed' %}
+                    <span class="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Rendered</span>
+                    </span>
+                {% elif scene.is_generating_audio %}
+                    <span class="px-2.5 py-0.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-300 text-xs font-bold flex items-center gap-1 animate-pulse">
+                        <span class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
+                        <span>Synthesizing Audio (ElevenLabs & Foley)...</span>
+                    </span>
+                {% elif scene.status == 'processing' %}
+                    <span class="px-2.5 py-0.5 rounded-lg bg-orange-500/20 border border-orange-500/30 text-orange-300 text-xs font-bold flex items-center gap-1 animate-pulse">
+                        <span class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-ping"></span>
+                        <span>Diffusing Frames (Fal.ai)...</span>
+                    </span>
+                {% elif scene.status == 'queued' %}
+                    <span class="px-2.5 py-0.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-xs font-bold font-mono">
+                        ⏳ Queued
+                    </span>
+                {% endif %}
+
+                <!-- Cast / Characters Assigned -->
+                {% for char in scene.characters.all %}
+                    <span class="px-2.5 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 text-xs font-semibold flex items-center gap-1">
+                        <span>👤</span>
+                        <span>{{ char.name }}</span>
+                    </span>
+                {% endfor %}
+
+                <!-- Delete Scene Button -->
+                <form action="{% url 'projects:delete_scene' scene.id %}" method="POST" class="inline ml-auto" onsubmit="return confirm('Remove Scene 0{{ scene.order }} from storyboard?');">
+                    {% csrf_token %}
+                    <button type="submit" class="w-7 h-7 rounded-lg bg-white/[0.03] hover:bg-rose-500/20 hover:text-rose-400 text-slate-400 flex items-center justify-center transition text-xs border border-white/[0.06] hover:border-rose-500/30" title="Delete Scene">
+                        ✕
+                    </button>
+                </form>
+            </div>
+
+            <!-- Title & Generative Prompt -->
+            <div>
+                <h3 class="text-lg font-bold text-white tracking-tight">{{ scene.title }}</h3>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed mt-1.5 bg-black/30 p-3 rounded-xl border border-white/[0.04]">
+                    {{ scene.prompt }}
+                </p>
+            </div>
+
+            <!-- Dialogue & Audio Direction Script Card -->
+            {% if scene.dialogue or scene.audio_direction %}
+                <div class="space-y-2 p-3.5 rounded-2xl bg-[#13161a] border border-amber-500/20">
+                    {% if scene.dialogue %}
+                        <div class="text-xs text-amber-200/90 flex items-start gap-2">
+                            <span class="text-amber-400 font-bold shrink-0">🎙️ Dialogue:</span>
+                            <span class="italic font-serif leading-relaxed">“{{ scene.dialogue }}”</span>
+                        </div>
+                    {% endif %}
+                    {% if scene.audio_direction %}
+                        <div class="text-[11px] text-slate-400 flex items-center gap-2 pt-1 border-t border-white/[0.04]">
+                            <span class="text-orange-400 font-mono font-bold">🔊 Audio Cue:</span>
+                            <span>{{ scene.audio_direction }}</span>
+                        </div>
+                    {% endif %}
+                </div>
             {% endif %}
-            <form action="{% url 'projects:delete_scene' scene.id %}" method="POST" class="inline ml-auto" onsubmit="return confirm('Remove Scene {{ scene.order }} from storyboard?');">
-                {% csrf_token %}
-                <button type="submit" class="text-slate-500 hover:text-rose-400 text-xs transition p-1" title="Delete Scene">
-                    ✕
-                </button>
-            </form>
+
+            <!-- Director Tags & Camera Controls -->
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+                {% if scene.camera_direction %}
+                    <span class="px-2.5 py-1 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 text-[11px] font-mono flex items-center gap-1.5">
+                        <span>📹</span>
+                        <span>{{ scene.camera_direction }}</span>
+                    </span>
+                {% endif %}
+
+                {% if scene.visual_style %}
+                    <span class="px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 text-[11px] font-mono flex items-center gap-1.5">
+                        <span>🎨</span>
+                        <span>{{ scene.visual_style }}</span>
+                    </span>
+                {% endif %}
+            </div>
+
+            <!-- Foley Audio Track Ready Widget -->
+            {% if scene.latest_audio %}
+                <div class="p-3 rounded-2xl bg-[#121519] border border-orange-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-orange-500/5">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                        <div class="w-8 h-8 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 text-xs shrink-0">
+                            <span>🔊</span>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                <span class="text-xs font-heading font-extrabold text-white tracking-tight">Foley Audio Track</span>
+                            </div>
+                            <span class="text-[10px] font-mono text-orange-400/80 truncate block">ElevenLabs • High-Fidelity Audio FX</span>
+                        </div>
+                    </div>
+                    <audio controls class="h-8 max-w-full sm:max-w-[240px] rounded-lg accent-orange-500 bg-white/[0.05]" preload="metadata">
+                        <source src="{{ scene.latest_audio.url }}" type="audio/mpeg">
+                        <source src="{{ scene.latest_audio.url }}" type="audio/wav">
+                        <source src="{{ scene.latest_audio.url }}" type="audio/ogg">
+                    </audio>
+                </div>
+            {% endif %}
         </div>
 
-        <h3 class="text-base font-bold text-white mb-1">{{ scene.title }}</h3>
-        <p class="text-xs text-slate-300 leading-relaxed">{{ scene.prompt }}</p>
+        <!-- Media Stage & Production Action Deck -->
+        <div class="w-full lg:w-80 shrink-0 space-y-3">
+            {% if scene.generated_media %}
+                <!-- Generated Video Canvas -->
+                <div class="w-full aspect-video rounded-2xl overflow-hidden bg-black border border-white/[0.12] shadow-2xl relative group/player">
+                    <video controls autoplay loop muted playsinline class="w-full h-full object-contain" preload="auto">
+                        <source src="{{ scene.generated_media.url }}" type="video/mp4">
+                        <source src="{{ scene.generated_media.url }}" type="image/webp">
+                    </video>
+                    
+                    <div class="absolute top-2 left-2 pointer-events-none flex items-center gap-1.5">
+                        <span class="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-md text-[10px] font-mono text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span>●</span> 1080p
+                        </span>
+                    </div>
+                </div>
 
-        {% if scene.visual_style %}
-            <div class="mt-2 text-[11px] text-slate-400">
-                <span class="text-slate-500">Style:</span> {{ scene.visual_style }}
-            </div>
-        {% endif %}
-    </div>
+                <!-- Production Audio & Video Controls -->
+                <div class="grid grid-cols-2 gap-2">
+                    <!-- Synthesize Foley / Audio Form -->
+                    <form hx-post="{% url 'projects:generate_scene_audio' scene.id %}"
+                          hx-target="#scene-card-{{ scene.id }}"
+                          hx-swap="outerHTML"
+                          class="m-0">
+                        {% csrf_token %}
+                        <input type="hidden" name="audio_type" value="foley">
+                        {% if scene.is_generating_audio %}
+                            <button type="button" disabled
+                                    class="w-full px-3 py-2 rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-300 text-[11px] font-bold flex items-center justify-center gap-1.5 shadow-sm cursor-not-allowed opacity-80 animate-pulse">
+                                <svg class="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Generating FX...</span>
+                            </button>
+                        {% else %}
+                            <button type="submit"
+                                    class="w-full px-3 py-2 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-300 text-[11px] font-bold flex items-center justify-center gap-1.5 transition active:scale-95 shadow-sm cursor-pointer"
+                                    title="Generate AI Foley & Sound Effects matching this scene via ElevenLabs & Fal">
+                                <span>🔊</span>
+                                <span>{% if scene.latest_audio %}Re-Generate Foley{% else %}Foley Audio{% endif %}</span>
+                            </button>
+                        {% endif %}
+                    </form>
 
-    <!-- Media or Status Preview -->
-    <div class="w-full md:w-64 flex flex-col items-center gap-3">
-        {% if scene.generated_media %}
-            <div class="w-full aspect-video rounded-xl overflow-hidden bg-black/60 border border-white/10">
-                <video controls class="w-full h-full object-contain">
-                    <source src="{{ scene.generated_media.url }}" type="video/mp4">
-                    <source src="{{ scene.generated_media.url }}" type="image/webp">
-                </video>
-            </div>
-            <button hx-post="{% url 'projects:generate_scene' scene.id %}"
-                    hx-target="#scene-card-{{ scene.id }}"
-                    hx-swap="outerHTML"
-                    class="btn btn-xs btn-outline border-white/20 hover:border-brand-500 text-xs w-full">
-                ↺ Regenerate Scene
-            </button>
-        {% elif scene.status == 'queued' or scene.status == 'processing' %}
-            <div class="w-full aspect-video rounded-xl bg-surface/60 border border-brand-500/30 flex flex-col items-center justify-center p-4 text-center">
-                <svg class="w-6 h-6 animate-spin text-brand-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span class="text-xs font-semibold text-slate-200">Rendering Scene...</span>
-                <span class="text-[10px] text-slate-400 mt-0.5">Asynchronous AI Job</span>
-            </div>
-        {% else %}
-            <div class="w-full aspect-video rounded-xl bg-surface/30 border border-dashed border-white/10 flex flex-col items-center justify-center p-4 text-center">
-                <span class="text-xs text-slate-400 mb-2">Ready to generate</span>
-                <button hx-post="{% url 'projects:generate_scene' scene.id %}"
-                        hx-target="#scene-card-{{ scene.id }}"
-                        hx-swap="outerHTML"
-                        class="btn btn-xs btn-primary bg-brand-600 hover:bg-brand-500 border-none text-white shadow-lg shadow-brand-500/30">
-                    ✨ Generate Scene
-                </button>
-            </div>
-        {% endif %}
+                    <!-- Regenerate Video Form -->
+                    <form hx-post="{% url 'projects:generate_scene' scene.id %}"
+                          hx-target="#scene-card-{{ scene.id }}"
+                          hx-swap="outerHTML"
+                          class="m-0">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="w-full px-3 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.1] text-slate-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition active:scale-95 cursor-pointer">
+                            <span>↺</span>
+                            <span>Re-Render</span>
+                        </button>
+                    </form>
+                </div>
+
+            {% elif scene.is_generating_audio %}
+                <!-- Animated Foley Synthesizing State -->
+                <div class="w-full aspect-video rounded-2xl bg-[#14161a] border border-orange-500/30 flex flex-col items-center justify-center p-5 text-center relative overflow-hidden shadow-inner">
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/10 to-transparent animate-scanline"></div>
+                    <div class="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 mb-2 relative">
+                        <span class="absolute inset-0 rounded-2xl bg-orange-500/30 animate-ping"></span>
+                        <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-bold text-white">Synthesizing Foley Audio...</span>
+                    <span class="text-[10px] text-orange-400/90 font-mono mt-0.5">{{ scene.audio_track.provider.name|default:"ElevenLabs & Fal AI Engine" }}</span>
+                    <span class="text-[9px] text-slate-500 mt-1 font-mono">Auto-updates on completion</span>
+                </div>
+
+            {% elif scene.status == 'queued' or scene.status == 'processing' %}
+                <!-- Animated Diffusing State -->
+                <div class="w-full aspect-video rounded-2xl bg-[#14161a] border border-orange-500/30 flex flex-col items-center justify-center p-5 text-center relative overflow-hidden shadow-inner">
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/10 to-transparent animate-scanline"></div>
+                    <div class="w-10 h-10 rounded-2xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 mb-2 relative">
+                        <span class="absolute inset-0 rounded-2xl bg-orange-500/30 animate-ping"></span>
+                        <svg class="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-bold text-white">Synthesizing Scene...</span>
+                    <span class="text-[10px] text-orange-400/90 font-mono mt-0.5">{{ scene.project.video_model.display_name|default:"Neural Video Engine" }}</span>
+                    <span class="text-[9px] text-slate-500 mt-1 font-mono">Auto-updates on completion</span>
+                </div>
+
+            {% else %}
+                <!-- Ready to Generate Placeholder -->
+                <div class="w-full aspect-video rounded-2xl bg-black/40 border border-dashed border-white/[0.12] flex flex-col items-center justify-center p-5 text-center space-y-2">
+                    <span class="text-xs text-slate-400 font-mono">Unrendered Scene</span>
+                    <form hx-post="{% url 'projects:generate_scene' scene.id %}"
+                          hx-target="#scene-card-{{ scene.id }}"
+                          hx-swap="outerHTML"
+                          class="m-0">
+                        {% csrf_token %}
+                        <button type="submit"
+                                class="fl-gradient-orange-btn fl-glow-orange text-white border-none rounded-xl px-4 py-2 font-heading font-extrabold text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg cursor-pointer">
+                            <span>✨</span>
+                            <span>Render Scene</span>
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
     </div>
 </div>

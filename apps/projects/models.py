@@ -130,3 +130,27 @@ class Scene(models.Model):
 
     def __str__(self):
         return f"Scene {self.order}: {self.title} ({self.project.name})"
+
+    @property
+    def latest_audio(self):
+        """Fetch the most recent completed audio generation asset for this scene."""
+        gen = self.generations.filter(generation_type='audio', status='completed').order_by('-created_at').first()
+        return gen.output_media if gen else None
+
+    @property
+    def is_generating(self) -> bool:
+        return self.status in ('queued', 'processing')
+
+    @property
+    def active_generation(self):
+        return self.generations.filter(status__in=['queued', 'processing']).order_by('-created_at').first()
+
+    @property
+    def is_generating_audio(self) -> bool:
+        active = self.active_generation
+        return bool(active and active.generation_type == 'audio')
+
+    @property
+    def is_generating_video(self) -> bool:
+        active = self.active_generation
+        return bool(active and active.generation_type in ('video', 'image'))

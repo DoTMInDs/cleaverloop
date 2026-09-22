@@ -49,19 +49,19 @@ class ProviderHealthChecker:
                 if resp.status_code == 200:
                     data = resp.json()
                     is_locked = data.get("is_locked", False)
-                    lock_reason = data.get("lock_reason", "")
-                    if is_locked or "exhausted" in lock_reason.lower():
+                    lock_reason = data.get("lock_reason") or ""
+                    if is_locked or (lock_reason and "exhausted" in str(lock_reason).lower()):
                         info["status"] = "unfunded"
                         info["status_label"] = "Balance Empty"
                         info["details"] = f"Account locked: {lock_reason or 'Zero balance'}. Deposit $5-$10 on Fal.ai."
                     else:
                         info["status"] = "ready"
                         info["status_label"] = "Funded & Ready"
-                        info["details"] = "Balance active. Ready to generate real 1080p Wan 2.1 & Luma Ray 2 videos."
+                        info["details"] = "Balance active. Ready to generate Wan 2.1, Flux 1.1 Pro & Luma Ray 2 videos."
                 elif resp.status_code in (401, 403):
                     info["status"] = "unfunded"
-                    info["status_label"] = "Balance Empty (403)"
-                    info["details"] = "Fal.ai returned locked/unauthorized. Add funds to unlock."
+                    info["status_label"] = "Invalid Key / Unauthorized"
+                    info["details"] = "Fal.ai returned unauthorized. Check your FAL_KEY in .env."
                 else:
                     info["status"] = "error"
                     info["status_label"] = f"HTTP {resp.status_code}"
@@ -75,11 +75,11 @@ class ProviderHealthChecker:
 
     @classmethod
     def check_google_veo(cls) -> Dict[str, Any]:
-        key = getattr(settings, 'GOOGLE_AI_API_KEY', '').strip()
+        key = getattr(settings, 'GOOGLE_AI_API_KEY', '').strip() or getattr(settings, 'GEMINI_API_KEY', '').strip()
         info = {
-            "name": "Google Veo 3.1 Cinematic",
+            "name": "Google Gemini & AI Studio (Free Tier)",
             "slug": "google_veo",
-            "modality": "Video & Image",
+            "modality": "Video, Image & Reasoning",
             "is_configured": bool(key),
             "status": "unknown",
             "status_label": "Checking...",
@@ -90,25 +90,26 @@ class ProviderHealthChecker:
         if not key:
             info["status"] = "unconfigured"
             info["status_label"] = "Missing Key"
-            info["details"] = "GOOGLE_AI_API_KEY is not set."
+            info["details"] = "GOOGLE_AI_API_KEY is not set in .env."
             return info
 
         try:
             with httpx.Client(timeout=8.0) as client:
                 url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
-                resp = client.get(url)
+                resp = client.get(url, headers={"x-goog-api-key": key})
                 if resp.status_code == 200:
-                    models = [m.get("name", "") for m in resp.json().get("models", []) if "veo" in m.get("name", "")]
-                    info["status"] = "rate_limited"
-                    info["status_label"] = "Free Tier (Rate Limited)"
-                    info["details"] = (
-                        f"Key is valid ({len(models)} Veo models found). Currently hits 429 quota exhaustion. "
-                        "Link Google Cloud billing to enable pay-as-you-go high quota."
-                    )
+                    models = [m.get("name", "") for m in resp.json().get("models", [])]
+                    info["status"] = "ready"
+                    info["status_label"] = "Free Tier Active"
+                    info["details"] = f"API Key valid ({len(models)} models available). Super Agent & reasoning ready."
                 elif resp.status_code == 429:
                     info["status"] = "rate_limited"
                     info["status_label"] = "Quota Exhausted (429)"
-                    info["details"] = "Rate limit reached. Link billing on Google AI Studio to unlock."
+                    info["details"] = "Free tier rate limit reached. Resets automatically every minute."
+                elif resp.status_code == 401:
+                    info["status"] = "error"
+                    info["status_label"] = "Invalid Key (401)"
+                    info["details"] = "Google API Key was rejected. Ensure you copied the API key starting with 'AIzaSy' from aistudio.google.com."
                 else:
                     info["status"] = "error"
                     info["status_label"] = f"HTTP {resp.status_code}"

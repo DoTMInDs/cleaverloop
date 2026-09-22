@@ -52,7 +52,8 @@ class SuperAgent:
             "generationConfig": {"responseMimeType": "application/json"}
         }
         with httpx.Client(timeout=25.0) as client:
-            resp = client.post(endpoint, json=payload)
+            headers = {"x-goog-api-key": api_key}
+            resp = client.post(endpoint, json=payload, headers=headers)
             if resp.status_code == 200:
                 text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
                 if text.startswith("```json"):

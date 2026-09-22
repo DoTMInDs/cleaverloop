@@ -372,7 +372,12 @@
                          class="rounded-2xl sm:rounded-3xl bg-[#111316] border border-white/[0.08] hover:border-orange-500/70 overflow-hidden cursor-pointer shrink-0 transition-all duration-300 group shadow-2xl relative"
                          :style="item.aspect_ratio === '9:16' ? 'width: 175px; height: 260px;' : (item.aspect_ratio === '21:9' ? 'width: 480px; height: 260px;' : (item.aspect_ratio === '1:1' ? 'width: 260px; height: 260px;' : 'width: 390px; height: 260px;'))">
                         
-                        <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none">
+                        <template x-if="item.media_url && (item.media_url.endsWith('.mp4') || item.media_url.endsWith('.webm') || item.type === 'video')">
+                            <video :src="item.media_url" autoplay loop muted playsinline class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"></video>
+                        </template>
+                        <template x-if="!item.media_url || (!item.media_url.endsWith('.mp4') && !item.media_url.endsWith('.webm') && item.type !== 'video')">
+                            <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none">
+                        </template>
                         <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent opacity-80 group-hover:opacity-95 transition-opacity"></div>
                         
                         <!-- Top Badges -->
@@ -515,7 +520,12 @@
                          class="rounded-2xl sm:rounded-3xl bg-[#111316] border border-white/[0.08] hover:border-orange-500/70 overflow-hidden cursor-pointer shrink-0 transition-all duration-300 group shadow-2xl relative"
                          :style="item.aspect_ratio === '9:16' ? 'width: 175px; height: 260px;' : (item.aspect_ratio === '21:9' ? 'width: 480px; height: 260px;' : (item.aspect_ratio === '1:1' ? 'width: 260px; height: 260px;' : 'width: 390px; height: 260px;'))">
                         
-                        <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none">
+                        <template x-if="item.media_url && (item.media_url.endsWith('.mp4') || item.media_url.endsWith('.webm') || item.type === 'video')">
+                            <video :src="item.media_url" autoplay loop muted playsinline class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"></video>
+                        </template>
+                        <template x-if="!item.media_url || (!item.media_url.endsWith('.mp4') && !item.media_url.endsWith('.webm') && item.type !== 'video')">
+                            <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none">
+                        </template>
                         <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent opacity-80 group-hover:opacity-95 transition-opacity"></div>
                         
                         <!-- Top Badges -->
@@ -553,7 +563,12 @@
                      @click="openInspectModal(item)">
                     
                     <!-- Media Asset (Image / Video Preview) -->
-                    <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                    <template x-if="item.media_url && (item.media_url.endsWith('.mp4') || item.media_url.endsWith('.webm') || item.type === 'video')">
+                        <video :src="item.media_url" autoplay loop muted playsinline class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"></video>
+                    </template>
+                    <template x-if="!item.media_url || (!item.media_url.endsWith('.mp4') && !item.media_url.endsWith('.webm') && item.type !== 'video')">
+                        <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                    </template>
 
                     <!-- Overlay Gradient Protection -->
                     <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none"></div>

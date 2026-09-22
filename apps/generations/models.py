@@ -92,6 +92,22 @@ class Generation(models.Model):
         related_name='source_generation'
     )
 
+    # Optional parent generation & attached audio track
+    parent_generation = models.ForeignKey(
+        'self',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='child_generations'
+    )
+    audio_track = models.ForeignKey(
+        'media.Media',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='attached_to_generations'
+    )
+
     # Credit accounting
     credits_reserved = models.BigIntegerField(default=0)
     credits_consumed = models.BigIntegerField(default=0)
@@ -129,3 +145,18 @@ class Generation(models.Model):
     @property
     def is_in_progress(self) -> bool:
         return self.status in ('queued', 'processing')
+
+    @property
+    def latest_audio(self):
+        """Fetch the most recent audio media attached or generated for this video."""
+        if self.audio_track:
+            return self.audio_track
+        child = self.child_generations.filter(generation_type='audio', status='completed').order_by('-created_at').first()
+        if child and child.output_media:
+            return child.output_media
+        return None
+
+    @property
+    def is_synthesizing_audio(self) -> bool:
+        """Check if an audio synthesis job is currently processing for this generation."""
+        return self.child_generations.filter(generation_type='audio', status__in=['queued', 'processing']).exists()
