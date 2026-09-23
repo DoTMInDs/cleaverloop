@@ -43,34 +43,30 @@ class CharacterGeneratorService:
 
         is_female = (dna.gender or '').lower() == 'female'
 
-        # Link high-quality full-body standing visual matching the prompt specifics
-        if not dna.full_body_url:
-            text_context = (brief + " " + dna.name + " " + dna.appearance_description + " " + dna.clothing_description).lower()
-            if any(w in text_context for w in ['bun', 'topknot', 'diallo', 'terrace', 'white', 'ivory', 'camille', 'paris', 'french', 'trenchcoat', 'blouse', 'dress']):
-                dna.full_body_url = '/media/characters/poses/amina_diallo_standing.jpg'
-            elif any(w in text_context for w in ['cornrow', 'braid', 'rust', 'cardigan', 'scholar', 'library']):
-                dna.full_body_url = '/media/characters/poses/amina_standing.jpg'
-            elif any(w in text_context for w in ['marcus', 'suit', 'tailored', 'vance', 'detective', 'ceo']):
-                dna.full_body_url = '/static/images/showcase/marcus_vance_walking.jpg'
-            elif is_female:
-                dna.full_body_url = '/media/characters/poses/amina_diallo_standing.jpg'
-            else:
-                dna.full_body_url = '/static/images/showcase/marcus_vance_walking.jpg'
-
-        # Generate avatar portrait or use full body asset
+        # Generate unique character avatar portrait
         avatar_url = cls.generate_avatar_portrait(dna, style_preset)
-        dna.avatar_url = dna.full_body_url or avatar_url
+        dna.avatar_url = avatar_url
         dna.face_anchor_url = avatar_url
 
-        # Build realistic gender-specific pose suite
+        # Link showcase visual asset ONLY if prompt/name is explicitly for that character
+        name_lower = (dna.name or '').lower()
+        if 'diallo' in name_lower or 'amina' in name_lower:
+            dna.full_body_url = '/media/characters/poses/amina_diallo_standing.jpg'
+        elif 'marcus' in name_lower or 'vance' in name_lower:
+            dna.full_body_url = '/media/characters/avatars/marcus_vance_walking.jpg'
+        else:
+            dna.full_body_url = avatar_url
+
+        # Build realistic gender-specific pose suite using the character's primary visual
+        primary_image = dna.full_body_url or avatar_url
         if is_female:
-            walking_img = '/media/characters/poses/amina_diallo_walking.jpg' if ('diallo' in (dna.name or '').lower() or 'bun' in (dna.appearance_description or '').lower() or dna.full_body_url == '/media/characters/poses/amina_diallo_standing.jpg') else dna.full_body_url
+            walking_img = '/media/characters/poses/amina_diallo_walking.jpg' if 'diallo' in (dna.name or '').lower() else primary_image
             dna.poses = [
                 {
                     "id": "standing",
                     "label": "Real-Life Contrapposto",
                     "icon": "🧍‍♀️",
-                    "image_url": dna.full_body_url,
+                    "image_url": primary_image,
                     "prompt_cue": (
                         f"Full-length fashion photograph of {dna.name} based exactly on prompt specifics, in a strictly realistic, natural real-life female pose: "
                         f"natural weight shift onto one hip (contrapposto), relaxed opposite knee, one hand casually tucked into pocket, "
@@ -91,32 +87,32 @@ class CharacterGeneratorService:
                     "id": "sitting",
                     "label": "Seated Workspace",
                     "icon": "🪑",
-                    "image_url": dna.full_body_url,
+                    "image_url": primary_image,
                     "prompt_cue": f"Seated gracefully with poise, legs angled naturally, relaxed feminine posture."
                 }
             ]
         else:
+            walking_img = '/media/characters/avatars/marcus_vance_walking.jpg' if 'marcus' in (dna.name or '').lower() else primary_image
             dna.poses = [
                 {
                     "id": "standing",
                     "label": "Full-Body Standing",
                     "icon": "🧍‍♂️",
-                    "image_url": dna.full_body_url,
+                    "image_url": primary_image,
                     "prompt_cue": f"Full-length standing view of man {dna.name} on two legs with footwear visible, athletic masculine posture."
                 },
                 {
                     "id": "walking",
                     "label": "Dynamic Striding",
                     "icon": "🚶‍♂️",
-                    "image_url": dna.full_body_url,
+                    "image_url": walking_img,
                     "prompt_cue": f"In natural walking motion, balanced fluid stride."
                 },
                 {
                     "id": "sitting",
                     "label": "Seated Workspace",
                     "icon": "🪑",
-                    "image_url": avatar_url,
-                    "prompt_cue": f"Seated thoughtfully at a wooden desk with composed posture."
+                    "image_url": primary_image,
                 }
             ]
 
@@ -262,91 +258,29 @@ class CharacterGeneratorService:
                 f"Confident natural standing posture, sharp focus, 8k resolution, photorealistic, cinematic studio lighting."
             )
 
-        # 5. Link regenerated full-body character visual persona
-        if not dna.full_body_url:
-            text_context = (dna.name + " " + dna.appearance_description + " " + dna.clothing_description).lower()
-            if any(w in text_context for w in ['bun', 'topknot', 'diallo', 'terrace', 'white', 'ivory', 'sweater', 'stud']):
-                dna.full_body_url = '/media/characters/poses/amina_diallo_standing.jpg'
-            elif any(w in text_context for w in ['cornrow', 'braid', 'rust', 'cardigan', 'scholar']):
-                dna.full_body_url = '/media/characters/poses/amina_standing.jpg'
-            elif any(w in text_context for w in ['marcus', 'suit', 'tailored', 'vance']):
-                dna.full_body_url = '/static/images/showcase/marcus_vance_walking.jpg'
-            elif is_female:
-                dna.full_body_url = '/media/characters/poses/amina_diallo_standing.jpg'
-            else:
-                dna.full_body_url = '/static/images/showcase/marcus_vance_walking.jpg'
-
-        # Maintain isolated face as avatar_url and face_anchor_url
+        # 5. For photo uploads: The character's primary visual IS their cropped face anchor!
+        # Do NOT assign unrelated stock photos of other people (like Amina Diallo or Marcus Vance).
+        dna.full_body_url = face_anchor_url
         dna.avatar_url = face_anchor_url
         dna.face_anchor_url = face_anchor_url
-        primary_standing_image = dna.full_body_url or face_anchor_url
-        avatar_url = face_anchor_url
 
-        # Construct ready pose variants with strictly realistic gender-specific postures
-        if is_female:
-            walking_img = '/media/characters/poses/amina_diallo_walking.jpg' if ('diallo' in (dna.name or '').lower() or 'bun' in (dna.appearance_description or '').lower() or dna.full_body_url == '/media/characters/poses/amina_diallo_standing.jpg') else dna.full_body_url
-
-            dna.poses = [
-                {
-                    "id": "standing",
-                    "label": "Real-Life Contrapposto",
-                    "icon": "🧍‍♀️",
-                    "image_url": dna.full_body_url,
-                    "prompt_cue": (
-                        f"Full-length fashion photograph of {dna.name} in a strictly realistic, natural real-life female pose: "
-                        f"natural weight shift onto one hip (contrapposto), relaxed opposite knee, one hand casually tucked into trouser pocket, "
-                        f"head-to-toe on two legs with stylish shoes, graceful feminine silhouette and natural curves."
-                    )
-                },
-                {
-                    "id": "walking",
-                    "label": "Candid Street Stride",
-                    "icon": "🚶‍♀️",
-                    "image_url": walking_img,
-                    "prompt_cue": (
-                        f"Candid full-length photograph of {dna.name} in an authentic real-life female walking pose: "
-                        f"captured mid-stride in fluid natural motion, relaxed arm swing, three-quarter angle, graceful feminine posture."
-                    )
-                },
-                {
-                    "id": "face_lock",
-                    "label": "Biometric Face Lock",
-                    "icon": "🔒",
-                    "image_url": dna.face_anchor_url,
-                    "prompt_cue": f"100% locked facial geometry and authentic likeness of {dna.name}."
-                }
-            ]
-        else:
-            dna.poses = [
-                {
-                    "id": "standing",
-                    "label": "Full-Body Standing",
-                    "icon": "🧍‍♂️",
-                    "image_url": primary_standing_image,
-                    "prompt_cue": f"Full-length standing view of man {dna.name} on two legs with footwear visible, athletic masculine posture."
-                },
-                {
-                    "id": "sitting",
-                    "label": "Seated Workspace",
-                    "icon": "🪑",
-                    "image_url": avatar_url,
-                    "prompt_cue": f"Seated thoughtfully at a wooden desk with notebooks, composed masculine posture."
-                },
-                {
-                    "id": "walking",
-                    "label": "Dynamic Striding",
-                    "icon": "🚶‍♂️",
-                    "image_url": primary_standing_image,
-                    "prompt_cue": f"In natural walking motion, balanced fluid stride."
-                },
-                {
-                    "id": "arms_crossed",
-                    "label": "Arms Crossed",
-                    "icon": "🙅‍♂️",
-                    "image_url": primary_standing_image,
-                    "prompt_cue": f"Standing tall with arms folded across chest, observant and resolute demeanor."
-                }
-            ]
+        # Build pose variants using the uploaded character's real face anchor
+        dna.poses = [
+            {
+                "id": "face_lock",
+                "label": "Biometric Face Lock",
+                "icon": "🔒",
+                "image_url": face_anchor_url,
+                "prompt_cue": f"100% locked facial geometry and authentic likeness of {dna.name}."
+            },
+            {
+                "id": "portrait",
+                "label": "Signature Portrait",
+                "icon": "👤",
+                "image_url": face_anchor_url,
+                "prompt_cue": f"Character portrait of {dna.name}, {dna.appearance_description}."
+            }
+        ]
 
         return dna
 
@@ -431,7 +365,14 @@ class CharacterGeneratorService:
             "generationConfig": {"responseMimeType": "application/json"}
         }
 
-        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+        models_to_try = [
+            "gemini-3.6-flash",
+            "gemini-flash-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-pro-latest"
+        ]
         last_error = None
         for model in models_to_try:
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
@@ -451,8 +392,10 @@ class CharacterGeneratorService:
                         data = json.loads(text)
                         return CharacterDNASchema(**data)
                     last_error = f"Gemini Vision API ({model}) returned status {resp.status_code}: {resp.text[:200]}"
+                    logger.warning(f"{last_error}, attempting next model fallback...")
             except Exception as e:
-                last_error = str(e)
+                last_error = f"Gemini Vision API ({model}) error: {e}"
+                logger.warning(f"{last_error}, attempting next model fallback...")
         raise RuntimeError(last_error or "Gemini Vision API call failed")
 
     @classmethod
@@ -503,11 +446,11 @@ class CharacterGeneratorService:
             )
             face_bounding_box = {"ymin": 0.10, "xmin": 0.25, "ymax": 0.50, "xmax": 0.92}
             full_body_url = "/media/characters/poses/amina_standing.jpg"
-            portrait_prompt = f"Cinematic 8K portrait of a female character, woman {name}, {appearance}, wearing {clothing}, {style_desc}."
+            portrait_prompt = f"Portrait of a female character, woman {name}, {appearance}, wearing {clothing}, {style_desc}."
             full_body_prompt = (
                 f"Full-length fashion portrait of a female character, woman standing upright head-to-toe on two legs with stylish boots. "
                 f"Authentic feminine silhouette, natural curves, and graceful posture. Exact same face: {appearance}. Wearing: {clothing}. "
-                f"Confident posture, 8k resolution, cinematic lighting."
+                f"Confident posture, {style_desc}."
             )
         else:
             name = "Kaelen Mercer"
@@ -522,18 +465,39 @@ class CharacterGeneratorService:
             appearance = (
                 "Striking natural facial contours, sharp defined jawline, expressive focused eyes, "
                 "subtle natural skin texture, textured contemporary styled hair, balanced proportions, "
-                "warm cinematic portrait lighting with zero visual drift."
+                "warm portrait lighting with zero visual drift."
             )
             clothing = "Modern minimalist tailored jacket with high-neck dark shirt, tailored trousers, and polished leather shoes."
             personality = "Intense captivating gaze, confident composure, observant demeanor, natural screen magnetism."
             subject_isolation = "🎯 Primary Subject Isolated: Extracted dominant foreground subject; filtered out background noise."
             face_bounding_box = {"ymin": 0.12, "xmin": 0.20, "ymax": 0.55, "xmax": 0.80}
             full_body_url = "/static/images/showcase/marcus_vance_walking.jpg"
-            portrait_prompt = f"Cinematic 8K portrait of a male character, man {name}, {appearance}, wearing {clothing}, {style_desc}."
+            portrait_prompt = f"Portrait of a male character, man {name}, {appearance}, wearing {clothing}, {style_desc}."
             full_body_prompt = (
                 f"Full-length fashion portrait of a male character, man standing upright head-to-toe on two legs with polished leather shoes. "
-                f"Masculine build with broad shoulders. Exact same face: {appearance}. Wearing: {clothing}. Confident posture, 8k resolution, cinematic lighting."
+                f"Masculine build with broad shoulders. Exact same face: {appearance}. Wearing: {clothing}. Confident posture, {style_desc}."
             )
+
+        # Style preset adaptations for fallback engine
+        if style_preset == 'anime':
+            appearance += ", rendered in vibrant modern anime/manga art style with expressive cel-shaded features and vibrant color saturation"
+            clothing += ", styled in contemporary anime aesthetic"
+            tagline += " (Anime Style)"
+        elif style_preset == 'cyberpunk':
+            appearance += ", neo-tokyo cyberpunk aesthetic with subtle luminous neural ocular implants and ambient neon reflections"
+            clothing += ", accented with high-tech weather-resistant cyberpunk materials and subtle neon trims"
+            tagline += " (Cyberpunk Style)"
+        elif style_preset == 'fantasy':
+            appearance += ", dark high fantasy concept art aesthetic with mystical ambient luminescence"
+            clothing += ", adorned with ornate high-fantasy adventurer accents and layered garments"
+            tagline += " (High Fantasy)"
+        elif style_preset == 'pixar_3d':
+            appearance += ", stylized 3D animated character design with soft clay Octane-rendered aesthetics and warm studio illumination"
+            tagline += " (Stylized 3D)"
+        elif style_preset == 'vintage_cartoon':
+            appearance += ", 1930s rubber-hose monochrome cartoon illustration style with pie-cut eyes and hand-inked aesthetic"
+            clothing += ", vintage 1930s monochrome cartoon styling"
+            tagline += " (1930s Rubber-Hose)"
 
         return CharacterDNASchema(
             name=name,
@@ -591,7 +555,14 @@ class CharacterGeneratorService:
             "generationConfig": {"responseMimeType": "application/json"}
         }
 
-        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+        models_to_try = [
+            "gemini-3.6-flash",
+            "gemini-flash-latest",
+            "gemini-3.1-flash-lite",
+            "gemini-2.5-flash",
+            "gemini-2.0-flash",
+            "gemini-pro-latest"
+        ]
         last_error = None
         for model in models_to_try:
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
@@ -611,8 +582,10 @@ class CharacterGeneratorService:
                         data = json.loads(text)
                         return CharacterDNASchema(**data)
                     last_error = f"Gemini API ({model}) returned status {resp.status_code}: {resp.text[:200]}"
+                    logger.warning(f"{last_error}, attempting next model fallback...")
             except Exception as e:
-                last_error = str(e)
+                last_error = f"Gemini API ({model}) error: {e}"
+                logger.warning(f"{last_error}, attempting next model fallback...")
         raise RuntimeError(last_error or "Gemini API call failed")
 
     @classmethod
@@ -701,7 +674,7 @@ class CharacterGeneratorService:
             appearance = f"27-year-old {'female operative' if is_female else 'male operative'} with angular jawline, striking luminescent cyan cybernetic iris, sleek raven-black hair with subtle fiber-optic strands, and micro-circuitry along temple."
             clothing = clothing_str or "Matte-black ballistic leather bomber jacket with glowing amber internal lining, fitted tactical carbon-weave pants, magnetic collar harness."
             personality = "Hyper-focused, sharp analytical gaze, calm under extreme pressure, subtle confident smirk."
-            full_body_url = "/media/characters/poses/amina_diallo_standing.jpg" if is_female else "/static/images/showcase/marcus_vance_walking.jpg"
+            full_body_url = ""
         elif any(w in brief_lower for w in ['detective', 'noir', 'mystery', 'investigator', 'sherlock', 'fedora']) and not extracted_name:
             name = "Clara Cross" if is_female else "Barnaby Cross"
             tagline = "Hardboiled Noir Investigator"
@@ -709,7 +682,7 @@ class CharacterGeneratorService:
             appearance = f"38-year-old {'female detective' if is_female else 'male detective'}, deep-set piercing hazel eyes, dark wavy hair with silver temples, expressive observant brow."
             clothing = clothing_str or "Heavy charcoal wool trenchcoat, loosened vintage silk tie, brass-buckled holster, weathered charcoal fedora."
             personality = "Perceptive, cynical yet deeply empathetic, measured cadence, observant steady gaze."
-            full_body_url = "/media/characters/poses/amina_standing.jpg" if is_female else "/static/images/showcase/marcus_vance_walking.jpg"
+            full_body_url = ""
         elif any(w in brief_lower for w in ['space', 'star', 'pilot', 'commander', 'cosmic', 'galaxy']) and not extracted_name:
             name = "Captain Lyra Vance"
             tagline = "Deep Space Explorer & Fleet Commander"
@@ -717,7 +690,7 @@ class CharacterGeneratorService:
             appearance = "34-year-old commander, radiant olive skin tone, steel-blue eyes with golden flecks, cropped ash-blonde hair, subtle tactical scar over right brow."
             clothing = clothing_str or "Ceramic composite naval commander suit in deep obsidian navy with burnished gold rank seals and magnetic interface cuffs."
             personality = "Authoritative, inspiring, decisive in crisis, unyielding visionary determination."
-            full_body_url = "/media/characters/poses/amina_diallo_standing.jpg"
+            full_body_url = ""
         elif any(w in brief_lower for w in ['camille', 'paris', 'french']) and not extracted_name:
             name = "Camille Laurent"
             gender = "female"
@@ -726,7 +699,7 @@ class CharacterGeneratorService:
             appearance = "25-year-old French woman with elegant dark wavy hair framing sculpted cheekbones, expressive hazel eyes, warm natural smile, radiant complexion."
             clothing = clothing_str or "Tailored beige wool trenchcoat over black cashmere knit turtleneck, high-waisted charcoal trousers, leather ankle boots."
             personality = "Intellectual, creative, poised, effortless Parisian charm with perceptive gaze."
-            full_body_url = "/media/characters/poses/amina_diallo_standing.jpg"
+            full_body_url = ""
         elif any(w in brief_lower for w in ['amina', 'scholar', 'botanist']) and not extracted_name:
             name = "Amina Diallo"
             gender = "female"
@@ -765,16 +738,35 @@ class CharacterGeneratorService:
             )
             personality = "Confident, charismatic, observant, composed demeanor with captivating screen magnetism."
             
-            # Select visual asset based on context
-            text_context = (brief + " " + name + " " + appearance + " " + clothing).lower()
-            if any(w in text_context for w in ['bun', 'topknot', 'diallo', 'terrace', 'white', 'ivory', 'camille', 'trenchcoat', 'cardigan']):
+            # Select showcase asset ONLY if explicitly matching that persona
+            name_lower = name.lower()
+            if 'diallo' in name_lower or 'amina' in name_lower:
                 full_body_url = "/media/characters/poses/amina_diallo_standing.jpg"
-            elif any(w in text_context for w in ['cornrow', 'braid', 'rust', 'scholar', 'library']):
-                full_body_url = "/media/characters/poses/amina_standing.jpg"
-            elif is_female:
-                full_body_url = "/media/characters/poses/amina_diallo_standing.jpg"
-            else:
+            elif 'marcus' in name_lower or 'vance' in name_lower:
                 full_body_url = "/static/images/showcase/marcus_vance_walking.jpg"
+            else:
+                full_body_url = ""
+
+        # Style preset adaptations for fallback engine
+        if style_preset == 'anime':
+            appearance += ", rendered in vibrant modern anime/manga art style with expressive cel-shaded features and vibrant color saturation"
+            clothing += ", styled in contemporary anime aesthetic"
+            tagline += " (Anime Style)"
+        elif style_preset == 'cyberpunk':
+            appearance += ", neo-tokyo cyberpunk aesthetic with subtle luminous neural ocular implants and ambient neon reflections"
+            clothing += ", accented with high-tech weather-resistant cyberpunk materials and subtle neon trims"
+            tagline += " (Cyberpunk Style)"
+        elif style_preset == 'fantasy':
+            appearance += ", dark high fantasy concept art aesthetic with mystical ambient luminescence"
+            clothing += ", adorned with ornate high-fantasy adventurer accents and layered garments"
+            tagline += " (High Fantasy)"
+        elif style_preset == 'pixar_3d':
+            appearance += ", stylized 3D animated character design with soft clay Octane-rendered aesthetics and warm studio illumination"
+            tagline += " (Stylized 3D)"
+        elif style_preset == 'vintage_cartoon':
+            appearance += ", 1930s rubber-hose monochrome cartoon illustration style with pie-cut eyes and hand-inked aesthetic"
+            clothing += ", vintage 1930s monochrome cartoon styling"
+            tagline += " (1930s Rubber-Hose)"
 
         portrait_prompt = (
             f"Close-up masterpiece character portrait of {name} ({tagline}). "
@@ -813,6 +805,25 @@ class CharacterGeneratorService:
     @classmethod
     def generate_avatar_portrait(cls, dna: CharacterDNASchema, style_preset: str = "cinematic") -> str:
         """Generates a high-definition synthetic character avatar and saves to media storage."""
+        # 1. Try Pollinations AI to generate a unique, high-fidelity AI portrait tailored to prompt & style
+        try:
+            import urllib.parse
+            style_desc = cls.STYLE_PRESETS.get(style_preset, "photorealistic 8k portrait")
+            gender_term = "woman" if (dna.gender or '').lower() == 'female' else "man"
+            prompt = f"masterpiece close-up character portrait of {dna.name}, {gender_term}, {dna.appearance_description}, {style_desc}, sharp focus, studio lighting"
+            clean_prompt = prompt.replace("\n", " ").strip()[:280]
+            encoded_prompt = urllib.parse.quote(clean_prompt)
+            seed = uuid.uuid4().int % 1000000
+            pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=768&nologo=true&seed={seed}"
+            with httpx.Client(timeout=8.0) as client:
+                resp = client.get(pollinations_url)
+                if resp.status_code == 200 and len(resp.content) > 3000:
+                    filename = f"characters/avatars/ai_{uuid.uuid4().hex[:10]}.jpg"
+                    saved_path = default_storage.save(filename, ContentFile(resp.content))
+                    return default_storage.url(saved_path)
+        except Exception as e:
+            logger.warning(f"Live AI portrait generation skipped ({e}), falling back to styled monogram...")
+
         width, height = 512, 512
         image = Image.new('RGB', (width, height), color=(14, 16, 20))
         draw = ImageDraw.Draw(image)

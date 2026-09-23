@@ -38,25 +38,197 @@ def dispatch_generation_task(generation_id: str):
         # Collect reference media URLs if any
         ref_urls = [m.url for m in generation.reference_media.all() if m.url]
 
-        # If character is selected and no reference image was provided, attach character avatar
-        if not ref_urls and generation.character and generation.character.avatar:
-            try:
-                avatar_url = generation.character.avatar.url
-                if avatar_url:
-                    ref_urls.append(avatar_url)
-            except Exception as e:
-                logger.debug(f"Could not read character avatar URL: {e}")
+        # If character is selected and no reference image was provided, attach character face anchor
+        if not ref_urls and generation.character:
+            candidate_urls = []
+            if generation.character.face_anchor_url:
+                candidate_urls.append(generation.character.face_anchor_url)
+            if generation.character.primary_image_url:
+                candidate_urls.append(generation.character.primary_image_url)
+            if generation.character.avatar:
+                try:
+                    candidate_urls.append(generation.character.avatar.url)
+                except Exception:
+                    pass
 
-        # Directorial character prompt injection
+            from apps.providers.base import load_image_as_base64
+            for cand in candidate_urls:
+                if cand:
+                    try:
+                        if load_image_as_base64(cand):
+                            ref_urls.append(cand)
+                            break
+                    except Exception:
+                        pass
+
+        # Directorial character prompt injection — inject full visual DNA so the model generates the right person
         effective_prompt = generation.prompt
         if generation.character:
-            char_cue = generation.character.build_prompt_cue()
-            if char_cue and generation.character.name.lower() not in effective_prompt.lower():
-                effective_prompt = f"{char_cue}. {effective_prompt}"
+            char = generation.character
+            # build_prompt_cue() assembles: gender, physique, appearance, clothing in one rich cue string
+            char_cue = char.build_prompt_cue() if hasattr(char, 'build_prompt_cue') else ""
+            if char.name.lower() not in effective_prompt.lower():
+                if char_cue:
+                    effective_prompt = f"{char_cue}. {effective_prompt}"
+                else:
+                    effective_prompt = f"{char.name}. {effective_prompt}"
+
+        # Prevent headless/cropped bodies and guarantee photorealistic framing
+        if generation.generation_type == 'video':
+            framing_cues = (
+                "cinematic medium close-up portrait shot, character's entire head and face clearly visible and centered, "
+                "eye-level camera angle, eyes, nose, mouth and jawline fully in frame, "
+                "photorealistic 4K hyper-detailed skin texture, natural cinematic lighting with soft rim light"
+            )
+            if not any(k in effective_prompt.lower() for k in ('portrait', 'headshot', 'medium close-up', 'close up', 'face centered', 'close-up')):
+                effective_prompt = f"{effective_prompt}, {framing_cues}"
+
+            # Anti-decapitation & anti-cropping negative prompt
+            anti_crop = (
+                "headless, cut off head, cropped head, head out of frame, missing head, decapitated, "
+                "bad framing, top of head cut off, body without head, out of frame, "
+                "distorted face, deformed features, bad anatomy, bad proportions, "
+                "unnatural mouth, low quality, blurry, warped hands, ugly, poorly drawn"
+            )
+            if generation.negative_prompt:
+                generation.negative_prompt = f"{generation.negative_prompt}, {anti_crop}"
+            else:
+                generation.negative_prompt = anti_crop
 
         extra_params = {}
-        if generation.generation_type == 'audio' and generation.quality:
-            extra_params['voice'] = generation.quality
+        if generation.generation_type == 'audio':
+            if generation.quality:
+                extra_params['voice'] = generation.quality
+            target_vp = generation.voice_profile
+            if not target_vp and generation.character and generation.character.voice_profile:
+                target_vp = generation.character.voice_profile
+            if target_vp and target_vp.samples.exists():
+                first_sample = target_vp.samples.first()
+                if first_sample and first_sample.audio_file:
+                    sample_path = first_sample.audio_file.path if hasattr(first_sample.audio_file, 'path') else first_sample.audio_file.url
+                    extra_params['voice_sample_path'] = sample_path
+                    extra_params['voice'] = str(target_vp.id)
+
+        # -------------------------------------------------------------
+        # 1-Step Unified Lip-Sync & Voice Route Routing
+        # -------------------------------------------------------------
+        is_google_veo = generation.provider.slug == 'google' or 'veo' in generation.model.model_id.lower()
+        if generation.generation_type == 'video' and (generation.is_lip_sync or generation.voice_profile or generation.dialogue):
+            dialogue_text = (generation.dialogue or "").strip()
+            if not dialogue_text:
+                # Auto-deduce realistic in-character spoken dialogue from the prompt
+                try:
+                    from apps.ai.dialogue import AIDialogueDirector
+                    char_name = generation.character.name if generation.character else ""
+                    char_gender = (generation.character.metadata.get('gender') or '') if generation.character else ""
+                    deduced = AIDialogueDirector.deduce_dialogue(
+                        prompt=generation.prompt,
+                        character_name=char_name,
+                        duration=generation.duration or 5,
+                        character_gender=char_gender
+                    )
+                    dialogue_text = (deduced.get("dialogue") or "").strip()
+                    if dialogue_text:
+                        generation.dialogue = dialogue_text
+                        generation.is_lip_sync = True
+                        generation.save(update_fields=['dialogue', 'is_lip_sync'])
+                        logger.info(f"Auto-deduced in-character dialogue for generation {generation.id}: '{dialogue_text}'")
+                except Exception as exc:
+                    logger.warning(f"Could not auto-deduce dialogue: {exc}")
+
+            if is_google_veo and not generation.voice_profile:
+                # ROUTE A: Google Veo Native Speech (ElevenLabs Bypassed)
+                extra_params['dialogue'] = dialogue_text
+                generation.uses_native_veo_audio = True
+                generation.pipeline_stage = "Rendering cinematic video with Google Veo native speech..."
+                generation.save(update_fields=['uses_native_veo_audio', 'pipeline_stage'])
+            elif dialogue_text:
+                # ROUTE B: Character Voice / Neural Lip-Sync Pipeline
+                # Step 1: Pre-synthesize speech with character voice if not already attached
+                if not generation.audio_track:
+                    generation.pipeline_stage = "Stage 1/3: Synthesizing character speech in recorded voice..."
+                    generation.save(update_fields=['pipeline_stage'])
+
+                    # Resolve Voice Profile from generation or attached character
+                    target_vp = generation.voice_profile
+                    if not target_vp and generation.character and generation.character.voice_profile:
+                        target_vp = generation.character.voice_profile
+                        generation.voice_profile = target_vp
+                        generation.save(update_fields=['voice_profile'])
+
+                    audio_res = None
+
+                    # CASE 1: Voice profile has user-recorded audio samples -> ZERO-SHOT NEURAL CLONE!
+                    if target_vp and target_vp.samples.exists():
+                        first_sample = target_vp.samples.first()
+                        if first_sample and first_sample.audio_file:
+                            sample_path = first_sample.audio_file.path if hasattr(first_sample.audio_file, 'path') else first_sample.audio_file.url
+                            logger.info(f"Synthesizing character dialogue using authentic recorded voice sample '{target_vp.name}' via Fal F5-TTS")
+                            from apps.providers.adapters.fal_ai import FalAIProvider
+                            audio_res = FalAIProvider().clone_voice_speech(
+                                text=dialogue_text,
+                                ref_audio_path_or_url=sample_path
+                            )
+
+                    # CASE 2: Preset / remote voice or fallback
+                    if not audio_res or audio_res.status != 'completed':
+                        voice_target = 'adam'  # safe fallback
+                        if target_vp:
+                            pid = target_vp.provider_voice_id or ''
+                            if pid and not pid.startswith('mock-') and not pid.startswith('fal-'):
+                                voice_target = pid
+                            else:
+                                gender = (target_vp.gender or '').lower()
+                                voice_target = 'rachel' if gender == 'female' else 'adam'
+                        elif generation.quality and not generation.quality.startswith('mock-') and generation.quality not in ('standard', 'hd', 'hq'):
+                            voice_target = generation.quality
+
+                        from apps.providers.adapters.elevenlabs import ElevenLabsProvider
+                        audio_req = GenerationRequest(
+                            prompt=dialogue_text,
+                            duration=generation.duration,
+                            extra_params={'voice': voice_target}
+                        )
+                        audio_res = ElevenLabsProvider().generate_audio('eleven_multilingual_v2', audio_req)
+                    if audio_res.status == 'completed' and audio_res.output_media_url:
+                        audio_media = Media.objects.create(
+                            owner=generation.user,
+                            project=generation.project,
+                            generation=generation,
+                            media_type='audio',
+                            storage_key=audio_res.output_media_url,
+                            duration=generation.duration
+                        )
+                        # Download audio to local storage immediately for reliable mux access
+                        import os
+                        if audio_res.output_media_url.startswith(('http://', 'https://')):
+                            from apps.providers.base import is_safe_external_url
+                            if is_safe_external_url(audio_res.output_media_url):
+                                try:
+                                    audio_req_obj = urllib.request.Request(
+                                        audio_res.output_media_url,
+                                        headers={'User-Agent': 'CleaverLoop-Engine/1.0'}
+                                    )
+                                    with urllib.request.urlopen(audio_req_obj, timeout=20) as r:
+                                        audio_bytes = r.read()
+                                    if len(audio_bytes) > 512:
+                                        ext = 'mp3' if audio_res.output_media_url.lower().endswith('.mp3') else 'wav'
+                                        from django.core.files.base import ContentFile
+                                        audio_media.file.save(f"{audio_media.id[:8]}.{ext}", ContentFile(audio_bytes), save=True)
+                                except Exception as dl_err:
+                                    logger.warning(f"Could not pre-download audio for mux: {dl_err}")
+                        generation.audio_track = audio_media
+                        generation.save(update_fields=['audio_track'])
+                        extra_params['audio_url'] = audio_media.url
+                    else:
+                        logger.warning(f"Speech synthesis failed for generation {generation.id}: {audio_res.error_message}")
+
+                # Enhanced directorial framing prompt for natural jaw/lip motion
+                effective_prompt = (
+                    f"{effective_prompt}. Medium close-up portrait, natural conversational head motion, "
+                    f"expressive jaw movement synchronized to speech, authentic eye contact, "
+                    f"warm cinematic key light on face, shallow depth of field."
+                )
 
         # For video lipsync/latentsync tasks, explicitly isolate video and audio reference assets
         if generation.generation_type == 'video' and any(k in generation.model.model_id.lower() for k in ('lipsync', 'latentsync')):
@@ -333,14 +505,95 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
             generation.scene.status = 'completed'
             generation.scene.save(update_fields=['generated_media', 'status'])
 
-        # If attached to a parent video generation, link audio_track
-        if generation.parent_generation and generation.generation_type == 'audio':
-            generation.parent_generation.audio_track = media
-            generation.parent_generation.save(update_fields=['audio_track'])
+        # If attached to a parent video generation:
+        if generation.parent_generation:
+            # Case A: Audio track generation completed -> link audio_track & auto-mux sound
+            if generation.generation_type == 'audio':
+                generation.parent_generation.audio_track = media
+                generation.parent_generation.save(update_fields=['audio_track'])
+                try:
+                    import os
+                    from apps.editor.ffmpeg_service import FFmpegService
+                    parent_med = generation.parent_generation.output_media
+                    if parent_med and parent_med.file and media.file:
+                        if os.path.exists(parent_med.file.path) and os.path.exists(media.file.path):
+                            muxed_path = FFmpegService.merge_video_and_audio(parent_med.file.path, media.file.path)
+                            if muxed_path and os.path.exists(muxed_path) and muxed_path != parent_med.file.path:
+                                with open(muxed_path, 'rb') as f:
+                                    parent_med.file.save(f"{parent_med.id}_voiced.mp4", ContentFile(f.read()), save=True)
+                                logger.info(f"Automatically muxed audio track into parent video {parent_med.id}")
+                except Exception as e:
+                    logger.warning(f"Auto audio-video mux failed: {e}")
+
+                # Automatically trigger neural lip-sync if attached to base video
+                if generation.parent_generation.output_media and not any(k in generation.parent_generation.model.model_id.lower() for k in ('lipsync', 'latentsync')):
+                    _trigger_unified_neural_lipsync(generation.parent_generation)
+
+            # Case B: Child Video (e.g. Neural Lip-Sync pass) completed -> promote to parent video output!
+            elif generation.generation_type == 'video':
+                generation.parent_generation.output_media = media
+                generation.parent_generation.pipeline_stage = "Neural lip-sync and audio integration complete!"
+                generation.parent_generation.save(update_fields=['output_media', 'pipeline_stage'])
+                logger.info(f"Promoted lip-synced video media {media.id} to parent generation {generation.parent_generation.id}")
+
+        # If this is a 1-step lip-sync generation that just finished base video, trigger neural lip-sync step!
+        if generation.generation_type == 'video' and generation.is_lip_sync and generation.audio_track and not any(k in generation.model.model_id.lower() for k in ('lipsync', 'latentsync')):
+            _trigger_unified_neural_lipsync(generation)
 
         # Commit credits
         CreditService.commit_credits(generation)
         logger.info(f"Successfully finalized generation {generation.id}")
+
+def _trigger_unified_neural_lipsync(parent_gen: Generation):
+    """
+    1-Step Unified Lip-Sync Pipeline: Automatically launches neural lip-sync pass
+    after base video finishes, connecting the base video with the cloned audio track.
+    """
+    try:
+        from apps.providers.models import AIModel, AIProviderConfig
+        fal_cfg = AIProviderConfig.objects.filter(slug='fal').first() or parent_gen.provider
+        lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
+        if not lipsync_model:
+            lipsync_model, _ = AIModel.objects.get_or_create(
+                model_id='fal-latentsync',
+                defaults={
+                    'provider': fal_cfg,
+                    'display_name': 'LatentSync (Full-Face & Jaw Neural)',
+                    'modality': 'video',
+                    'credit_cost_fixed': 15,
+                    'credit_cost_per_second': 3,
+                    'is_enabled': True
+                }
+            )
+
+        duration = parent_gen.duration or 5
+        parent_gen.pipeline_stage = "Stage 3/3: Running full-face neural lip-sync & jaw articulation..."
+        parent_gen.save(update_fields=['pipeline_stage'])
+
+        lipsync_gen = Generation.objects.create(
+            user=parent_gen.user,
+            project=parent_gen.project,
+            parent_generation=parent_gen,
+            generation_type='video',
+            provider=lipsync_model.provider,
+            model=lipsync_model,
+            model_id_snapshot=lipsync_model.model_id,
+            prompt=f"👄 Neural Lip-Sync: {parent_gen.prompt}",
+            aspect_ratio=parent_gen.aspect_ratio,
+            duration=duration,
+            character=parent_gen.character,
+            audio_track=parent_gen.audio_track,
+            status='queued'
+        )
+        if parent_gen.output_media:
+            lipsync_gen.reference_media.add(parent_gen.output_media)
+        if parent_gen.audio_track:
+            lipsync_gen.reference_media.add(parent_gen.audio_track)
+
+        dispatch_generation_task.delay(str(lipsync_gen.id))
+        logger.info(f"Triggered automated unified lip-sync job {lipsync_gen.id} for parent {parent_gen.id}")
+    except Exception as exc:
+        logger.error(f"Could not trigger automated neural lip-sync for {parent_gen.id}: {exc}")
 
 def _finalize_failed_generation(generation: Generation, raw_error: str):
     """Mark generation as failed, record diagnostics, and automatically refund reserved credits."""

@@ -160,26 +160,38 @@
                         <source src="{{ generation.latest_audio.url }}" type="audio/ogg">
                     </audio>
 
-                    <!-- 1-Click Neural Lip-Sync Action Banner -->
+                    <!-- 1-Click Neural Lip-Sync & FFmpeg Mux Action Banner -->
                     <div class="pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
                         <div class="space-y-0.5">
                             <h5 class="text-xs font-bold text-white flex items-center gap-1.5">
                                 <span>👄</span>
-                                <span>Neural Lip-Sync Studio</span>
-                                <span class="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 text-[9px] font-mono font-bold">New</span>
+                                <span>Neural Lip-Sync & Audio Muxing</span>
+                                <span class="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 text-[9px] font-mono font-bold">Studio Suite</span>
                             </h5>
-                            <p class="text-[11px] text-slate-400">Animate {{ generation.character.name|default:"character" }}'s mouth, jaw, and facial expressions in sync with this audio track.</p>
+                            <p class="text-[11px] text-slate-400">Animate facial articulation with neural sync, or mux this 48kHz audio track directly into the MP4 video container.</p>
                         </div>
 
-                        <form action="{% url 'generations:lipsync_video' generation.id %}" method="POST" class="inline">
-                            {% csrf_token %}
-                            <button type="submit"
-                                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-4 py-2 font-heading font-black text-xs uppercase tracking-wider transition hover:scale-105 flex items-center gap-1.5 shadow-lg shadow-orange-500/25">
-                                <span>👄</span>
-                                <span>Sync Lips & Video</span>
-                                <span class="opacity-80 text-[10px] font-mono">• 30 cr</span>
-                            </button>
-                        </form>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <form action="{% url 'generations:mux_audio_video' generation.id %}" method="POST" class="inline">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        title="Directly embed 48kHz AAC audio into this MP4 video with FFmpeg"
+                                        class="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/10 text-slate-200 hover:text-white border border-white/10 font-heading font-bold text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
+                                    <span>🎬</span>
+                                    <span>Mux Audio (FFmpeg)</span>
+                                </button>
+                            </form>
+
+                            <form action="{% url 'generations:lipsync_video' generation.id %}" method="POST" class="inline">
+                                {% csrf_token %}
+                                <button type="submit"
+                                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-4 py-2 font-heading font-black text-xs uppercase tracking-wider transition hover:scale-105 flex items-center gap-1.5 shadow-lg shadow-orange-500/25 cursor-pointer">
+                                    <span>👄</span>
+                                    <span>Sync Lips & Video</span>
+                                    <span class="opacity-80 text-[10px] font-mono">• 30 cr</span>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             {% endif %}
@@ -239,19 +251,121 @@
                                 </label>
                             </div>
 
-                            <!-- Voice dropdown (TTS mode) - Dynamically Generated -->
-                            <div x-show="audioType === 'tts'" x-transition class="space-y-1.5">
-                                <label class="text-[11px] font-mono uppercase text-slate-300 font-bold">Voice Persona</label>
-                                <select name="voice" x-model="selectedVoice" class="w-full px-3.5 py-2.5 rounded-2xl bg-black/70 border border-white/10 text-xs text-white focus:outline-none focus:border-orange-500">
-                                    {% for v in available_voices %}
-                                        <option value="{{ v.id }}">{{ v.name }} — {{ v.desc }} ({{ v.badge }})</option>
-                                    {% empty %}
-                                        <option value="adam">Adam — Deep, Cinematic Male Narrator</option>
-                                        <option value="rachel">Rachel — Warm, Calm Female Voice</option>
-                                        <option value="nicole">Nicole — Energetic, Crisp Female Narrator</option>
-                                        <option value="antoni">Antoni — Natural, Engaging Male Storyteller</option>
-                                    {% endfor %}
-                                </select>
+                            <!-- Voice Persona Picker (Glassmorphic Popover) -->
+                            <div x-show="audioType === 'tts'" x-transition class="space-y-1.5 relative" @click.outside="voiceDropdownOpen = false">
+                                <input type="hidden" name="voice" :value="selectedVoice">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-[11px] font-mono uppercase text-slate-300 font-bold flex items-center gap-1.5">
+                                        <span class="text-orange-400">🎙️</span>
+                                        <span>Voice Persona</span>
+                                    </label>
+                                    <a href="{% url 'voices:create' %}" target="_blank" class="text-[10px] text-orange-400 hover:text-orange-300 font-bold transition flex items-center gap-1 hover:underline">
+                                        <span>+ Clone Voice</span>
+                                        <span class="font-mono">↗</span>
+                                    </a>
+                                </div>
+
+                                <!-- Trigger Button -->
+                                <button type="button"
+                                        @click="voiceDropdownOpen = !voiceDropdownOpen"
+                                        :class="voiceDropdownOpen ? 'border-orange-500 ring-1 ring-orange-500/40 bg-[#14171c]' : 'border-white/[0.1] bg-[#0b0d10] hover:border-white/20 hover:bg-[#101216]'"
+                                        class="w-full rounded-2xl border text-xs text-white p-2.5 outline-none transition-all duration-200 flex items-center justify-between gap-2.5 cursor-pointer shadow-lg group">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <div class="w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 transition-all duration-200 shadow-sm"
+                                             :class="selectedVoiceIsCloned ? 'bg-gradient-to-br from-amber-500/30 to-orange-500/20 border border-amber-500/50 text-amber-300' : 'bg-orange-500/15 border border-orange-500/30 text-orange-400'">
+                                            <span x-text="selectedVoiceIsCloned ? '⭐' : '🗣️'"></span>
+                                        </div>
+                                        <div class="text-left min-w-0">
+                                            <div class="font-bold text-white text-xs truncate flex items-center gap-1.5">
+                                                <span x-text="selectedVoiceName"></span>
+                                                <span class="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full"
+                                                      :class="selectedVoiceIsCloned ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/[0.06] text-slate-400 border border-white/[0.08]'"
+                                                      x-text="selectedVoiceBadge"></span>
+                                            </div>
+                                            <div class="text-[10px] text-slate-400 truncate mt-0.5" x-text="selectedVoiceDesc"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0 text-slate-400 group-hover:text-white transition">
+                                        <svg class="w-3.5 h-3.5 transition-transform duration-200"
+                                             :class="voiceDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </div>
+                                </button>
+
+                                <!-- Popover Menu -->
+                                <div x-show="voiceDropdownOpen"
+                                     x-transition:enter="transition ease-out duration-150"
+                                     x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+                                     x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                                     x-transition:leave="transition ease-in duration-100"
+                                     x-transition:leave-start="opacity-100 scale-100"
+                                     x-transition:leave-end="opacity-0 scale-95"
+                                     class="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#0c0e12]/98 backdrop-blur-2xl border border-white/[0.12] shadow-2xl p-2.5 z-50 max-h-72 overflow-y-auto space-y-2">
+                                    
+                                    <!-- Search Bar -->
+                                    <div class="relative">
+                                        <input type="text"
+                                               x-model="voiceSearch"
+                                               placeholder="Search voices..."
+                                               class="w-full rounded-xl bg-black/60 border border-white/10 text-[11px] text-white placeholder-slate-500 pl-8 pr-3 py-1.5 outline-none focus:border-orange-500/70 transition">
+                                        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-500">🔍</span>
+                                    </div>
+
+                                    <!-- Voice Items -->
+                                    <div class="space-y-1">
+                                        {% for v in available_voices %}
+                                        <div x-show="!voiceSearch || '{{ v.name|lower|escapejs }}'.includes(voiceSearch.toLowerCase()) || '{{ v.desc|lower|escapejs }}'.includes(voiceSearch.toLowerCase()) || '{{ v.badge|lower|escapejs }}'.includes(voiceSearch.toLowerCase())"
+                                             class="flex items-center gap-1.5">
+                                            <button type="button"
+                                                    @click="selectVoice('{{ v.id }}', '{{ v.name|escapejs }}', '{{ v.desc|escapejs }}', '{{ v.badge|escapejs }}', {% if v.is_cloned or v.is_custom %}true{% else %}false{% endif %})"
+                                                    :class="selectedVoice === '{{ v.id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white shadow-sm' : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white'"
+                                                    class="flex-1 p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0 font-bold {% if v.is_cloned or v.is_custom %}bg-amber-500/15 border border-amber-500/30 text-amber-300{% else %}bg-orange-500/15 border border-orange-500/25 text-orange-400{% endif %}">
+                                                        {% if v.is_cloned or v.is_custom %}🎙️{% else %}🗣️{% endif %}
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <div class="text-xs font-bold text-white group-hover/item:text-orange-300 transition truncate flex items-center gap-1.5">
+                                                            <span>{{ v.name }}</span>
+                                                            <span class="text-[8px] font-mono px-1 py-0.2 rounded {% if v.is_cloned or v.is_custom %}bg-amber-500/20 text-amber-300 border border-amber-500/30{% else %}bg-white/[0.06] text-slate-400 border border-white/[0.08]{% endif %}">{{ v.badge }}</span>
+                                                        </div>
+                                                        <div class="text-[10px] text-slate-400 truncate">{{ v.desc }}</div>
+                                                    </div>
+                                                </div>
+                                                <span x-show="selectedVoice === '{{ v.id }}'" class="text-orange-400 text-xs font-bold shrink-0">✓</span>
+                                            </button>
+                                            {% if v.preview_url %}
+                                            <button type="button"
+                                                    @click.stop="const a = new Audio('{{ v.preview_url }}'); a.play();"
+                                                    title="Audition Sample Clip"
+                                                    class="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-amber-500/20 hover:text-amber-300 border border-white/[0.06] text-slate-400 flex items-center justify-center text-[10px] shrink-0 transition cursor-pointer">
+                                                ▶
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                        {% empty %}
+                                        <button type="button"
+                                                @click="selectVoice('adam', 'Adam', 'Deep, Cinematic Male Narrator', 'Cinematic', false)"
+                                                class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between bg-orange-500/20 border-orange-500/50 text-white">
+                                            <div class="text-xs font-bold text-white">Adam (Cinematic)</div>
+                                            <span class="text-orange-400 text-xs font-bold">✓</span>
+                                        </button>
+                                        {% endfor %}
+                                    </div>
+
+                                    <!-- Footer -->
+                                    <div class="pt-2 border-t border-white/[0.06]">
+                                        <a href="{% url 'voices:create' %}" target="_blank"
+                                           class="w-full py-1.5 px-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-dashed border-orange-500/30 text-orange-300 hover:text-orange-200 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                                            <span>🎙️</span>
+                                            <span>+ Clone New Voice Persona</span>
+                                            <span class="font-mono text-[10px]">↗</span>
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Prompt Input -->

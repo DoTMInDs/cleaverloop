@@ -248,7 +248,20 @@ function generationDetailInspector(videoDuration, promptText, charName) {
         audioType: 'foley',
         audioPrompt: defaultFoley,
         selectedVoice: 'adam',
-        videoDuration: duration,
+        selectedVoiceName: 'Adam (Cinematic)',
+        selectedVoiceDesc: 'Deep, cinematic male narrator',
+        selectedVoiceBadge: 'Cinematic',
+        selectedVoiceIsCloned: false,
+        voiceDropdownOpen: false,
+        voiceSearch: '',
+        selectVoice(id, name, desc, badge, isCloned) {
+            this.selectedVoice = id;
+            this.selectedVoiceName = name;
+            this.selectedVoiceDesc = desc || '';
+            this.selectedVoiceBadge = badge || (isCloned ? 'CLONED' : 'PRESET');
+            this.selectedVoiceIsCloned = !!isCloned;
+            this.voiceDropdownOpen = false;
+        },
         isPlayingSync: false,
         isDeducing: false,
         deducedEmotion: '',

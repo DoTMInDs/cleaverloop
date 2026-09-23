@@ -66,6 +66,7 @@ LOCAL_APPS = [
     'apps.studio',
     'apps.editor',
     'apps.ai',
+    'apps.voices',
     'apps.adminpanel',
     'apps.analytics',
 ]
@@ -283,6 +284,7 @@ USD_TO_GHS_RATE = env('USD_TO_GHS_RATE', default='auto')
 
 # Platform Economics Configuration (Flashloop Benchmark)
 DEFAULT_STARTER_CREDITS = env.int('DEFAULT_STARTER_CREDITS', default=500)
+CREDIT_COST_VOICE_CLONE = env.int('CREDIT_COST_VOICE_CLONE', default=50)
 SUBSCRIPTION_PLANS = {
     'free': {
         'name': 'Free Trial',

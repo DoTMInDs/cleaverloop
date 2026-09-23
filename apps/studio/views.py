@@ -172,7 +172,9 @@ class CreateStudioView(LoginRequiredMixin, TemplateView):
         ctx['video_models'] = AIModel.objects.filter(modality='video', is_enabled=True, provider__is_enabled=True).order_by('-priority')
         ctx['audio_models'] = AIModel.objects.filter(modality='audio', is_enabled=True, provider__is_enabled=True).order_by('-priority')
         from apps.providers.adapters.elevenlabs import ElevenLabsProvider
-        ctx['available_voices'] = ElevenLabsProvider.get_available_voices()
+        from apps.voices.models import VoiceProfile
+        ctx['available_voices'] = ElevenLabsProvider.get_available_voices(user=user)
+        ctx['cloned_voices'] = VoiceProfile.objects.filter(user=user, status='ready')
         ctx['characters'] = Character.objects.filter(owner=user)
         ctx['projects'] = Project.objects.filter(owner=user)
         ctx['recent_generations'] = Generation.objects.filter(user=user, parent_generation__isnull=True).select_related('output_media', 'model', 'provider')[:12]

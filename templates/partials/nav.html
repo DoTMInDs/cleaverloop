@@ -44,6 +44,10 @@
             class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if 'characters' in request.path %}text-brand-400 bg-white/5{% else %}text-slate-300{% endif %}">
             Characters
         </a>
+        <a href="{% url 'voices:list' %}"
+            class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if 'voices' in request.path %}text-orange-400 bg-white/5{% else %}text-slate-300{% endif %} flex items-center gap-1.5">
+            <span>🎙️</span> Voices
+        </a>
         <a href="{% url 'generations:history' %}"
             class="px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-white/5 transition {% if 'generations' in request.path %}text-brand-400 bg-white/5{% else %}text-slate-300{% endif %}">
             History

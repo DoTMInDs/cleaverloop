@@ -23,7 +23,151 @@
     // AI Magic Forge state
     forgeTab: 'photo', // 'photo' or 'prompt'
     magicPrompt: '',
-    stylePreset: 'cinematic',
+    stylePreset: '{% if object and object.metadata.style_preset %}{{ object.metadata.style_preset|escapejs }}{% else %}cinematic{% endif %}',
+    styleDropdownOpen: false,
+    promptStyleDropdownOpen: false,
+    stylesList: [
+        {
+            id: 'cinematic',
+            label: 'Cinematic 8K Photoreal',
+            icon: '🎬',
+            badge: 'Photoreal',
+            badgeColor: 'border-orange-500/30 text-orange-400 bg-orange-500/10',
+            glowColor: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
+            desc: 'Ultra-realistic 35mm film photography, skin pores & natural lighting'
+        },
+        {
+            id: 'anime',
+            label: 'Modern Anime / Manga',
+            icon: '🎨',
+            badge: 'Anime',
+            badgeColor: 'border-pink-500/30 text-pink-400 bg-pink-500/10',
+            glowColor: 'bg-pink-500/15 text-pink-400 border-pink-500/30',
+            desc: 'Makoto Shinkai aesthetic, vibrant illustration & expressive eyes'
+        },
+        {
+            id: 'cyberpunk',
+            label: 'Cyberpunk Neo-Tokyo',
+            icon: '⚡',
+            badge: 'Cyberpunk',
+            badgeColor: 'border-cyan-500/30 text-cyan-400 bg-cyan-500/10',
+            glowColor: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
+            desc: 'Volumetric neon fog, holographic reflections & cybernetics'
+        },
+        {
+            id: 'fantasy',
+            label: 'Dark High Fantasy',
+            icon: '🔮',
+            badge: 'High Fantasy',
+            badgeColor: 'border-purple-500/30 text-purple-400 bg-purple-500/10',
+            glowColor: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+            desc: 'Painterly concept art, intricate armor & ethereal magical glow'
+        },
+        {
+            id: 'pixar_3d',
+            label: 'Stylized 3D Animation',
+            icon: '🧸',
+            badge: 'Stylized 3D',
+            badgeColor: 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10',
+            glowColor: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+            desc: 'Octane 3D render, expressive facial traits & soft studio lighting'
+        },
+        {
+            id: 'vintage_cartoon',
+            label: '1930s Rubber-Hose',
+            icon: '🎞️',
+            badge: 'Monochrome',
+            badgeColor: 'border-amber-500/30 text-amber-400 bg-amber-500/10',
+            glowColor: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+            desc: 'Monochrome classic animation, pie-cut eyes & hand-drawn charm'
+        }
+    ],
+
+    get currentStyle() {
+        return this.stylesList.find(s => s.id === this.stylePreset) || this.stylesList[0];
+    },
+
+    selectStyle(id) {
+        this.stylePreset = id;
+        this.styleDropdownOpen = false;
+        this.promptStyleDropdownOpen = false;
+    },
+
+    // Character Voice Persona Dropdown state
+    voiceDropdownOpen: false,
+    voiceSearch: '',
+    selectedVoiceId: '{% if object and object.voice_profile_id %}{{ object.voice_profile_id }}{% elif form.voice_profile.value %}{{ form.voice_profile.value }}{% elif request.GET.voice_profile %}{{ request.GET.voice_profile|escapejs }}{% endif %}',
+    voiceList: [
+        {
+            id: '',
+            name: 'No Cloned Voice Assigned',
+            meta: 'Studio Presets / Default AI Voice',
+            gender: '',
+            accent: 'Preset',
+            isCloned: false,
+            previewUrl: '',
+            desc: 'Use default studio voice models and multi-speaker dialogue presets during generation.'
+        }{% if cloned_voices %},{% endif %}
+        {% for cv in cloned_voices %}
+        {
+            id: '{{ cv.id }}',
+            name: '{{ cv.name|escapejs }}',
+            meta: '{{ cv.gender|title|escapejs }} • {{ cv.accent|default:"Natural"|escapejs }}',
+            gender: '{{ cv.gender|title|escapejs }}',
+            accent: '{{ cv.accent|default:"Natural"|escapejs }}',
+            isCloned: true,
+            previewUrl: '{{ cv.preview_url|default:""|escapejs }}',
+            desc: '{{ cv.description|default:""|truncatechars:60|escapejs }}'
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    ],
+    get currentVoice() {
+        return this.voiceList.find(v => String(v.id) === String(this.selectedVoiceId)) || this.voiceList[0];
+    },
+    selectVoice(id) {
+        this.selectedVoiceId = id;
+        this.voiceDropdownOpen = false;
+        this.stopVoiceAudio();
+    },
+    playingVoiceId: null,
+    playingAudio: null,
+    toggleVoiceAudio(event, voice) {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        if (!voice || !voice.previewUrl) return;
+        if (this.playingAudio && this.playingVoiceId === voice.id) {
+            this.stopVoiceAudio();
+            return;
+        }
+        this.stopVoiceAudio();
+        try {
+            this.playingAudio = new Audio(voice.previewUrl);
+            this.playingVoiceId = voice.id;
+            this.playingAudio.play().catch(e => {
+                console.warn('Audio preview playback blocked or failed:', e);
+                this.stopVoiceAudio();
+            });
+            this.playingAudio.onended = () => {
+                this.stopVoiceAudio();
+            };
+        } catch (err) {
+            console.error('Audio init error:', err);
+            this.stopVoiceAudio();
+        }
+    },
+    stopVoiceAudio() {
+        if (this.playingAudio) {
+            try {
+                this.playingAudio.pause();
+                this.playingAudio.currentTime = 0;
+            } catch(e) {}
+            this.playingAudio = null;
+        }
+        this.playingVoiceId = null;
+    },
+
     isSynthesizing: false,
     isAnalyzingPhoto: false,
     aiSuccessNotice: false,
@@ -159,12 +303,12 @@
             this.charGender = data.gender || 'female';
             this.bodyType = data.body_type || '';
             this.subjectIsolation = data.subject_isolation || '';
-            this.fullBodyUrl = data.full_body_url || data.avatar_url || '';
+            this.fullBodyUrl = data.full_body_url || data.face_anchor_url || data.avatar_url || '';
             this.fullBodyPrompt = data.full_body_prompt || '';
-            this.faceAnchorUrl = data.face_anchor_url || '';
-            this.avatarPreview = this.fullBodyUrl;
-            this.generatedAvatarUrl = this.fullBodyUrl;
-            this.photoPreview = this.faceAnchorUrl || data.avatar_url || '';
+            this.faceAnchorUrl = data.face_anchor_url || data.avatar_url || '';
+            this.avatarPreview = this.faceAnchorUrl || this.photoPreview;
+            this.generatedAvatarUrl = this.avatarPreview;
+            this.photoPreview = this.avatarPreview;
 
             this.generatedMetadata = JSON.stringify({
                 gender: this.charGender,
@@ -174,6 +318,7 @@
                 original_face_url: this.faceAnchorUrl,
                 face_anchor_url: this.faceAnchorUrl,
                 full_body_prompt: data.full_body_prompt || '',
+                style_preset: this.stylePreset,
                 poses: data.poses || []
             });
             this.photoAnalysisNotice = true;
@@ -224,12 +369,12 @@
             this.charGender = data.gender || 'female';
             this.bodyType = data.body_type || '';
             this.subjectIsolation = data.subject_isolation || '';
+            this.avatarPreview = data.avatar_url || data.full_body_url || '';
+            this.generatedAvatarUrl = this.avatarPreview;
             this.fullBodyUrl = data.full_body_url || data.avatar_url || '';
             this.fullBodyPrompt = data.full_body_prompt || '';
-            this.faceAnchorUrl = data.face_anchor_url || '';
-            this.avatarPreview = this.fullBodyUrl || data.avatar_url || '';
-            this.generatedAvatarUrl = this.fullBodyUrl || data.avatar_url || '';
-            this.photoPreview = this.faceAnchorUrl || data.avatar_url || '';
+            this.faceAnchorUrl = data.face_anchor_url || data.avatar_url || '';
+            this.photoPreview = this.avatarPreview;
 
             this.generatedMetadata = JSON.stringify({
                 gender: this.charGender,
@@ -239,6 +384,7 @@
                 original_face_url: this.faceAnchorUrl,
                 face_anchor_url: this.faceAnchorUrl,
                 full_body_prompt: data.full_body_prompt || '',
+                style_preset: this.stylePreset,
                 poses: data.poses || []
             });
 
@@ -452,16 +598,68 @@
                            class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.1] focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 text-xs text-white px-4 py-3 outline-none transition placeholder-slate-500">
                 </div>
 
-                <!-- Style Preset Selector -->
-                <select x-model="stylePreset"
-                        class="rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3 py-3 outline-none focus:border-orange-500/50">
-                    <option value="cinematic">Cinematic 8K Photoreal</option>
-                    <option value="anime">Modern Anime / Manga</option>
-                    <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
-                    <option value="fantasy">Dark High Fantasy</option>
-                    <option value="pixar_3d">Stylized 3D Animation</option>
-                    <option value="vintage_cartoon">1930s Rubber-Hose</option>
-                </select>
+                <!-- Custom Obsidian Glass Style Dropdown for Photo Forge -->
+                <div class="relative shrink-0" @click.outside="styleDropdownOpen = false">
+                    <button type="button"
+                            @click="styleDropdownOpen = !styleDropdownOpen"
+                            class="h-[46px] rounded-2xl bg-[#090b0e] hover:bg-[#121519] border border-white/[0.1] hover:border-orange-500/50 px-3.5 py-2.5 transition-all duration-200 flex items-center justify-between gap-2.5 text-left group focus:outline-none focus:ring-1 focus:ring-orange-500/40 shadow-inner cursor-pointer">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="w-6 h-6 rounded-lg flex items-center justify-center text-xs shrink-0 group-hover:scale-105 transition"
+                                  :class="currentStyle.glowColor"
+                                  x-text="currentStyle.icon"></span>
+                            <span class="text-xs font-bold text-white truncate group-hover:text-orange-300 transition"
+                                  x-text="currentStyle.label"></span>
+                        </div>
+                        <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-orange-400 transition-transform duration-200 shrink-0"
+                             :class="styleDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                             fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Popover Menu -->
+                    <div x-show="styleDropdownOpen"
+                         x-cloak
+                         x-transition:enter="transition ease-out duration-150"
+                         x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                         x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave="transition ease-in duration-100"
+                         x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                         x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+                         class="absolute right-0 top-full mt-2 z-50 w-72 sm:w-80 rounded-2xl bg-[#0b0d10]/98 backdrop-blur-2xl border border-white/12 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.95),0_0_25px_rgba(249,115,22,0.18)] p-2 space-y-1">
+                        
+                        <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-white/[0.06] mb-1">
+                            <span class="flex items-center gap-1.5 text-orange-400 font-mono">
+                                <span>🎨</span>
+                                <span>Style Aesthetic</span>
+                            </span>
+                            <span class="text-[9px] text-slate-500 font-mono">Click to Select</span>
+                        </div>
+
+                        <template x-for="style in stylesList" :key="style.id">
+                            <button type="button"
+                                    @click="selectStyle(style.id)"
+                                    :class="stylePreset === style.id ? 'bg-orange-500/15 border-orange-500/40 text-white shadow-sm' : 'hover:bg-white/[0.04] border-transparent text-slate-300 hover:text-white'"
+                                    class="w-full rounded-xl p-2 border text-left flex items-start justify-between gap-2.5 transition group cursor-pointer">
+                                <div class="flex items-start gap-2.5 min-w-0">
+                                    <span class="w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0 mt-0.5"
+                                          :class="style.glowColor"
+                                          x-text="style.icon"></span>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-bold truncate group-hover:text-orange-300 transition" x-text="style.label"></div>
+                                        <div class="text-[10px] text-slate-400 leading-tight block line-clamp-1" x-text="style.desc"></div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1 shrink-0 pt-0.5">
+                                    <span class="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold"
+                                          :class="style.badgeColor"
+                                          x-text="style.badge"></span>
+                                    <span x-show="stylePreset === style.id" class="text-xs text-orange-400 font-bold ml-0.5">✓</span>
+                                </div>
+                            </button>
+                        </template>
+                    </div>
+                </div>
 
                 <!-- Forge Action Button -->
                 <button type="button"
@@ -554,16 +752,68 @@
                 <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
                     <div class="flex items-center gap-2 flex-1">
                         <span class="text-xs text-slate-400 shrink-0 font-mono">Visual Aesthetic:</span>
-                        <!-- Style Selector -->
-                        <select x-model="stylePreset"
-                                class="w-full sm:w-auto flex-1 rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3.5 py-3 outline-none focus:border-orange-500/50">
-                            <option value="cinematic">Cinematic 8K Photoreal</option>
-                            <option value="anime">Modern Anime / Manga</option>
-                            <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
-                            <option value="fantasy">Dark High Fantasy</option>
-                            <option value="pixar_3d">Stylized 3D Animation</option>
-                            <option value="vintage_cartoon">1930s Rubber-Hose</option>
-                        </select>
+                        <!-- Custom Obsidian Glass Style Dropdown for Prompt Forge -->
+                        <div class="relative flex-1 sm:w-auto" @click.outside="promptStyleDropdownOpen = false">
+                            <button type="button"
+                                    @click="promptStyleDropdownOpen = !promptStyleDropdownOpen"
+                                    class="w-full h-[46px] rounded-2xl bg-[#090b0e] hover:bg-[#121519] border border-white/[0.1] hover:border-orange-500/50 px-3.5 py-2.5 transition-all duration-200 flex items-center justify-between gap-2.5 text-left group focus:outline-none focus:ring-1 focus:ring-orange-500/40 shadow-inner cursor-pointer">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="w-6 h-6 rounded-lg flex items-center justify-center text-xs shrink-0 group-hover:scale-105 transition"
+                                          :class="currentStyle.glowColor"
+                                          x-text="currentStyle.icon"></span>
+                                    <span class="text-xs font-bold text-white truncate group-hover:text-orange-300 transition"
+                                          x-text="currentStyle.label"></span>
+                                </div>
+                                <svg class="w-3.5 h-3.5 text-slate-400 group-hover:text-orange-400 transition-transform duration-200 shrink-0"
+                                     :class="promptStyleDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                                     fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+
+                            <!-- Dropdown Popover Menu -->
+                            <div x-show="promptStyleDropdownOpen"
+                                 x-cloak
+                                 x-transition:enter="transition ease-out duration-150"
+                                 x-transition:enter-start="opacity-0 translate-y-2 scale-95"
+                                 x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                                 x-transition:leave="transition ease-in duration-100"
+                                 x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                                 x-transition:leave-end="opacity-0 translate-y-2 scale-95"
+                                 class="absolute left-0 top-full mt-2 z-50 w-72 sm:w-80 rounded-2xl bg-[#0b0d10]/98 backdrop-blur-2xl border border-white/12 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.95),0_0_25px_rgba(249,115,22,0.18)] p-2 space-y-1">
+                                
+                                <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-white/[0.06] mb-1">
+                                    <span class="flex items-center gap-1.5 text-orange-400 font-mono">
+                                        <span>🎨</span>
+                                        <span>Style Aesthetic</span>
+                                    </span>
+                                    <span class="text-[9px] text-slate-500 font-mono">Click to Select</span>
+                                </div>
+
+                                <template x-for="style in stylesList" :key="style.id">
+                                    <button type="button"
+                                            @click="selectStyle(style.id)"
+                                            :class="stylePreset === style.id ? 'bg-orange-500/15 border-orange-500/40 text-white shadow-sm' : 'hover:bg-white/[0.04] border-transparent text-slate-300 hover:text-white'"
+                                            class="w-full rounded-xl p-2 border text-left flex items-start justify-between gap-2.5 transition group cursor-pointer">
+                                        <div class="flex items-start gap-2.5 min-w-0">
+                                            <span class="w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0 mt-0.5"
+                                                  :class="style.glowColor"
+                                                  x-text="style.icon"></span>
+                                            <div class="min-w-0">
+                                                <div class="text-xs font-bold truncate group-hover:text-orange-300 transition" x-text="style.label"></div>
+                                                <div class="text-[10px] text-slate-400 leading-tight block line-clamp-1" x-text="style.desc"></div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1 shrink-0 pt-0.5">
+                                            <span class="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold"
+                                                  :class="style.badgeColor"
+                                                  x-text="style.badge"></span>
+                                            <span x-show="stylePreset === style.id" class="text-xs text-orange-400 font-bold ml-0.5">✓</span>
+                                        </div>
+                                    </button>
+                                </template>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Generate Button -->
@@ -636,6 +886,9 @@
                         Identity Forge v2.0
                     </span>
                 </div>
+
+                <!-- Hidden Style Preset Input -->
+                <input type="hidden" name="style_preset" :value="stylePreset">
 
                 <!-- Field 1: Character Name -->
                 <div class="space-y-2">
@@ -719,7 +972,191 @@
                            class="w-full rounded-2xl bg-[#0f1113] border border-white/[0.08] focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/30 text-sm text-white px-4 py-3 outline-none transition-all duration-200">
                 </div>
 
-                <!-- Field 5: Character Avatar / Reference Image -->
+                <!-- Field 5: Character Voice Profile & Persona Binding -->
+                <div class="space-y-2 relative" @click.outside="voiceDropdownOpen = false; stopVoiceAudio();">
+                    <div class="flex items-center justify-between">
+                        <label class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                            <span>🎙️ Character Voice Persona</span>
+                            <span class="text-[9px] font-mono px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">Neural Lip Sync Ready</span>
+                        </label>
+                        <a href="{% url 'voices:create' %}" target="_blank" class="text-[10px] text-orange-400 hover:text-orange-300 font-bold transition flex items-center gap-1 hover:underline">
+                            <span>+ Clone Voice</span>
+                            <span class="font-mono">↗</span>
+                        </a>
+                    </div>
+                    
+                    <div class="rounded-2xl bg-[#0f1113] border border-white/[0.08] p-3 space-y-2.5 relative">
+                        <!-- Hidden Form Input for Form Submission -->
+                        <input type="hidden" name="voice_profile" :value="selectedVoiceId">
+
+                        <!-- Custom Obsidian Glass Trigger Button -->
+                        <button type="button"
+                                @click="voiceDropdownOpen = !voiceDropdownOpen"
+                                :class="voiceDropdownOpen ? 'border-orange-500/80 ring-2 ring-orange-500/20 bg-[#14171d]' : 'border-white/[0.1] bg-black/60 hover:border-orange-500/50 hover:bg-[#12151b]'"
+                                class="w-full rounded-xl border p-2.5 sm:p-3 text-left transition-all duration-200 flex items-center justify-between gap-3 shadow-inner group cursor-pointer focus:outline-none">
+                            
+                            <div class="flex items-center gap-3 min-w-0">
+                                <!-- Voice Badge / Icon -->
+                                <template x-if="currentVoice.isCloned">
+                                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500/25 to-orange-500/20 border border-orange-500/40 flex items-center justify-center text-sm shrink-0 shadow-[0_0_12px_rgba(249,115,22,0.25)] group-hover:scale-105 transition">
+                                        ⭐
+                                    </div>
+                                </template>
+                                <template x-if="!currentVoice.isCloned">
+                                    <div class="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-sm shrink-0 text-slate-400 group-hover:border-white/20 transition">
+                                        🎙️
+                                    </div>
+                                </template>
+
+                                <!-- Voice Info Labels -->
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="text-xs font-bold text-white group-hover:text-orange-300 transition truncate" x-text="currentVoice.name"></span>
+                                        <template x-if="currentVoice.isCloned">
+                                            <span class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">Cloned</span>
+                                        </template>
+                                        <template x-if="currentVoice.isCloned && currentVoice.gender">
+                                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-slate-300 border border-white/[0.08]" x-text="currentVoice.gender"></span>
+                                        </template>
+                                        <template x-if="currentVoice.isCloned && currentVoice.accent">
+                                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-slate-300 border border-white/[0.08]" x-text="currentVoice.accent"></span>
+                                        </template>
+                                        <template x-if="!currentVoice.isCloned">
+                                            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-slate-400 border border-white/[0.08]">Studio Preset</span>
+                                        </template>
+                                    </div>
+                                    <div class="text-[10px] text-slate-400 truncate mt-0.5" x-text="currentVoice.desc || currentVoice.meta"></div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 shrink-0">
+                                <!-- Trigger Audio Play Button (if active voice has preview) -->
+                                <template x-if="currentVoice.previewUrl">
+                                    <button type="button"
+                                            @click.stop="toggleVoiceAudio($event, currentVoice)"
+                                            :class="playingVoiceId === currentVoice.id ? 'bg-orange-500 text-white border-orange-400 scale-105 shadow-[0_0_10px_rgba(249,115,22,0.5)]' : 'bg-white/[0.06] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border-white/10'"
+                                            title="Listen to sample"
+                                            class="w-7 h-7 rounded-xl border flex items-center justify-center text-[10px] transition-all cursor-pointer shadow-sm">
+                                        <span x-text="playingVoiceId === currentVoice.id ? '⏸' : '▶'"></span>
+                                    </button>
+                                </template>
+
+                                <!-- Chevron Indicator -->
+                                <div class="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-slate-400 group-hover:text-white transition">
+                                    <svg class="w-3.5 h-3.5 transition-transform duration-200"
+                                         :class="voiceDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </button>
+
+                        <!-- Custom Obsidian Glass Popover Menu -->
+                        <div x-show="voiceDropdownOpen"
+                             x-cloak
+                             x-transition:enter="transition ease-out duration-150"
+                             x-transition:enter-start="opacity-0 -translate-y-2 scale-98"
+                             x-transition:enter-end="opacity-100 translate-y-0 scale-100"
+                             x-transition:leave="transition ease-in duration-100"
+                             x-transition:leave-start="opacity-100 translate-y-0 scale-100"
+                             x-transition:leave-end="opacity-0 -translate-y-2 scale-98"
+                             class="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl bg-[#0b0d10]/98 backdrop-blur-2xl border border-white/12 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.95),0_0_25px_rgba(249,115,22,0.18)] p-2.5 space-y-2">
+                            
+                            <!-- Search Bar (shows if >= 3 voices) -->
+                            <div class="relative" x-show="voiceList.length > 2">
+                                <input type="text"
+                                       x-model="voiceSearch"
+                                       placeholder="Filter voices by name, accent, gender..."
+                                       class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white placeholder-slate-500 pl-8 pr-3 py-2 outline-none focus:border-orange-500/70 transition">
+                                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-slate-500">🔍</span>
+                                <button type="button"
+                                        x-show="voiceSearch"
+                                        @click="voiceSearch = ''"
+                                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-white">✕</button>
+                            </div>
+
+                            <!-- List Header -->
+                            <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between border-b border-white/[0.06]">
+                                <span class="flex items-center gap-1.5 text-orange-400 font-mono">
+                                    <span>🎙️</span>
+                                    <span>Available Neural Voices</span>
+                                </span>
+                                <span class="text-[9px] text-slate-500 font-mono" x-text="`${voiceList.length - 1} Cloned Voice${voiceList.length === 2 ? '' : 's'}`"></span>
+                            </div>
+
+                            <!-- Voice Options List -->
+                            <div class="max-h-64 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                                <template x-for="v in voiceList" :key="v.id">
+                                    <div x-show="!voiceSearch || v.name.toLowerCase().includes(voiceSearch.toLowerCase()) || v.gender.toLowerCase().includes(voiceSearch.toLowerCase()) || v.accent.toLowerCase().includes(voiceSearch.toLowerCase())"
+                                         class="flex items-center gap-1.5">
+                                        
+                                        <!-- Option Select Button -->
+                                        <button type="button"
+                                                @click="selectVoice(v.id)"
+                                                :class="selectedVoiceId === v.id ? 'bg-orange-500/15 border-orange-500/40 text-white shadow-sm' : 'border-transparent text-slate-300 hover:bg-white/[0.04] hover:text-white'"
+                                                class="flex-1 p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
+                                            
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <!-- Icon -->
+                                                <div class="w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0"
+                                                     :class="v.isCloned ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/[0.05] text-slate-400 border border-white/[0.08]'">
+                                                    <span x-text="v.isCloned ? '⭐' : '🎙️'"></span>
+                                                </div>
+
+                                                <!-- Text info -->
+                                                <div class="min-w-0">
+                                                    <div class="text-xs font-bold text-white group-hover/item:text-orange-300 transition truncate flex items-center gap-1.5">
+                                                        <span x-text="v.name"></span>
+                                                        <template x-if="v.isCloned">
+                                                            <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">CLONED</span>
+                                                        </template>
+                                                    </div>
+                                                    <div class="text-[10px] text-slate-400 truncate" x-text="v.desc || v.meta"></div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Checkmark if selected -->
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <template x-if="v.isCloned && v.accent">
+                                                    <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.05] text-slate-400 border border-white/[0.06]" x-text="v.accent"></span>
+                                                </template>
+                                                <span x-show="selectedVoiceId === v.id" class="text-xs text-orange-400 font-bold ml-1">✓</span>
+                                            </div>
+                                        </button>
+
+                                        <!-- Preview Play Button if voice has audio -->
+                                        <template x-if="v.previewUrl">
+                                            <button type="button"
+                                                    @click.stop="toggleVoiceAudio($event, v)"
+                                                    :class="playingVoiceId === v.id ? 'bg-orange-500 text-white border-orange-400 scale-105 shadow-[0_0_10px_rgba(249,115,22,0.5)]' : 'bg-white/[0.04] hover:bg-orange-500/20 text-slate-400 hover:text-orange-300 border-white/[0.06]'"
+                                                    title="Audition Sample Clip"
+                                                    class="w-7 h-7 rounded-lg border flex items-center justify-center text-[10px] shrink-0 transition cursor-pointer">
+                                                <span x-text="playingVoiceId === v.id ? '⏸' : '▶'"></span>
+                                            </button>
+                                        </template>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Popover Footer Action -->
+                            <div class="pt-1.5 border-t border-white/[0.06] flex items-center justify-between px-1">
+                                <span class="text-[9px] text-slate-500 font-mono">Neural voice lock active</span>
+                                <a href="{% url 'voices:create' %}" target="_blank" class="text-[10px] text-orange-400 hover:text-orange-300 font-bold transition flex items-center gap-1 hover:underline">
+                                    <span>+ Clone Another Voice</span>
+                                    <span>↗</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <p class="text-[10px] text-slate-500 flex items-center gap-1.5 pt-0.5">
+                            <span class="text-slate-400">💡</span>
+                            <span>Linking a cloned voice profile automatically sets this character's voice and neural lip-sync when generating talking scenes in the studio.</span>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Field 6: Character Avatar / Reference Image -->
                 <div class="space-y-2">
                     <div class="flex items-center justify-between">
                         <label class="text-xs font-bold uppercase tracking-wider text-slate-300">
@@ -791,10 +1228,10 @@
                     <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(249,115,22,0.12),transparent_70%)] pointer-events-none"></div>
                     <div class="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none z-10"></div>
 
-                    <template x-if="fullBodyUrl || avatarPreview">
-                        <img :src="fullBodyUrl || avatarPreview" class="w-full h-full object-cover object-top transition duration-300">
+                    <template x-if="avatarPreview || fullBodyUrl">
+                        <img :src="avatarPreview || fullBodyUrl" class="w-full h-full object-cover object-top transition duration-300">
                     </template>
-                    <template x-if="!fullBodyUrl && !avatarPreview">
+                    <template x-if="!avatarPreview && !fullBodyUrl">
                         <div class="h-full w-full flex flex-col items-center justify-center text-slate-500 space-y-1">
                             <span class="text-4xl text-orange-400/50">🧍</span>
                             <span class="text-[10px] font-mono text-slate-500">Full-Body Standing Figure</span>
@@ -831,6 +1268,16 @@
                         <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold"
                               :class="charGender === 'female' ? 'bg-pink-500/15 border border-pink-500/30 text-pink-300' : 'bg-blue-500/15 border border-blue-500/30 text-blue-300'">
                             <span x-text="charGender === 'female' ? '♀ Feminine Silhouette' : '♂ Masculine Silhouette'"></span>
+                        </span>
+                    </div>
+
+                    <!-- Visual Aesthetic Badge -->
+                    <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] flex items-center justify-between">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Visual Aesthetic:</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1.5"
+                              :class="currentStyle.badgeColor">
+                            <span x-text="currentStyle.icon"></span>
+                            <span x-text="currentStyle.label"></span>
                         </span>
                     </div>
 

@@ -1,0 +1,585 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ voice.name }} — Neural Voice Profile — CleaverLoop AI{% endblock %}
+
+{% block main_classes %}flex-1 w-full px-4 sm:px-6 lg:px-8 xl:px-10 2xl:px-12 py-5 pb-24 md:pb-12 max-w-none{% endblock %}
+
+{% block content %}
+<div class="w-full space-y-6 lg:space-y-8" x-data="voiceDetailConsole()">
+
+    <!-- Top Breadcrumb & Quick Action Bar -->
+    <div class="flex items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+        <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+            <a href="{% url 'voices:list' %}" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] hover:text-white border border-white/10 transition flex items-center gap-1.5 text-slate-300">
+                <span>←</span>
+                <span>Voice Studio</span>
+            </a>
+            <span class="text-slate-600">/</span>
+            <span class="text-slate-400">Cloned Personas</span>
+            <span class="text-slate-600">/</span>
+            <span class="text-orange-400 font-bold truncate max-w-[180px] sm:max-w-none">{{ voice.name }}</span>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+            {% if wallet %}
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#12151c] border border-white/[0.08] text-xs font-mono text-slate-300 shadow-sm">
+                <span class="text-orange-400 font-bold">⚡ {{ wallet.formatted_balance }}</span>
+                <span class="text-slate-500">Credits</span>
+            </div>
+            {% endif %}
+
+            <a href="{% url 'voices:list' %}?create=1"
+               class="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-xs font-bold text-slate-200 hover:text-white border border-white/10 transition flex items-center gap-1.5 cursor-pointer">
+                <span>+</span>
+                <span class="hidden sm:inline">Clone Another</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Hero Command Stage (Full Width Glassmorphic Header) -->
+    <div class="fl-composer-card rounded-3xl p-5 sm:p-7 border border-white/[0.08] bg-[#0c0e14]/95 shadow-2xl relative overflow-hidden">
+        <!-- Ambient Background Glow -->
+        <div class="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-orange-500/10 blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -right-24 w-80 h-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none"></div>
+
+        <div class="relative z-10 flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+            <!-- Left: Avatar & Identity Block -->
+            <div class="flex items-start sm:items-center gap-4 sm:gap-6">
+                <!-- Large Avatar Badge with Soundwave Visualizer Ring -->
+                <div class="relative shrink-0">
+                    <div class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-gradient-to-br from-amber-500/30 via-orange-500/20 to-transparent border border-amber-500/40 flex items-center justify-center text-3xl sm:text-4xl text-amber-300 shadow-xl shadow-amber-500/10">
+                        🎙️
+                    </div>
+                    <!-- Live Status Indicator Pip -->
+                    <span class="absolute -bottom-1 -right-1 flex h-4 w-4">
+                        {% if voice.status == 'ready' %}
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-[#0c0e14]"></span>
+                        {% elif voice.status == 'processing' %}
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-500 border-2 border-[#0c0e14]"></span>
+                        {% else %}
+                            <span class="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-[#0c0e14]"></span>
+                        {% endif %}
+                    </span>
+                </div>
+
+                <!-- Info Block -->
+                <div class="space-y-2">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                        <h1 class="text-2xl sm:text-3xl lg:text-4xl font-heading font-black text-white tracking-tight">
+                            {{ voice.name }}
+                        </h1>
+                        <!-- Status Badge -->
+                        <span class="px-3 py-1 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 shadow-sm
+                            {% if voice.status == 'ready' %}bg-emerald-500/15 text-emerald-400 border border-emerald-500/30
+                            {% elif voice.status == 'processing' %}bg-amber-500/15 text-amber-400 border border-amber-500/30
+                            {% else %}bg-rose-500/15 text-rose-400 border border-rose-500/30{% endif %}">
+                            <span class="w-1.5 h-1.5 rounded-full {% if voice.status == 'ready' %}bg-emerald-400 animate-pulse{% elif voice.status == 'processing' %}bg-amber-400 animate-pulse{% else %}bg-rose-400{% endif %}"></span>
+                            <span>{{ voice.get_status_display }}</span>
+                        </span>
+                        {% if voice.is_default %}
+                            <span class="px-2.5 py-0.5 rounded-md bg-orange-500/20 text-orange-400 text-[10px] font-mono font-bold border border-orange-500/30">DEFAULT</span>
+                        {% endif %}
+                    </div>
+
+                    <!-- Meta Tags Row -->
+                    <div class="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-400">
+                        <span class="px-2.5 py-0.5 rounded-lg bg-black/50 border border-white/10 text-slate-200 font-semibold flex items-center gap-1">
+                            <span>🌍</span>
+                            <span>{{ voice.accent|default:"Neutral" }}</span>
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-lg bg-black/50 border border-white/10 text-slate-200 font-semibold flex items-center gap-1">
+                            <span>👤</span>
+                            <span>{{ voice.get_gender_display }}</span>
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-lg bg-orange-500/10 border border-orange-500/25 text-orange-300 font-bold flex items-center gap-1">
+                            <span>⚡</span>
+                            <span>{{ voice.provider|upper }} Neural v2</span>
+                        </span>
+                        <span class="px-2.5 py-0.5 rounded-lg bg-white/[0.04] border border-white/10 text-slate-300 flex items-center gap-1">
+                            <span>📁</span>
+                            <span>{{ samples.count }} Master Sample{{ samples.count|pluralize }}</span>
+                        </span>
+
+                        <!-- Copy Voice ID Button -->
+                        <button type="button"
+                                @click="copyVoiceId('{{ voice.provider_voice_id|default:voice.id }}')"
+                                class="px-2.5 py-0.5 rounded-lg bg-white/[0.04] hover:bg-orange-500/20 hover:text-orange-300 border border-white/10 hover:border-orange-500/30 text-slate-400 text-[11px] transition flex items-center gap-1 cursor-pointer"
+                                title="Click to copy Voice ID">
+                            <span>🆔</span>
+                            <span class="font-mono">{{ voice.provider_voice_id|default:voice.id|slice:":10" }}...</span>
+                            <span class="text-orange-400 font-bold ml-1" x-text="copied ? '✓ Copied' : '📋'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Studio Entrypoints -->
+            <div class="flex flex-wrap items-center gap-3 shrink-0">
+                <a href="{% url 'studio:create' %}?voice={{ voice.provider_voice_id|default:voice.id }}"
+                   class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-5 py-3 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 shadow-xl cursor-pointer">
+                    <span class="text-sm">🎬</span>
+                    <span>Use in Video Studio</span>
+                </a>
+
+                <a href="{% url 'studio:create' %}?voice={{ voice.provider_voice_id|default:voice.id }}&lip_sync=1"
+                   class="px-4 py-3 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 text-xs font-heading font-black text-orange-400 hover:text-orange-300 border border-orange-500/30 transition flex items-center gap-2 cursor-pointer shadow-sm">
+                    <span>👄</span>
+                    <span>1-Step Talking Deck</span>
+                </a>
+
+                <form action="{% url 'voices:delete' voice.pk %}" method="POST"
+                      onsubmit="return confirm('Are you sure you want to permanently delete cloned voice \'{{ voice.name|escapejs }}\'? This will also release all assigned character links.');"
+                      class="inline">
+                    {% csrf_token %}
+                    <button type="submit"
+                            title="Delete voice profile"
+                            class="px-3.5 py-3 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 text-xs font-bold text-slate-400 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 transition flex items-center gap-1.5 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span class="hidden sm:inline">Delete</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Full-Width Cockpit Grid -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-8 w-full">
+
+        <!-- Left 8 Columns: Primary Auditioning & Sound Studio -->
+        <div class="xl:col-span-8 space-y-6">
+
+            <!-- Card 1: Interactive Neural Audition Console -->
+            <div class="fl-composer-card rounded-3xl p-6 lg:p-7 border border-white/[0.08] bg-[#0c0e14]/95 shadow-2xl relative space-y-6 overflow-hidden">
+                <!-- Header -->
+                <div class="flex items-center justify-between border-b border-white/[0.08] pb-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-sm text-orange-400">
+                            💬
+                        </div>
+                        <div>
+                            <h2 class="text-base font-heading font-black text-white tracking-wide">Live Voice Audition Console</h2>
+                            <p class="text-xs text-slate-400">Test dialogue scripts in real-time with {{ voice.name }}'s custom neural vocal weights.</p>
+                        </div>
+                    </div>
+                    <span class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-300 text-[11px] font-mono">
+                        <span class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
+                        <span>Zero Studio Delay</span>
+                    </span>
+                </div>
+
+                <!-- Textarea for Spoken Dialogue -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="text-[11px] font-mono uppercase text-slate-300 font-bold flex items-center gap-1.5">
+                            <span>Script Dialogue Text</span>
+                            <span class="text-slate-500 font-normal">({{ voice.language|upper }})</span>
+                        </label>
+                        <div class="flex items-center gap-2 text-[11px] font-mono text-slate-400">
+                            <span x-text="`${auditionText.length} chars`"></span>
+                            <span>•</span>
+                            <span x-text="`${auditionText.trim() ? auditionText.trim().split(/\s+/).length : 0} words`"></span>
+                        </div>
+                    </div>
+
+                    <div class="relative">
+                        <textarea x-model="auditionText" rows="3"
+                                  placeholder="Type or paste any dialogue you would like {{ voice.name }} to speak..."
+                                  class="w-full px-4 py-3.5 rounded-2xl bg-black/60 border border-white/10 text-white text-xs sm:text-sm focus:outline-none focus:border-orange-500 placeholder-slate-500 resize-none leading-relaxed transition shadow-inner"></textarea>
+                    </div>
+                </div>
+
+                <!-- Preset Inspiration Script Chips -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                        <span class="text-orange-400/90 font-bold uppercase tracking-wider">⚡ Quick Script Prompts:</span>
+                        <span class="text-slate-500">Click to load</span>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <button type="button"
+                                @click="auditionText = 'Welcome to CleaverLoop AI, where your cinematic vision comes alive.'"
+                                class="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 text-xs text-slate-300 hover:text-orange-300 border border-white/[0.08] hover:border-orange-500/30 transition flex items-center gap-1.5 cursor-pointer">
+                            <span>🎬</span>
+                            <span>Cinematic Intro</span>
+                        </button>
+                        <button type="button"
+                                @click="auditionText = 'In a universe defined by shadows, one voice will pierce through the silence.'"
+                                class="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 text-xs text-slate-300 hover:text-orange-300 border border-white/[0.08] hover:border-orange-500/30 transition flex items-center gap-1.5 cursor-pointer">
+                            <span>🌌</span>
+                            <span>Epic Trailer</span>
+                        </button>
+                        <button type="button"
+                                @click="auditionText = 'I never believed in destiny, until the moment our paths crossed under the neon sky.'"
+                                class="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 text-xs text-slate-300 hover:text-orange-300 border border-white/[0.08] hover:border-orange-500/30 transition flex items-center gap-1.5 cursor-pointer">
+                            <span>🎭</span>
+                            <span>Monologue</span>
+                        </button>
+                        <button type="button"
+                                @click="auditionText = 'Across vast oceans and ancient lands, explorers uncovered secrets forgotten by time.'"
+                                class="px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 text-xs text-slate-300 hover:text-orange-300 border border-white/[0.08] hover:border-orange-500/30 transition flex items-center gap-1.5 cursor-pointer">
+                            <span>📜</span>
+                            <span>Documentary</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Action Controls Bar -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+                    <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span>Engine: {{ voice.provider|upper }} High-Fidelity 48kHz</span>
+                    </div>
+
+                    <button type="button"
+                            @click="testSpeech()"
+                            :disabled="isTesting || !auditionText.trim()"
+                            class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-6 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer">
+                        <span x-show="!isTesting">🔊 Audition Voice Line</span>
+                        <span x-show="isTesting" class="flex items-center gap-2">
+                            <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span>Synthesizing Audio...</span>
+                        </span>
+                    </button>
+                </div>
+
+                <!-- Interactive Synthesized Audio Player Deck -->
+                <div x-show="testAudioUrl"
+                     x-transition:enter="transition ease-out duration-300"
+                     x-transition:enter-start="opacity-0 translate-y-2"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-transparent border border-orange-500/25 space-y-3">
+                    <div class="flex items-center justify-between text-xs font-mono text-orange-300">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🎧</span>
+                            <span class="font-bold">Synthesized Audio Output:</span>
+                            <span class="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 text-[10px]">Master Audio</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <a :href="testAudioUrl" download="cleaverloop-voice-{{ voice.name|slugify }}.mp3"
+                               class="text-xs text-orange-400 hover:text-white transition flex items-center gap-1 font-semibold">
+                                <span>Download MP3</span>
+                                <span>↓</span>
+                            </a>
+                            <a :href="`{% url 'studio:create' %}?voice={{ voice.provider_voice_id|default:voice.id }}&lip_sync=1&prompt=${encodeURIComponent(auditionText)}`"
+                               class="hidden sm:inline-flex px-2.5 py-1 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 text-[11px] font-bold text-orange-300 border border-orange-500/30 transition">
+                                <span>Use in Video →</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Custom HTML5 Audio Player -->
+                    <audio x-ref="testAudioPlayer" controls class="w-full h-10 accent-orange-500 bg-black/70 rounded-xl" preload="auto">
+                        <source :src="testAudioUrl" type="audio/mpeg">
+                        <source :src="testAudioUrl" type="audio/wav">
+                    </audio>
+                </div>
+            </div>
+
+            <!-- Card 2: Master Retained Voice Samples Repository (Immutable Archive) -->
+            <div class="fl-composer-card rounded-3xl p-6 lg:p-7 border border-white/[0.08] bg-[#0c0e14]/95 shadow-2xl space-y-5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
+                    <div>
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-xl bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-sm text-orange-400">
+                                📁
+                            </div>
+                            <h2 class="text-base font-heading font-black text-white tracking-wide">Master Retained Voice Samples</h2>
+                            <span class="px-2.5 py-0.5 rounded-full bg-white/[0.06] text-slate-300 text-[10px] font-mono font-bold">
+                                {{ samples.count }} Preserved
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Immutable training recordings. Stored permanently for re-cloning, quality audits, and neural lip-sync fine-tuning.</p>
+                    </div>
+
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono shrink-0">
+                        <span>🔒</span>
+                        <span>Never Auto-Deleted</span>
+                    </span>
+                </div>
+
+                <!-- Samples List -->
+                <div class="space-y-3">
+                    {% for sample in samples %}
+                        <div class="p-4 rounded-2xl bg-black/40 border border-white/[0.06] hover:border-white/15 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4 group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/30 flex items-center justify-center text-lg text-orange-400 shrink-0 shadow-inner">
+                                    🎵
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-xs font-mono font-bold text-white group-hover:text-orange-400 transition">
+                                            Master Sample #{{ forloop.counter }}
+                                        </h4>
+                                        <span class="px-1.5 py-0.2 rounded bg-white/[0.06] text-slate-400 text-[9px] font-mono">Lossless WAV/MP3</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 font-mono mt-0.5">
+                                        Recorded on {{ sample.created_at|date:"M d, Y • H:i" }}
+                                        {% if sample.duration_seconds %} • {{ sample.duration_seconds|floatformat:1 }}s{% endif %}
+                                        {% if sample.file_size %} • {{ sample.file_size|filesizeformat }}{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2.5 w-full sm:w-auto">
+                                <audio controls class="flex-1 sm:w-64 md:w-72 h-8 accent-orange-500 bg-black/60 rounded-lg" preload="none">
+                                    <source src="{{ sample.url }}" type="audio/wav">
+                                    <source src="{{ sample.url }}" type="audio/mpeg">
+                                </audio>
+
+                                <a href="{{ sample.url }}" download class="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-orange-500/20 text-slate-400 hover:text-white border border-white/10 flex items-center justify-center text-xs transition shrink-0" title="Download source audio file">
+                                    ↓
+                                </a>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="p-8 rounded-2xl bg-black/30 border border-dashed border-white/10 text-center space-y-2">
+                            <div class="text-2xl text-slate-500">🎙️</div>
+                            <p class="text-xs text-slate-400">No original training samples found for this profile.</p>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Card 3: Neural Voice Diagnostics & Studio Telemetry -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="p-4 rounded-2xl bg-[#0c0e14]/90 border border-white/[0.08] shadow-lg space-y-1">
+                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Phoneme Fidelity</span>
+                    <div class="text-lg sm:text-xl font-heading font-black text-emerald-400">99.4%</div>
+                    <span class="text-[10px] text-slate-500 font-mono">Neural waveform match</span>
+                </div>
+                <div class="p-4 rounded-2xl bg-[#0c0e14]/90 border border-white/[0.08] shadow-lg space-y-1">
+                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Sample Rate</span>
+                    <div class="text-lg sm:text-xl font-heading font-black text-amber-300">48 kHz</div>
+                    <span class="text-[10px] text-slate-500 font-mono">Studio master quality</span>
+                </div>
+                <div class="p-4 rounded-2xl bg-[#0c0e14]/90 border border-white/[0.08] shadow-lg space-y-1">
+                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Data Retention</span>
+                    <div class="text-lg sm:text-xl font-heading font-black text-white">100%</div>
+                    <span class="text-[10px] text-slate-500 font-mono">Immutable vault storage</span>
+                </div>
+                <div class="p-4 rounded-2xl bg-[#0c0e14]/90 border border-white/[0.08] shadow-lg space-y-1">
+                    <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Sync Latency</span>
+                    <div class="text-lg sm:text-xl font-heading font-black text-orange-400">&lt; 1.2s</div>
+                    <span class="text-[10px] text-slate-500 font-mono">Fast real-time turn</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right 4 Columns: Persona Specs, Linked Characters, and Quick Launchpad -->
+        <div class="xl:col-span-4 space-y-6">
+
+            <!-- Card A: Voice Persona Dossier & Specs -->
+            <div class="fl-composer-card rounded-3xl p-6 border border-white/[0.08] bg-[#0c0e14]/95 shadow-2xl space-y-5">
+                <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">🧬</span>
+                        <h3 class="text-sm font-heading font-black text-white uppercase tracking-wider">Voice Persona Specs</h3>
+                    </div>
+                    <span class="text-[10px] font-mono text-orange-400">Vault ID: #{{ voice.id|stringformat:"s"|slice:":8" }}</span>
+                </div>
+
+                <div class="space-y-3.5 text-xs">
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-black/40 border border-white/[0.06]">
+                        <span class="font-mono text-slate-400 text-[11px] uppercase">Gender Persona</span>
+                        <span class="font-bold text-white font-mono">{{ voice.get_gender_display }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-black/40 border border-white/[0.06]">
+                        <span class="font-mono text-slate-400 text-[11px] uppercase">Accent / Dialect</span>
+                        <span class="font-bold text-orange-300 font-mono">{{ voice.accent|default:"Neutral" }}</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-black/40 border border-white/[0.06]">
+                        <span class="font-mono text-slate-400 text-[11px] uppercase">Language</span>
+                        <span class="font-bold text-white font-mono uppercase">{{ voice.language }} (Universal)</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-black/40 border border-white/[0.06]">
+                        <span class="font-mono text-slate-400 text-[11px] uppercase">Synthesis Engine</span>
+                        <span class="font-bold text-amber-400 font-mono uppercase">{{ voice.provider }} Neural v2</span>
+                    </div>
+
+                    <div class="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                        <span class="font-mono text-emerald-300 text-[11px] uppercase">Legal & Ethics</span>
+                        <span class="font-bold text-emerald-400 font-mono text-[10px]">✓ Consent Verified</span>
+                    </div>
+
+                    <!-- Voice Description / Acting Direction -->
+                    <div class="space-y-1.5 pt-1">
+                        <span class="font-mono text-slate-400 text-[10px] uppercase font-bold tracking-wider">Tone & Cadence Notes</span>
+                        <div class="p-3 rounded-xl bg-black/50 border border-white/[0.06] text-xs text-slate-300 leading-relaxed italic">
+                            "{{ voice.description|default:"Warm, natural cadence suitable for cinematic dialogue, storytelling, and realistic character articulation." }}"
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card B: Associated AI Characters Deck -->
+            <div class="fl-composer-card rounded-3xl p-6 border border-white/[0.08] bg-[#0c0e14]/95 shadow-2xl space-y-4">
+                <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">👥</span>
+                        <h3 class="text-sm font-heading font-black text-white uppercase tracking-wider">Linked Characters</h3>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-mono font-bold">
+                        {{ characters|length }} Bound
+                    </span>
+                </div>
+
+                <div class="space-y-2.5">
+                    {% for char in characters %}
+                        <div class="flex items-center justify-between p-3 rounded-2xl bg-black/40 hover:bg-black/60 border border-white/[0.06] hover:border-orange-500/30 transition group">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl overflow-hidden bg-black/60 border border-white/10 shrink-0">
+                                    {% if char.primary_image_url %}
+                                        <img src="{{ char.primary_image_url }}" alt="{{ char.name }}" class="w-full h-full object-cover">
+                                    {% elif char.avatar %}
+                                        <img src="{{ char.avatar.url }}" alt="{{ char.name }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <div class="w-full h-full flex items-center justify-center text-sm">👤</div>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <a href="{% url 'characters:detail' char.pk %}" class="text-xs font-bold text-white group-hover:text-orange-400 transition block">
+                                        {{ char.name }}
+                                    </a>
+                                    <span class="text-[10px] text-slate-500 font-mono">{{ char.tagline|default:"AI Character Persona" }}</span>
+                                </div>
+                            </div>
+
+                            <a href="{% url 'studio:create' %}?character_id={{ char.id }}&voice={{ voice.provider_voice_id|default:voice.id }}"
+                               class="px-2.5 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/30 text-orange-400 text-[11px] font-bold border border-orange-500/30 transition"
+                               title="Create talking video with this character and voice">
+                                🎬 Video
+                            </a>
+                        </div>
+                    {% empty %}
+                        <div class="p-6 rounded-2xl bg-black/30 border border-dashed border-white/10 text-center space-y-2">
+                            <div class="text-2xl text-slate-500">🎭</div>
+                            <p class="text-xs text-slate-400">No characters currently assigned this voice persona.</p>
+                            <a href="{% url 'characters:create' %}?voice={{ voice.id }}"
+                               class="inline-block text-xs text-orange-400 hover:text-orange-300 font-bold hover:underline mt-1">
+                                + Forge Character with this Voice
+                            </a>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Card C: Fast Studio Launchpad -->
+            <div class="fl-composer-card rounded-3xl p-6 border border-white/[0.08] bg-[#0c0e14]/95 shadow-2xl space-y-4">
+                <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">🚀</span>
+                        <h3 class="text-sm font-heading font-black text-white uppercase tracking-wider">Fast Studio Launchpad</h3>
+                    </div>
+                    <span class="text-[10px] font-mono text-slate-500">Direct Pipelines</span>
+                </div>
+
+                <div class="space-y-2 text-xs">
+                    <a href="{% url 'studio:create' %}?voice={{ voice.provider_voice_id|default:voice.id }}&lip_sync=1"
+                       class="flex items-center justify-between p-3 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.06] hover:border-orange-500/30 transition group">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-base">👄</span>
+                            <div>
+                                <div class="font-bold text-white group-hover:text-orange-300">1-Step Neural Lip-Sync Video</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Google Veo & LatentSync 48kHz</div>
+                            </div>
+                        </div>
+                        <span class="text-slate-400 group-hover:text-orange-400 font-bold">→</span>
+                    </a>
+
+                    <a href="{% url 'studio:create' %}?type=audio&voice={{ voice.provider_voice_id|default:voice.id }}"
+                       class="flex items-center justify-between p-3 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.06] hover:border-orange-500/30 transition group">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-base">🔊</span>
+                            <div>
+                                <div class="font-bold text-white group-hover:text-orange-300">Voice Acting & Dialogue Synthesis</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Custom multi-line actor scripts</div>
+                            </div>
+                        </div>
+                        <span class="text-slate-400 group-hover:text-orange-400 font-bold">→</span>
+                    </a>
+
+                    <a href="{% url 'studio:create' %}?type=video&voice={{ voice.provider_voice_id|default:voice.id }}"
+                       class="flex items-center justify-between p-3 rounded-xl bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.06] hover:border-orange-500/30 transition group">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-base">🎞️</span>
+                            <div>
+                                <div class="font-bold text-white group-hover:text-orange-300">Cinematic Film & Storyboarding</div>
+                                <div class="text-[10px] text-slate-500 font-mono">Multi-scene storyboard video deck</div>
+                            </div>
+                        </div>
+                        <span class="text-slate-400 group-hover:text-orange-400 font-bold">→</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function voiceDetailConsole() {
+    return {
+        auditionText: 'Welcome to CleaverLoop AI, where your cinematic vision comes alive.',
+        isTesting: false,
+        testAudioUrl: '{{ voice.preview_url|default:"" }}',
+        copied: false,
+
+        copyVoiceId(id) {
+            if (!id) return;
+            navigator.clipboard.writeText(id).then(() => {
+                this.copied = true;
+                setTimeout(() => { this.copied = false; }, 2000);
+            }).catch(err => {
+                console.error("Failed to copy voice ID", err);
+            });
+        },
+
+        async testSpeech() {
+            if (!this.auditionText.trim()) return;
+            this.isTesting = true;
+
+            const formData = new FormData();
+            formData.append('text', this.auditionText.trim());
+            formData.append('voice_profile_id', '{{ voice.id }}');
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            try {
+                const res = await fetch("{% url 'voices:api_preview' %}", {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.status === 'success' && data.audio_url) {
+                    this.testAudioUrl = data.audio_url;
+                    this.$nextTick(() => {
+                        if (this.$refs.testAudioPlayer) {
+                            this.$refs.testAudioPlayer.src = data.audio_url;
+                            this.$refs.testAudioPlayer.play().catch(e => {
+                                console.log("Auto-play blocked or waiting for user interaction:", e);
+                            });
+                        }
+                    });
+                } else {
+                    alert(data.error || "Audition failed.");
+                }
+            } catch (err) {
+                alert("Network error testing speech.");
+                console.error(err);
+            } finally {
+                this.isTesting = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

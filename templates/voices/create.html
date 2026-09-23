@@ -1,0 +1,404 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Clone Your Voice — CleaverLoop AI{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8 pb-16" x-data="voiceCloneStudio()">
+    <!-- Top Header -->
+    <div class="flex items-center justify-between border-b border-white/[0.08] pb-6">
+        <div>
+            <a href="{% url 'voices:list' %}" class="text-xs text-slate-400 hover:text-white transition flex items-center gap-1.5 mb-2 font-mono">
+                <span>← Back to Voice Studio</span>
+            </a>
+            <h1 class="text-2xl md:text-3xl font-heading font-black text-white flex items-center gap-2.5">
+                <span>🎙️</span>
+                <span>Clone Your Voice</span>
+            </h1>
+            <p class="text-xs sm:text-sm text-slate-400 mt-1">Record directly from your microphone or upload audio files to forge a personalized neural voice persona.</p>
+        </div>
+
+        <div class="hidden sm:flex flex-col items-end text-right">
+            <span class="text-[11px] font-mono text-slate-400">Setup Fee</span>
+            <div class="flex items-center gap-1.5 text-orange-400 font-bold font-mono text-sm">
+                <span>⚡ {{ clone_cost }} Credits</span>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono">Balance: {{ wallet.formatted_balance }}</span>
+        </div>
+    </div>
+
+    <!-- Main Cloning Form -->
+    <form action="{% url 'voices:create' %}" method="POST" enctype="multipart/form-data" @submit="handleSubmit($event)" class="space-y-8">
+        {% csrf_token %}
+
+        <!-- Input Source Tabs: Record vs Upload -->
+        <div class="rounded-3xl bg-[#0d0f12] border border-white/[0.1] p-6 shadow-2xl space-y-6">
+            <div class="flex items-center justify-between border-b border-white/[0.08] pb-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-heading font-bold text-white uppercase tracking-wider text-xs">Audio Capture Mode</span>
+                </div>
+
+                <div class="flex items-center gap-2 bg-black/60 p-1 rounded-xl border border-white/10">
+                    <button type="button" @click="activeTab = 'record'"
+                            :class="activeTab === 'record' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40 shadow-sm' : 'text-slate-400 hover:text-white border-transparent'"
+                            class="px-3.5 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                        <span>🎙️</span>
+                        <span>Record Microphone</span>
+                    </button>
+                    <button type="button" @click="activeTab = 'upload'"
+                            :class="activeTab === 'upload' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40 shadow-sm' : 'text-slate-400 hover:text-white border-transparent'"
+                            class="px-3.5 py-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                        <span>📁</span>
+                        <span>Upload Audio Files</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab 1: Live Microphone Studio -->
+            <div x-show="activeTab === 'record'" class="space-y-5" x-transition>
+                <div class="rounded-2xl bg-black/50 border border-white/[0.06] p-5 space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <span class="relative flex h-3 w-3">
+                                <span x-show="isRecording" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                <span :class="isRecording ? 'bg-rose-500' : 'bg-slate-600'" class="relative inline-flex rounded-full h-3 w-3"></span>
+                            </span>
+                            <span class="text-xs font-mono font-bold uppercase" :class="isRecording ? 'text-rose-400' : 'text-slate-400'" x-text="isRecording ? 'Recording Live Speech...' : (hasRecording ? 'Recording Ready' : 'Microphone Ready')"></span>
+                        </div>
+                        <div class="font-mono text-sm font-bold text-white bg-black/70 px-3 py-1 rounded-lg border border-white/10" x-text="formattedDuration">00:00</div>
+                    </div>
+
+                    <!-- Live Audio Waveform Canvas -->
+                    <div class="relative w-full h-24 bg-black/80 rounded-xl overflow-hidden border border-white/10 flex items-center justify-center">
+                        <canvas x-ref="visualizerCanvas" class="w-full h-full"></canvas>
+                        <div x-show="!isRecording && !hasRecording" class="absolute inset-0 flex items-center justify-center text-xs text-slate-500 font-mono">
+                            Press Record and speak naturally into your microphone
+                        </div>
+                    </div>
+
+                    <!-- Audio Review Player (if recorded) -->
+                    <div x-show="hasRecording" class="p-3 bg-orange-500/10 rounded-xl border border-orange-500/20 space-y-2" x-transition>
+                        <div class="flex items-center justify-between text-xs text-orange-300 font-mono">
+                            <span class="flex items-center gap-1.5 font-bold">
+                                <span>🎙️</span>
+                                <span>Audio Review:</span>
+                            </span>
+                            <span x-text="`Duration: ${recordedSeconds}s`"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <audio x-ref="recordedPlayer" controls class="flex-1 h-8 accent-orange-500 bg-black/50 rounded-lg"></audio>
+                            <button type="button"
+                                    @click="discardRecording()"
+                                    title="Delete voice recording"
+                                    class="w-8 h-8 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 hover:text-rose-300 border border-rose-500/30 flex items-center justify-center text-xs transition cursor-pointer shrink-0 shadow-sm"
+                                    aria-label="Delete voice recording">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Recording Controls -->
+                    <div class="flex items-center justify-center gap-3 pt-2">
+                        <template x-if="!isRecording">
+                            <button type="button" @click="startRecording()"
+                                    class="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-heading font-black text-xs uppercase tracking-wider transition shadow-lg shadow-rose-600/30 flex items-center gap-2 cursor-pointer">
+                                <span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
+                                <span x-text="hasRecording ? 'Re-Record Clip' : 'Start Recording'">Start Recording</span>
+                            </button>
+                        </template>
+
+                        <template x-if="isRecording">
+                            <button type="button" @click="stopRecording()"
+                                    class="px-6 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-white/20 font-heading font-black text-xs uppercase tracking-wider transition flex items-center gap-2 cursor-pointer">
+                                <span class="w-3 h-3 bg-white rounded-sm"></span>
+                                <span>Stop Recording</span>
+                            </button>
+                        </template>
+                    </div>
+
+                    <!-- Script Teleprompter Card -->
+                    <div class="rounded-xl bg-[#111419] border border-white/[0.08] p-4 space-y-2">
+                        <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                            <span class="text-orange-400 font-bold">📜 Suggested Reading Script</span>
+                            <span>Read aloud with clear, natural cadence</span>
+                        </div>
+                        <p class="text-xs text-slate-300 italic leading-relaxed">
+                            "The rainbow is a division of white light into many beautiful colors. When sunlight strikes raindrops in the atmosphere, they act as tiny prisms and form a vivid arch across the sky. Throughout centuries, storytellers and adventurers have sought the legendary pot of gold resting at its edge."
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Hidden file input for recorded blob -->
+                <input type="file" name="recorded_audio" x-ref="recordedAudioInput" class="hidden">
+            </div>
+
+            <!-- Tab 2: Audio File Upload -->
+            <div x-show="activeTab === 'upload'" class="space-y-4" x-transition>
+                <div class="border-2 border-dashed border-white/15 hover:border-orange-500/50 rounded-2xl p-8 text-center bg-black/40 transition cursor-pointer"
+                     @click="$refs.fileInput.click()"
+                     @dragover.prevent="isDragging = true"
+                     @dragleave.prevent="isDragging = false"
+                     @drop.prevent="handleFileDrop($event)">
+                    
+                    <input type="file" name="audio_samples" multiple accept="audio/wav,audio/mp3,audio/mpeg,audio/m4a,audio/flac,audio/ogg" x-ref="fileInput" @change="handleFileSelect($event)" class="hidden">
+                    
+                    <div class="w-12 h-12 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-2xl text-orange-400 mx-auto mb-3">
+                        📁
+                    </div>
+                    <h4 class="text-sm font-heading font-bold text-white">Click or drag audio files here</h4>
+                    <p class="text-xs text-slate-400 mt-1">Upload 1 to 5 clear audio samples of speaking voice (WAV, MP3, M4A, FLAC up to 25MB total).</p>
+                    <p class="text-[10px] text-orange-400/80 font-mono mt-2">💡 Tip: Avoid background music, heavy reverb, or multi-speaker audio.</p>
+                </div>
+
+                <!-- Selected Files List -->
+                <div x-show="selectedFiles.length > 0" class="space-y-2">
+                    <div class="text-xs font-mono text-slate-400">Selected Audio Files:</div>
+                    <div class="space-y-1.5">
+                        <template x-for="(file, idx) in selectedFiles" :key="idx">
+                            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs text-slate-300 font-mono">
+                                <span class="truncate" x-text="file.name"></span>
+                                <span class="text-orange-400" x-text="`${(file.size / (1024*1024)).toFixed(1)} MB`"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice Profile Metadata Card -->
+        <div class="rounded-3xl bg-[#0d0f12] border border-white/[0.1] p-6 shadow-2xl space-y-6">
+            <h3 class="text-sm font-heading font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span>🏷️</span>
+                <span>Voice Profile Details</span>
+            </h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div class="space-y-1.5">
+                    <label class="text-xs font-mono uppercase text-slate-300 font-bold">Voice Name <span class="text-orange-400">*</span></label>
+                    <input type="text" name="name" required placeholder="e.g. Elena — Conversational Warm"
+                           class="w-full px-4 py-3 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500 placeholder-slate-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-mono uppercase text-slate-300 font-bold">Gender</label>
+                        <select name="gender" class="w-full px-3.5 py-3 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500">
+                            <option value="neutral">Neutral</option>
+                            <option value="female">Female</option>
+                            <option value="male">Male</option>
+                            <option value="custom">Character / Custom</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-mono uppercase text-slate-300 font-bold">Accent / Language</label>
+                        <input type="text" name="accent" placeholder="e.g. American, British, Lagos"
+                               class="w-full px-3.5 py-3 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500 placeholder-slate-500">
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="text-xs font-mono uppercase text-slate-300 font-bold">Voice Description & Cadence</label>
+                <textarea name="description" rows="2" placeholder="e.g. Calming and friendly narrator tone with upbeat pacing, suitable for documentary voiceovers and cinematic monologues."
+                          class="w-full px-4 py-3 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500 placeholder-slate-500 resize-none"></textarea>
+            </div>
+
+            <!-- Mandatory Consent Checkbox -->
+            <div class="p-4 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-start gap-3">
+                <input type="checkbox" name="consent" id="consent_checkbox" required
+                       class="mt-1 w-4 h-4 rounded text-orange-500 focus:ring-orange-500 bg-black/60 border-white/20 cursor-pointer">
+                <label for="consent_checkbox" class="text-xs text-slate-200 cursor-pointer leading-relaxed">
+                    <span class="font-bold text-white">Voice Ownership & Ethics Confirmation:</span>
+                    I hereby affirm that I own the rights, have legal consent, or am cloning my personal voice in full compliance with the terms of service. I will not use this voice to generate deceptive or non-consensual deepfakes.
+                </label>
+            </div>
+        </div>
+
+        <!-- Submit & Clone Action -->
+        <div class="flex items-center justify-between pt-2">
+            <a href="{% url 'voices:list' %}" class="px-5 py-3 rounded-xl bg-white/[0.05] hover:bg-white/10 text-xs font-semibold text-slate-300 hover:text-white transition">
+                Cancel
+            </a>
+
+            <button type="submit" :disabled="isSubmitting"
+                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-8 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105 flex items-center gap-2.5 shadow-xl shadow-orange-500/25 disabled:opacity-50 cursor-pointer">
+                <span x-show="!isSubmitting">✨ Clone Neural Voice (50 Credits)</span>
+                <span x-show="isSubmitting" class="flex items-center gap-2">
+                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Extracting Neural Weights...</span>
+                </span>
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Alpine.js Audio Studio Logic -->
+<script>
+function voiceCloneStudio() {
+    return {
+        activeTab: 'record',
+        isRecording: false,
+        hasRecording: false,
+        isSubmitting: false,
+        isDragging: false,
+        recordedSeconds: 0,
+        timerInterval: null,
+        mediaRecorder: null,
+        audioChunks: [],
+        selectedFiles: [],
+        audioContext: null,
+        analyser: null,
+        animFrameId: null,
+
+        get formattedDuration() {
+            const m = Math.floor(this.recordedSeconds / 60).toString().padStart(2, '0');
+            const s = (this.recordedSeconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        },
+
+        async startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.audioChunks = [];
+                this.recordedSeconds = 0;
+                this.isRecording = true;
+                this.hasRecording = false;
+
+                // Setup Web Audio API Visualizer
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                const source = this.audioContext.createMediaStreamSource(stream);
+                source.connect(this.analyser);
+                this.analyser.fftSize = 64;
+                this.drawVisualizer();
+
+                // Setup MediaRecorder
+                this.mediaRecorder = new MediaRecorder(stream);
+                this.mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) this.audioChunks.push(e.data);
+                };
+
+                this.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    if (this.$refs.recordedPlayer) {
+                        this.$refs.recordedPlayer.src = audioUrl;
+                    }
+                    this.hasRecording = true;
+                    this.isRecording = false;
+
+                    // Convert blob to file in the hidden input
+                    const file = new File([audioBlob], `recorded_sample_${Date.now()}.wav`, { type: 'audio/wav' });
+                    const container = new DataTransfer();
+                    container.items.add(file);
+                    this.$refs.recordedAudioInput.files = container.files;
+
+                    // Stop mic tracks
+                    stream.getTracks().forEach(t => t.stop());
+                    cancelAnimationFrame(this.animFrameId);
+                };
+
+                this.mediaRecorder.start(250);
+
+                // Timer
+                this.timerInterval = setInterval(() => {
+                    this.recordedSeconds++;
+                }, 1000);
+
+            } catch (err) {
+                alert("Microphone access was denied or is unavailable. Please grant microphone permissions in your browser.");
+                console.error(err);
+            }
+        },
+
+        stopRecording() {
+            if (this.mediaRecorder && this.isRecording) {
+                this.mediaRecorder.stop();
+                clearInterval(this.timerInterval);
+            }
+        },
+
+        discardRecording() {
+            this.hasRecording = false;
+            this.recordedSeconds = 0;
+            this.audioChunks = [];
+            if (this.$refs.recordedPlayer) {
+                this.$refs.recordedPlayer.pause();
+                this.$refs.recordedPlayer.src = '';
+            }
+            if (this.$refs.recordedAudioInput) {
+                this.$refs.recordedAudioInput.value = '';
+                try {
+                    this.$refs.recordedAudioInput.files = new DataTransfer().files;
+                } catch (e) {}
+            }
+            const canvas = this.$refs.visualizerCanvas;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#05070a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        },
+
+        drawVisualizer() {
+            const canvas = this.$refs.visualizerCanvas;
+            if (!canvas || !this.analyser) return;
+            const ctx = canvas.getContext('2d');
+            const bufferLength = this.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const renderFrame = () => {
+                this.animFrameId = requestAnimationFrame(renderFrame);
+                this.analyser.getByteFrequencyData(dataArray);
+
+                ctx.fillStyle = '#05070a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 2;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height * 0.85;
+                    ctx.fillStyle = '#f97316';
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+                    x += barWidth;
+                }
+            };
+            renderFrame();
+        },
+
+        handleFileSelect(e) {
+            this.selectedFiles = Array.from(e.target.files);
+        },
+
+        handleFileDrop(e) {
+            this.isDragging = false;
+            if (e.dataTransfer.files.length > 0) {
+                this.$refs.fileInput.files = e.dataTransfer.files;
+                this.selectedFiles = Array.from(e.dataTransfer.files);
+            }
+        },
+
+        handleSubmit(e) {
+            if (this.activeTab === 'record' && !this.hasRecording) {
+                e.preventDefault();
+                alert("Please record audio before submitting, or switch to the Upload tab.");
+                return;
+            }
+            if (this.activeTab === 'upload' && this.selectedFiles.length === 0) {
+                e.preventDefault();
+                alert("Please choose at least one audio file to clone.");
+                return;
+            }
+            this.isSubmitting = true;
+        }
+    }
+}
+</script>
+{% endblock %}

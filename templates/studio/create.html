@@ -28,10 +28,15 @@ function createStudioApp() {
         generationType: '{% if request.GET.type %}{{ request.GET.type|escapejs }}{% else %}video{% endif %}',
         aspectRatio: '{% if request.GET.aspect %}{{ request.GET.aspect|escapejs }}{% elif request.GET.aspect_ratio %}{{ request.GET.aspect_ratio|escapejs }}{% else %}16:9{% endif %}',
         duration: {% if request.GET.duration %}{{ request.GET.duration }}{% else %}5{% endif %},
-        voice: 'adam',
+        voice: '{% if request.GET.voice %}{{ request.GET.voice|escapejs }}{% else %}adam{% endif %}',
         selectedVoiceName: 'Adam (Deep Narrator)',
         selectedVoiceDesc: 'Authoritative, rich storytelling tone',
+        selectedVoiceBadge: 'PRESET',
+        selectedVoiceIsCloned: false,
         voiceDropdownOpen: false,
+        videoVoiceDropdownOpen: false,
+        videoVoiceSearch: '',
+        audioVoiceSearch: '',
         modelDropdownOpen: false,
         selectedModel: '{% if request.GET.model %}{{ request.GET.model|escapejs }}{% elif request.GET.model_id %}{{ request.GET.model_id|escapejs }}{% else %}automatic{% endif %}',
         selectedModelName: 'Automatic Smart Routing',
@@ -47,10 +52,14 @@ function createStudioApp() {
         characterDropdownOpen: false,
         characterId: '{% if request.GET.character_id %}{{ request.GET.character_id|escapejs }}{% else %}{% endif %}',
         selectedCharacterName: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" %}{{ c.name|escapejs }}{% endif %}{% endfor %}{% else %}No Character (Standalone Scene){% endif %}',
-        selectedCharacterAvatar: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" and c.avatar %}{{ c.avatar.url }}{% endif %}{% endfor %}{% endif %}',
-        selectedCharacterTagline: 'Standalone Scene',
+        selectedCharacterAvatar: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" %}{% if c.primary_image_url %}{{ c.primary_image_url }}{% elif c.avatar %}{{ c.avatar.url }}{% endif %}{% endif %}{% endfor %}{% endif %}',
+        selectedCharacterTagline: '{% if request.GET.character_id %}{% for c in characters %}{% if request.GET.character_id == c.id|stringformat:"s" %}{{ c.appearance_description|truncatechars:40|escapejs }}{% endif %}{% endfor %}{% else %}Standalone Scene{% endif %}',
         estimatedCredits: 750,
         isEnhancing: false,
+        enableLipSync: {% if request.GET.character_id %}true{% else %}false{% endif %},
+        dialogueText: '',
+        isDeducingDialogue: false,
+        useClonedWithVeo: false,
 
         init() {
             const params = new URLSearchParams(window.location.search);
@@ -71,12 +80,50 @@ function createStudioApp() {
             if (params.has('voice')) {
                 this.voice = params.get('voice');
             }
+            {% if cloned_voices %}
+            {% for cv in cloned_voices %}
+            if (this.voice === '{{ cv.provider_voice_id|default:cv.id }}' || this.voice === '{{ cv.id }}') {
+                this.selectedVoiceName = '{{ cv.name|escapejs }}';
+                this.selectedVoiceDesc = '{{ cv.gender|title }} • {{ cv.accent|default:"Natural" }} Accent';
+                this.selectedVoiceBadge = 'CLONED';
+                this.selectedVoiceIsCloned = true;
+            }
+            {% endfor %}
+            {% endif %}
+            {% if available_voices %}
+            {% for v in available_voices %}
+            if (this.voice === '{{ v.id }}') {
+                this.selectedVoiceName = '{{ v.name|escapejs }}';
+                this.selectedVoiceDesc = '{{ v.desc|escapejs }}';
+                this.selectedVoiceBadge = '{{ v.badge|escapejs }}';
+                this.selectedVoiceIsCloned = false;
+            }
+            {% endfor %}
+            {% endif %}
             if (params.has('negative_prompt')) {
                 this.negativePrompt = params.get('negative_prompt');
                 this.showNegative = true;
             }
             if (params.has('character_id')) {
                 this.characterId = params.get('character_id');
+            }
+            // Auto-bind character profile & voice if characterId is active
+            if (this.characterId) {
+                {% for c in characters %}
+                if (this.characterId === '{{ c.id|stringformat:"s" }}') {
+                    this.selectedCharacterName = '{{ c.name|escapejs }}';
+                    this.selectedCharacterAvatar = '{% if c.primary_image_url %}{{ c.primary_image_url }}{% elif c.avatar %}{{ c.avatar.url }}{% endif %}';
+                    this.selectedCharacterTagline = '{{ c.appearance_description|truncatechars:40|escapejs }}';
+                    {% if c.voice_profile %}
+                    this.voice = '{{ c.voice_profile.provider_voice_id|default:c.voice_profile.id }}';
+                    this.selectedVoiceName = '{{ c.voice_profile.name|escapejs }}';
+                    this.selectedVoiceDesc = 'Cloned voice profile for {{ c.name|escapejs }}';
+                    this.selectedVoiceBadge = 'CLONED';
+                    this.selectedVoiceIsCloned = true;
+                    this.enableLipSync = true;
+                    {% endif %}
+                }
+                {% endfor %}
             }
             const modelParam = params.get('model') || params.get('model_id') || this.selectedModel;
             if (modelParam && modelParam !== 'automatic') {
@@ -104,19 +151,61 @@ function createStudioApp() {
             }
         },
 
-        selectCharacter(id, name, avatar, tagline) {
+        selectCharacter(id, name, avatar, tagline, voiceProfileId, voiceName) {
             this.characterId = id;
             this.selectedCharacterName = name;
             this.selectedCharacterAvatar = avatar || '';
             this.selectedCharacterTagline = tagline || '';
             this.characterDropdownOpen = false;
+            if (voiceProfileId) {
+                this.voice = voiceProfileId;
+                this.selectedVoiceName = voiceName || (name + ' (Voice)');
+                this.selectedVoiceDesc = 'Cloned voice profile for ' + name;
+                this.selectedVoiceBadge = 'CLONED';
+                this.selectedVoiceIsCloned = true;
+                this.enableLipSync = true;
+            }
+            this.calculateCredits();
         },
 
-        selectVoice(id, name, desc) {
+        async deduceDialogueForVideo() {
+            if (!this.promptText.trim()) {
+                alert("Please describe your scene prompt first.");
+                return;
+            }
+            this.isDeducingDialogue = true;
+            try {
+                const formData = new FormData();
+                formData.append('prompt', this.promptText);
+                formData.append('duration', this.duration);
+                const charName = this.selectedCharacterName !== 'No Character (Standalone Scene)' ? this.selectedCharacterName : '';
+                formData.append('character_name', charName);
+                formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+                const resp = await fetch("{% url 'generations:api_generate_dialogue' %}", {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (data && data.dialogue) {
+                    this.dialogueText = data.dialogue;
+                    this.enableLipSync = true;
+                }
+            } catch (e) {
+                console.error("Deduce dialogue error:", e);
+            } finally {
+                this.isDeducingDialogue = false;
+            }
+        },
+
+        selectVoice(id, name, desc, badge, isCloned) {
             this.voice = id;
             this.selectedVoiceName = name;
             this.selectedVoiceDesc = desc || '';
+            this.selectedVoiceBadge = badge || (isCloned ? 'CLONED' : 'PRESET');
+            this.selectedVoiceIsCloned = !!isCloned;
             this.voiceDropdownOpen = false;
+            this.videoVoiceDropdownOpen = false;
+            this.calculateCredits();
         },
 
         calculateCredits() {
@@ -141,6 +230,14 @@ function createStudioApp() {
                     if (this.selectedModel === 'best_quality') this.estimatedCredits = 8500 * dur;
                     else if (this.selectedModel === 'fastest' || this.selectedModel === 'budget') this.estimatedCredits = 2000 * dur;
                     else this.estimatedCredits = 4400 * dur;
+                }
+            }
+
+            // Lip-sync credit adjustment: 0 extra for Google Veo native speech, 45 for cloned voice lip-sync
+            if (this.enableLipSync && this.generationType === 'video') {
+                const isVeo = this.selectedModel.includes('veo') || this.selectedModelBadge === 'GOOGLE';
+                if (!isVeo || this.useClonedWithVeo) {
+                    this.estimatedCredits += 45;
                 }
             }
         },
@@ -684,7 +781,7 @@ function createStudioApp() {
                                 <!-- User Saved Characters Roster -->
                                 {% for c in characters %}
                                     <button type="button"
-                                            @click="selectCharacter('{{ c.id }}', '{{ c.name|escapejs }}', '{% if c.avatar %}{{ c.avatar.url }}{% endif %}', '{{ c.appearance_description|truncatechars:40|escapejs }}')"
+                                            @click="selectCharacter('{{ c.id }}', '{{ c.name|escapejs }}', '{% if c.primary_image_url %}{{ c.primary_image_url }}{% elif c.avatar %}{{ c.avatar.url }}{% endif %}', '{{ c.appearance_description|truncatechars:40|escapejs }}'{% if c.voice_profile %}, '{{ c.voice_profile.id }}', '{{ c.voice_profile.name|escapejs }}'{% endif %})"
                                             :class="characterId === '{{ c.id }}' ? 'bg-orange-500/15 border-orange-500/40 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.04]'"
                                             class="w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between gap-2.5 group cursor-pointer">
                                         <div class="flex items-center gap-2.5 min-w-0">
@@ -702,6 +799,9 @@ function createStudioApp() {
                                                     <span>{{ c.name }}</span>
                                                     {% if c.face_anchor_url %}
                                                         <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-black/60 text-orange-400 border border-orange-500/30">🔒 FACE LOCK</span>
+                                                    {% endif %}
+                                                    {% if c.voice_profile %}
+                                                        <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">🎙️ {{ c.voice_profile.name|truncatechars:12 }}</span>
                                                     {% endif %}
                                                 </div>
                                                 <div class="text-[10px] text-slate-400 truncate">{{ c.appearance_description|default:c.description|default:"Consistent Identity" }}</div>
@@ -755,9 +855,251 @@ function createStudioApp() {
                         </div>
                     </div>
 
+                    <!-- 1-Step Talking Character & Neural Lip-Sync Speech Deck (Video Modality) -->
+                    <div x-show="generationType === 'video'" x-cloak class="rounded-2xl bg-[#090b0e] border border-white/[0.08] p-4 sm:p-5 space-y-4">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                <input type="checkbox"
+                                       name="is_lip_sync"
+                                       value="true"
+                                       x-model="enableLipSync"
+                                       @change="calculateCredits()"
+                                       class="w-4 h-4 rounded border-white/20 bg-black/60 text-orange-500 focus:ring-orange-500/40 focus:ring-offset-0 transition cursor-pointer">
+                                <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                                    <span>👄</span>
+                                    <span>Enable Character Speech & Neural Lip-Sync</span>
+                                    <span class="text-[9px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">1-Step</span>
+                                </span>
+                            </label>
+                            
+                            <!-- Google Veo Native Audio Indicator -->
+                            <template x-if="selectedModel.includes('veo') || selectedModelBadge === 'GOOGLE'">
+                                <span class="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <span>⚡</span> Veo Native Speech Engine (Free Sync)
+                                </span>
+                            </template>
+                        </div>
+
+                        <!-- Speech Settings Drawer -->
+                        <div x-show="enableLipSync" x-transition.opacity class="space-y-3.5 pt-1 border-t border-white/[0.06]">
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                                        <span>💬 Spoken Dialogue Line</span>
+                                    </label>
+                                    <button type="button"
+                                            @click="deduceDialogueForVideo()"
+                                            :disabled="isDeducingDialogue"
+                                            class="text-[10px] font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 transition disabled:opacity-50 cursor-pointer">
+                                        <span x-show="!isDeducingDialogue">✨ Auto-Deduce from Scene Prompt</span>
+                                        <span x-show="isDeducingDialogue" class="flex items-center gap-1">
+                                            <span class="w-2.5 h-2.5 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"></span>
+                                            Deducing...
+                                        </span>
+                                    </button>
+                                </div>
+                                <textarea name="dialogue"
+                                          x-model="dialogueText"
+                                          rows="2"
+                                          placeholder="Enter the exact sentence or dialogue spoken by the character in this scene..."
+                                          class="w-full rounded-xl bg-black/60 border border-white/10 hover:border-white/20 focus:border-orange-500/80 focus:ring-1 focus:ring-orange-500/40 px-3 py-2 text-xs text-slate-200 placeholder-slate-500 outline-none transition resize-none"></textarea>
+                            </div>
+
+                            <!-- Voice Selection Row -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <!-- Redesigned Voice Persona Picker (Glassmorphic Popover) -->
+                                <div class="space-y-1.5 relative" @click.outside="videoVoiceDropdownOpen = false">
+                                    <input type="hidden" name="voice_profile_id" :value="voice">
+                                    <input type="hidden" name="voice" :value="voice">
+
+                                    <div class="flex items-center justify-between">
+                                        <label class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                                            <span class="text-orange-400">🎙️</span>
+                                            <span>Voice Persona</span>
+                                        </label>
+                                        <a href="{% url 'voices:create' %}" target="_blank" class="text-[10px] text-orange-400 hover:text-orange-300 font-bold transition flex items-center gap-1 hover:underline">
+                                            <span>+ Clone Voice</span>
+                                            <span class="font-mono">↗</span>
+                                        </a>
+                                    </div>
+
+                                    <!-- Main Trigger Button -->
+                                    <button type="button"
+                                            @click="videoVoiceDropdownOpen = !videoVoiceDropdownOpen"
+                                            :class="videoVoiceDropdownOpen ? 'border-orange-500 ring-1 ring-orange-500/40 bg-[#14171c]' : 'border-white/[0.1] bg-[#0b0d10] hover:border-white/20 hover:bg-[#101216]'"
+                                            class="w-full rounded-2xl border text-xs text-white p-2.5 sm:p-3 outline-none transition-all duration-200 flex items-center justify-between gap-2.5 cursor-pointer shadow-lg group">
+                                        
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <!-- Icon Badge -->
+                                            <div class="w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 transition-all duration-200 shadow-sm"
+                                                 :class="selectedVoiceIsCloned ? 'bg-gradient-to-br from-amber-500/30 to-orange-500/20 border border-amber-500/50 text-amber-300' : 'bg-orange-500/15 border border-orange-500/30 text-orange-400'">
+                                                <span x-text="selectedVoiceIsCloned ? '⭐' : '🗣️'"></span>
+                                            </div>
+
+                                            <!-- Voice Info -->
+                                            <div class="text-left min-w-0">
+                                                <div class="font-bold text-white text-xs truncate flex items-center gap-1.5">
+                                                    <span x-text="selectedVoiceName"></span>
+                                                    <template x-if="selectedVoiceIsCloned">
+                                                        <span class="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">CLONED</span>
+                                                    </template>
+                                                    <template x-if="!selectedVoiceIsCloned">
+                                                        <span class="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-white/[0.06] text-slate-400 border border-white/[0.08]" x-text="selectedVoiceBadge"></span>
+                                                    </template>
+                                                </div>
+                                                <div class="text-[10px] text-slate-400 truncate mt-0.5" x-text="selectedVoiceDesc"></div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Chevron Indicator -->
+                                        <div class="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0 text-slate-400 group-hover:text-white transition">
+                                            <svg class="w-3.5 h-3.5 transition-transform duration-200"
+                                                 :class="videoVoiceDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
+                                    </button>
+
+                                    <!-- Popover Menu -->
+                                    <div x-show="videoVoiceDropdownOpen"
+                                         x-transition:enter="transition ease-out duration-150"
+                                         x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
+                                         x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+                                         x-transition:leave="transition ease-in duration-100"
+                                         x-transition:leave-start="opacity-100 scale-100"
+                                         x-transition:leave-end="opacity-0 scale-95"
+                                         class="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#0c0e12]/98 backdrop-blur-2xl border border-white/[0.12] shadow-2xl p-2.5 z-50 max-h-80 overflow-y-auto space-y-2.5">
+                                        
+                                        <!-- Search / Filter Bar -->
+                                        <div class="relative">
+                                            <input type="text"
+                                                   x-model="videoVoiceSearch"
+                                                   placeholder="Search cloned or preset voices..."
+                                                   class="w-full rounded-xl bg-black/60 border border-white/10 text-[11px] text-white placeholder-slate-500 pl-8 pr-3 py-1.5 outline-none focus:border-orange-500/70 transition">
+                                            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-500">🔍</span>
+                                            <button type="button"
+                                                    x-show="videoVoiceSearch"
+                                                    @click="videoVoiceSearch = ''"
+                                                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-white">✕</button>
+                                        </div>
+
+                                        <!-- Group 1: My Cloned Voices -->
+                                        {% if cloned_voices %}
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between px-2 py-1">
+                                                <span class="text-[10px] font-mono uppercase font-bold text-amber-300 flex items-center gap-1.5">
+                                                    <span>⭐</span>
+                                                    <span>My Cloned Voices</span>
+                                                </span>
+                                                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                                                    {{ cloned_voices|length }} Ready
+                                                </span>
+                                            </div>
+
+                                            {% for cv in cloned_voices %}
+                                            <div x-show="!videoVoiceSearch || '{{ cv.name|lower|escapejs }}'.includes(videoVoiceSearch.toLowerCase()) || '{{ cv.accent|lower|escapejs }}'.includes(videoVoiceSearch.toLowerCase())"
+                                                 class="flex items-center gap-1.5">
+                                                <button type="button"
+                                                        @click="selectVoice('{{ cv.id }}', '{{ cv.name|escapejs }}', '{{ cv.gender|title }} • {{ cv.accent|default:"Natural" }} Accent', 'CLONED', true)"
+                                                        :class="voice === '{{ cv.id }}' ? 'bg-amber-500/20 border-amber-500/50 text-white shadow-sm' : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white'"
+                                                        class="flex-1 p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
+                                                    <div class="flex items-center gap-2.5 min-w-0">
+                                                        <div class="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xs shrink-0 text-amber-300 font-bold">
+                                                            🎙️
+                                                        </div>
+                                                        <div class="min-w-0">
+                                                            <div class="text-xs font-bold text-white group-hover/item:text-amber-300 transition truncate flex items-center gap-1.5">
+                                                                <span>{{ cv.name }}</span>
+                                                                <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">CUSTOM</span>
+                                                            </div>
+                                                            <div class="text-[10px] text-slate-400 truncate">{{ cv.gender|title }} • {{ cv.accent|default:"Natural" }} • {{ cv.samples.count }} sample{{ cv.samples.count|pluralize }}</div>
+                                                        </div>
+                                                    </div>
+                                                    <span x-show="voice === '{{ cv.id }}'" class="text-amber-400 text-xs font-bold shrink-0">✓</span>
+                                                </button>
+                                                {% if cv.preview_url %}
+                                                <button type="button"
+                                                        @click.stop="const a = new Audio('{{ cv.preview_url }}'); a.play();"
+                                                        title="Audition Sample Clip"
+                                                        class="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-amber-500/20 hover:text-amber-300 border border-white/[0.06] text-slate-400 flex items-center justify-center text-[10px] shrink-0 transition cursor-pointer">
+                                                    ▶
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="border-t border-white/[0.06] my-1"></div>
+                                        {% endif %}
+
+                                        <!-- Group 2: Preset Voices -->
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between px-2 py-1">
+                                                <span class="text-[10px] font-mono uppercase font-bold text-slate-400 flex items-center gap-1.5">
+                                                    <span>🎭</span>
+                                                    <span>Preset Voice Personas</span>
+                                                </span>
+                                                <span class="text-[9px] font-mono text-slate-500">ElevenLabs Neural</span>
+                                            </div>
+
+                                            {% for v in available_voices %}
+                                            <button type="button"
+                                                    x-show="!videoVoiceSearch || '{{ v.name|lower|escapejs }}'.includes(videoVoiceSearch.toLowerCase()) || '{{ v.desc|lower|escapejs }}'.includes(videoVoiceSearch.toLowerCase()) || '{{ v.badge|lower|escapejs }}'.includes(videoVoiceSearch.toLowerCase())"
+                                                    @click="selectVoice('{{ v.id }}', '{{ v.name|escapejs }}', '{{ v.desc|escapejs }}', '{{ v.badge|escapejs }}', false)"
+                                                    :class="voice === '{{ v.id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white'"
+                                                    class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <div class="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/25 flex items-center justify-center text-xs shrink-0 text-orange-400 font-bold">
+                                                        🗣️
+                                                    </div>
+                                                    <div class="min-w-0">
+                                                        <div class="text-xs font-bold text-white group-hover/item:text-orange-300 transition truncate flex items-center gap-1.5">
+                                                            <span>{{ v.name }}</span>
+                                                            <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-white/[0.06] text-slate-400 border border-white/[0.08]">{{ v.badge }}</span>
+                                                        </div>
+                                                        <div class="text-[10px] text-slate-400 truncate">{{ v.desc }}</div>
+                                                    </div>
+                                                </div>
+                                                <span x-show="voice === '{{ v.id }}'" class="text-orange-400 text-xs font-bold shrink-0">✓</span>
+                                            </button>
+                                            {% empty %}
+                                            <button type="button"
+                                                    @click="selectVoice('adam', 'Adam', 'Deep, authoritative narrator', 'Cinematic', false)"
+                                                    class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between bg-orange-500/20 border-orange-500/50 text-white">
+                                                <div class="text-xs font-bold text-white">Adam (Cinematic)</div>
+                                                <span class="text-orange-400 text-xs font-bold">✓</span>
+                                            </button>
+                                            {% endfor %}
+                                        </div>
+
+                                        <!-- Popover Footer Action -->
+                                        <div class="pt-2 border-t border-white/[0.06]">
+                                            <a href="{% url 'voices:create' %}" target="_blank"
+                                               class="w-full py-2 px-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-dashed border-orange-500/30 text-orange-300 hover:text-orange-200 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                                                <span>🎙️</span>
+                                                <span>+ Clone New Voice Persona (Mic or Upload)</span>
+                                                <span class="font-mono text-[10px]">↗</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Engine Mode Callout -->
+                                <div class="rounded-xl bg-black/40 border border-white/[0.06] p-2.5 flex flex-col justify-center text-[10px] text-slate-400 space-y-1">
+                                    <div class="font-bold text-white flex items-center gap-1">
+                                        <span>🧬 High-Fidelity Neural Sync</span>
+                                    </div>
+                                    <p class="leading-relaxed">
+                                        Full-face latent deformation (LatentSync) & CodeFormer neural restoration generate realistic jaw dynamics and natural teeth articulation.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Audio Modality: Voice Persona & Sound Mode Deck -->
                     <div x-show="generationType === 'audio'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                        <!-- ElevenLabs Voice Persona Picker -->
+                        <!-- ElevenLabs Voice Persona Picker (Glassmorphic Popover) -->
                         <div class="rounded-2xl bg-[#090b0e] border border-white/[0.08] p-4 space-y-2.5 relative"
                              @click.outside="voiceDropdownOpen = false">
                             <input type="hidden" name="voice" :value="voice">
@@ -765,63 +1107,171 @@ function createStudioApp() {
                             <div class="flex items-center justify-between">
                                 <label class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
                                     <span class="text-orange-400">🎙️</span>
-                                    <span>ElevenLabs Voice Persona</span>
+                                    <span>Voice Persona</span>
                                 </label>
-                                <span class="text-[10px] text-orange-400 font-mono">Neural TTS</span>
+                                <a href="{% url 'voices:create' %}" target="_blank" class="text-[10px] text-orange-400 hover:text-orange-300 font-bold transition flex items-center gap-1 hover:underline">
+                                    <span>+ Clone Voice</span>
+                                    <span class="font-mono">↗</span>
+                                </a>
                             </div>
 
                             <!-- Voice Trigger Button -->
                             <button type="button"
                                     @click="voiceDropdownOpen = !voiceDropdownOpen"
-                                    :class="voiceDropdownOpen ? 'border-orange-500/70 ring-1 ring-orange-500/30 bg-[#16181c]' : 'border-white/[0.08] bg-black/60 hover:border-white/20'"
-                                    class="w-full rounded-xl border text-xs text-white px-3.5 py-2.5 outline-none transition-all duration-200 flex items-center justify-between gap-2.5 cursor-pointer">
+                                    :class="voiceDropdownOpen ? 'border-orange-500 ring-1 ring-orange-500/40 bg-[#14171c]' : 'border-white/[0.08] bg-black/60 hover:border-white/20 hover:bg-[#101216]'"
+                                    class="w-full rounded-2xl border text-xs text-white p-2.5 sm:p-3 outline-none transition-all duration-200 flex items-center justify-between gap-2.5 cursor-pointer shadow-lg group">
                                 <div class="flex items-center gap-2.5 min-w-0">
-                                    <div class="w-7 h-7 rounded-lg bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-xs shrink-0 text-orange-300 font-bold">
-                                        🗣️
+                                    <!-- Icon Badge -->
+                                    <div class="w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 transition-all duration-200 shadow-sm"
+                                         :class="selectedVoiceIsCloned ? 'bg-gradient-to-br from-amber-500/30 to-orange-500/20 border border-amber-500/50 text-amber-300' : 'bg-orange-500/15 border border-orange-500/30 text-orange-400'">
+                                        <span x-text="selectedVoiceIsCloned ? '⭐' : '🗣️'"></span>
                                     </div>
+
+                                    <!-- Voice Info -->
                                     <div class="text-left min-w-0">
-                                        <div class="font-bold text-white text-xs truncate" x-text="selectedVoiceName"></div>
-                                        <div class="text-[10px] text-slate-400 truncate" x-text="selectedVoiceDesc"></div>
+                                        <div class="font-bold text-white text-xs truncate flex items-center gap-1.5">
+                                            <span x-text="selectedVoiceName"></span>
+                                            <template x-if="selectedVoiceIsCloned">
+                                                <span class="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">CLONED</span>
+                                            </template>
+                                            <template x-if="!selectedVoiceIsCloned">
+                                                <span class="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-white/[0.06] text-slate-400 border border-white/[0.08]" x-text="selectedVoiceBadge"></span>
+                                            </template>
+                                        </div>
+                                        <div class="text-[10px] text-slate-400 truncate mt-0.5" x-text="selectedVoiceDesc"></div>
                                     </div>
                                 </div>
 
-                                <svg class="w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200"
-                                     :class="voiceDropdownOpen ? 'rotate-180 text-orange-400' : ''"
-                                     fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                                </svg>
+                                <!-- Chevron Indicator -->
+                                <div class="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0 text-slate-400 group-hover:text-white transition">
+                                    <svg class="w-3.5 h-3.5 transition-transform duration-200"
+                                         :class="voiceDropdownOpen ? 'rotate-180 text-orange-400' : ''"
+                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
                             </button>
 
                             <!-- Voice Popover Menu -->
                             <div x-show="voiceDropdownOpen"
                                  x-transition:enter="transition ease-out duration-150"
-                                 x-transition:enter-start="opacity-0 scale-95 -translate-y-1"
+                                 x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
                                  x-transition:enter-end="opacity-100 scale-100 translate-y-0"
                                  x-transition:leave="transition ease-in duration-100"
                                  x-transition:leave-start="opacity-100 scale-100"
                                  x-transition:leave-end="opacity-0 scale-95"
-                                 class="absolute left-3.5 right-3.5 top-full mt-1.5 rounded-2xl bg-[#0d0f12]/98 backdrop-blur-xl border border-white/[0.12] shadow-2xl p-2 space-y-1 z-50 max-h-64 overflow-y-auto">
+                                 class="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#0c0e12]/98 backdrop-blur-2xl border border-white/[0.12] shadow-2xl p-2.5 z-50 max-h-80 overflow-y-auto space-y-2.5">
                                 
-                                {% for v in available_voices %}
-                                <button type="button" @click="selectVoice('{{ v.id }}', '{{ v.name|escapejs }} ({{ v.badge|escapejs }})', '{{ v.desc|escapejs }}')"
-                                        :class="voice === '{{ v.id }}' ? 'bg-orange-500/20 border-orange-500/40 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.04]'"
-                                        class="w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between cursor-pointer">
-                                    <div>
-                                        <div class="text-xs font-bold text-white">{{ v.name }} ({{ v.badge }})</div>
-                                        <div class="text-[10px] text-slate-400">{{ v.desc }}</div>
+                                <!-- Search / Filter Bar -->
+                                <div class="relative">
+                                    <input type="text"
+                                           x-model="audioVoiceSearch"
+                                           placeholder="Search cloned or preset voices..."
+                                           class="w-full rounded-xl bg-black/60 border border-white/10 text-[11px] text-white placeholder-slate-500 pl-8 pr-3 py-1.5 outline-none focus:border-orange-500/70 transition">
+                                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-500">🔍</span>
+                                    <button type="button"
+                                            x-show="audioVoiceSearch"
+                                            @click="audioVoiceSearch = ''"
+                                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-white">✕</button>
+                                </div>
+
+                                <!-- Group 1: My Cloned Voices -->
+                                {% if cloned_voices %}
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between px-2 py-1">
+                                        <span class="text-[10px] font-mono uppercase font-bold text-amber-300 flex items-center gap-1.5">
+                                            <span>⭐</span>
+                                            <span>My Cloned Voices</span>
+                                        </span>
+                                        <span class="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
+                                            {{ cloned_voices|length }} Ready
+                                        </span>
                                     </div>
-                                    <span x-show="voice === '{{ v.id }}'" class="text-orange-400 text-xs font-bold">✓</span>
-                                </button>
-                                {% empty %}
-                                <button type="button" @click="selectVoice('adam', 'Adam (Cinematic)', 'Deep, authoritative narrator')"
-                                        class="w-full p-2.5 rounded-xl border text-left transition flex items-center justify-between bg-orange-500/20 border-orange-500/40 text-white cursor-pointer">
-                                    <div>
+
+                                    {% for cv in cloned_voices %}
+                                    <div x-show="!audioVoiceSearch || '{{ cv.name|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase()) || '{{ cv.accent|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase())"
+                                         class="flex items-center gap-1.5">
+                                        <button type="button"
+                                                @click="selectVoice('{{ cv.id }}', '{{ cv.name|escapejs }}', '{{ cv.gender|title }} • {{ cv.accent|default:"Natural" }} Accent', 'CLONED', true)"
+                                                :class="voice === '{{ cv.id }}' ? 'bg-amber-500/20 border-amber-500/50 text-white shadow-sm' : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white'"
+                                                class="flex-1 p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <div class="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xs shrink-0 text-amber-300 font-bold">
+                                                    🎙️
+                                                </div>
+                                                <div class="min-w-0">
+                                                    <div class="text-xs font-bold text-white group-hover/item:text-amber-300 transition truncate flex items-center gap-1.5">
+                                                        <span>{{ cv.name }}</span>
+                                                        <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">CUSTOM</span>
+                                                    </div>
+                                                    <div class="text-[10px] text-slate-400 truncate">{{ cv.gender|title }} • {{ cv.accent|default:"Natural" }}</div>
+                                                </div>
+                                            </div>
+                                            <span x-show="voice === '{{ cv.id }}'" class="text-amber-400 text-xs font-bold shrink-0">✓</span>
+                                        </button>
+                                        {% if cv.preview_url %}
+                                        <button type="button"
+                                                @click.stop="const a = new Audio('{{ cv.preview_url }}'); a.play();"
+                                                title="Audition Sample Clip"
+                                                class="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-amber-500/20 hover:text-amber-300 border border-white/[0.06] text-slate-400 flex items-center justify-center text-[10px] shrink-0 transition cursor-pointer">
+                                            ▶
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                <div class="border-t border-white/[0.06] my-1"></div>
+                                {% endif %}
+
+                                <!-- Group 2: Preset Voices -->
+                                <div class="space-y-1">
+                                    <div class="flex items-center justify-between px-2 py-1">
+                                        <span class="text-[10px] font-mono uppercase font-bold text-slate-400 flex items-center gap-1.5">
+                                            <span>🎭</span>
+                                            <span>Preset Voice Personas</span>
+                                        </span>
+                                        <span class="text-[9px] font-mono text-slate-500">ElevenLabs Neural</span>
+                                    </div>
+
+                                    {% for v in available_voices %}
+                                    <button type="button"
+                                            x-show="!audioVoiceSearch || '{{ v.name|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase()) || '{{ v.desc|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase()) || '{{ v.badge|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase())"
+                                            @click="selectVoice('{{ v.id }}', '{{ v.name|escapejs }}', '{{ v.desc|escapejs }}', '{{ v.badge|escapejs }}', false)"
+                                            :class="voice === '{{ v.id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white'"
+                                            class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/25 flex items-center justify-center text-xs shrink-0 text-orange-400 font-bold">
+                                                🗣️
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="text-xs font-bold text-white group-hover/item:text-orange-300 transition truncate flex items-center gap-1.5">
+                                                    <span>{{ v.name }}</span>
+                                                    <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-white/[0.06] text-slate-400 border border-white/[0.08]">{{ v.badge }}</span>
+                                                </div>
+                                                <div class="text-[10px] text-slate-400 truncate">{{ v.desc }}</div>
+                                            </div>
+                                        </div>
+                                        <span x-show="voice === '{{ v.id }}'" class="text-orange-400 text-xs font-bold shrink-0">✓</span>
+                                    </button>
+                                    {% empty %}
+                                    <button type="button"
+                                            @click="selectVoice('adam', 'Adam', 'Deep, authoritative narrator', 'Cinematic', false)"
+                                            class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between bg-orange-500/20 border-orange-500/50 text-white">
                                         <div class="text-xs font-bold text-white">Adam (Cinematic)</div>
-                                        <div class="text-[10px] text-slate-400">Deep, authoritative narrator</div>
-                                    </div>
-                                    <span class="text-orange-400 text-xs font-bold">✓</span>
-                                </button>
-                                {% endfor %}
+                                        <span class="text-orange-400 text-xs font-bold">✓</span>
+                                    </button>
+                                    {% endfor %}
+                                </div>
+
+                                <!-- Popover Footer Action -->
+                                <div class="pt-2 border-t border-white/[0.06]">
+                                    <a href="{% url 'voices:create' %}" target="_blank"
+                                       class="w-full py-2 px-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-dashed border-orange-500/30 text-orange-300 hover:text-orange-200 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+                                        <span>🎙️</span>
+                                        <span>+ Clone New Voice Persona</span>
+                                        <span class="font-mono text-[10px]">↗</span>
+                                    </a>
+                                </div>
                             </div>
                         </div>
 

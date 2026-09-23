@@ -78,7 +78,7 @@ class GenerationDetailView(LoginRequiredMixin, DetailView):
                     logger.warning(f"Error checking child audio generation {child.id}: {e}")
             self.object.refresh_from_db()
 
-        ctx['available_voices'] = ElevenLabsProvider.get_available_voices()
+        ctx['available_voices'] = ElevenLabsProvider.get_available_voices(user=self.request.user)
         duration = self.object.duration or 5
         audio_model = AIModel.objects.filter(modality='audio', is_enabled=True).order_by('-priority').first()
         ctx['audio_credit_cost'] = audio_model.calculate_credit_cost(duration=duration) if audio_model else 25
@@ -88,11 +88,12 @@ class GenerationDetailView(LoginRequiredMixin, DetailView):
 def _get_generation_partial_context(generation: Generation) -> dict:
     from apps.providers.adapters.elevenlabs import ElevenLabsProvider
     duration = generation.duration or 5
+    available_voices = ElevenLabsProvider.get_available_voices(user=generation.user)
     audio_model = AIModel.objects.filter(modality='audio', is_enabled=True).order_by('-priority').first()
     credit_cost = audio_model.calculate_credit_cost(duration=duration) if audio_model else 25
     return {
         'generation': generation,
-        'available_voices': ElevenLabsProvider.get_available_voices(),
+        'available_voices': available_voices,
         'audio_credit_cost': credit_cost,
     }
 
@@ -144,9 +145,37 @@ def create_generation_view(request):
     negative_prompt = request.POST.get('negative_prompt', '').strip()[:1000]
     model_choice = request.POST.get('model', 'automatic')
     aspect_ratio = request.POST.get('aspect_ratio', '16:9')
-    voice_choice = request.POST.get('voice', 'adam')
+    voice_choice = request.POST.get('voice_profile_id') or request.POST.get('voice', 'adam')
     character_id = request.POST.get('character_id')
-    quality = voice_choice if gen_type == 'audio' else request.POST.get('quality', 'standard')
+    dialogue = request.POST.get('dialogue', '').strip()[:2000]
+    is_lip_sync = request.POST.get('is_lip_sync') in ('1', 'true', 'on', True) or bool(dialogue and gen_type == 'video')
+
+    # Resolve Character and Voice Profile
+    valid_character = None
+    selected_voice_profile = None
+    if character_id:
+        valid_character = Character.objects.filter(id=character_id, owner=request.user).first()
+        if valid_character and valid_character.voice_profile:
+            selected_voice_profile = valid_character.voice_profile
+            voice_choice = str(selected_voice_profile.id)
+
+    if not selected_voice_profile and voice_choice and voice_choice != 'adam':
+        from apps.voices.models import VoiceProfile
+        try:
+            from django.db.models import Q
+            selected_voice_profile = VoiceProfile.objects.filter(user=request.user, id=voice_choice).first()
+            if not selected_voice_profile:
+                selected_voice_profile = VoiceProfile.objects.filter(user=request.user).filter(
+                    Q(provider_voice_id=voice_choice) | Q(name__iexact=voice_choice)
+                ).first()
+        except Exception:
+            pass
+
+    # If character or custom voice profile is attached for video, auto-engage neural lip-sync pipeline
+    if gen_type == 'video' and (selected_voice_profile or dialogue or (voice_choice and voice_choice != 'adam')):
+        is_lip_sync = True
+
+    quality = voice_choice if (gen_type == 'audio' or is_lip_sync) else request.POST.get('quality', 'standard')
 
     try:
         duration_raw = request.POST.get('duration', '5')
@@ -188,11 +217,6 @@ def create_generation_view(request):
             status=429
         )
 
-    # Validate character ownership to prevent IDOR
-    valid_character = None
-    if character_id:
-        valid_character = Character.objects.filter(id=character_id, owner=request.user).first()
-
     # Reference asset upload with extension and size validation
     ref_media = None
     if 'reference_file' in request.FILES:
@@ -233,6 +257,11 @@ def create_generation_view(request):
 
     # Calculate credit cost
     credit_cost = selected_model.calculate_credit_cost(duration=duration)
+    is_google_veo = selected_model.provider.slug == 'google' or 'veo' in selected_model.model_id.lower()
+
+    # If lip-sync is requested and not using Google Veo native speech, add speech + lip-sync fee
+    if is_lip_sync and not (is_google_veo and not selected_voice_profile):
+        credit_cost += 45  # 15 credits speech + 30 credits full-face neural sync
 
     # Create Generation record
     generation = Generation.objects.create(
@@ -247,6 +276,9 @@ def create_generation_view(request):
         duration=duration,
         quality=quality,
         character=valid_character,
+        voice_profile=selected_voice_profile,
+        dialogue=dialogue,
+        is_lip_sync=is_lip_sync,
         status='queued'
     )
 
@@ -341,6 +373,7 @@ def synthesize_video_audio_view(request, generation_id):
     char_name = parent_gen.character.name if parent_gen.character else ""
     char_gender = getattr(parent_gen.character, 'gender', '')
 
+    target_vp = parent_gen.voice_profile or (parent_gen.character.voice_profile if parent_gen.character else None)
     if audio_type == 'tts':
         # If user did not provide a bespoke script, dynamically deduce in-character line via AI
         if not raw_prompt or raw_prompt == parent_gen.prompt or any(w in raw_prompt.lower() for w in ['photorealistic', '8k', 'cinematic', 'tracking shot']):
@@ -353,9 +386,14 @@ def synthesize_video_audio_view(request, generation_id):
             )
             audio_prompt = deduction.get('dialogue', '')
             if not voice or voice == 'adam':
-                voice = deduction.get('suggested_voice', 'adam')
+                if target_vp:
+                    voice = str(target_vp.id)
+                else:
+                    voice = deduction.get('suggested_voice', 'adam')
         else:
             audio_prompt = raw_prompt
+            if (not voice or voice == 'adam') and target_vp:
+                voice = str(target_vp.id)
     else:
         if not raw_prompt:
             audio_prompt = f"Cinematic atmospheric sound effects, foley, footsteps, and score for: {parent_gen.prompt}"
@@ -382,6 +420,8 @@ def synthesize_video_audio_view(request, generation_id):
             prompt=audio_prompt,
             quality=voice if audio_type == 'tts' else 'standard',
             duration=duration,
+            character=parent_gen.character,
+            voice_profile=target_vp,
             status='queued'
         )
         if parent_gen.output_media:
@@ -423,20 +463,21 @@ def lipsync_video_view(request, generation_id):
         messages.error(request, err_msg)
         return redirect('generations:detail', pk=parent_gen.id)
 
-    # Resolve or create Lip-Sync AI Model entry
+    # Resolve or create Lip-Sync AI Model entry (prefer high-quality LatentSync)
     fal_provider_obj = parent_gen.provider
-    lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
+    lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
     if not lipsync_model:
-        # Fallback to general video model or create on-the-fly
+        lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
+    if not lipsync_model:
         from apps.providers.models import AIProviderConfig
         fal_cfg = AIProviderConfig.objects.filter(slug='fal').first() or fal_provider_obj
         lipsync_model, _ = AIModel.objects.get_or_create(
-            model_id='fal-sync-lipsync',
+            model_id='fal-latentsync',
             defaults={
                 'provider': fal_cfg,
-                'display_name': 'SyncLabs LipSync 1.7 (Neural)',
+                'display_name': 'LatentSync (Full-Face Neural Lip-Sync)',
                 'modality': 'video',
-                'credit_cost_fixed': 15,
+                'credit_cost_fixed': 20,
                 'credit_cost_per_second': 3,
                 'is_enabled': True
             }
@@ -480,3 +521,41 @@ def lipsync_video_view(request, generation_id):
     if request.headers.get('HX-Request'):
         return render(request, 'partials/generation_status.html', _get_generation_partial_context(lipsync_gen))
     return redirect('generations:detail', pk=lipsync_gen.id)
+
+@login_required
+@require_POST
+def mux_audio_video_view(request, generation_id):
+    """
+    1-Click FFmpeg Muxer: Embeds attached audio track directly into MP4 video container.
+    """
+    gen = get_object_or_404(
+        Generation.objects.select_related('output_media', 'audio_track'),
+        id=generation_id,
+        user=request.user
+    )
+    if not gen.output_media or not gen.latest_audio:
+        err_msg = "Both a completed video and an attached audio track are required to mux sound."
+        if request.headers.get('HX-Request'):
+            return HttpResponse(_render_error_card(err_msg), status=400)
+        messages.error(request, err_msg)
+        return redirect('generations:detail', pk=gen.id)
+
+    try:
+        from apps.editor.ffmpeg_service import FFmpegService
+        import os
+        from django.core.files.base import ContentFile
+        vid_file = gen.output_media.file
+        aud_file = gen.latest_audio.file
+        if vid_file and aud_file and os.path.exists(vid_file.path) and os.path.exists(aud_file.path):
+            muxed_path = FFmpegService.merge_video_and_audio(vid_file.path, aud_file.path)
+            if muxed_path and os.path.exists(muxed_path) and muxed_path != vid_file.path:
+                with open(muxed_path, 'rb') as f:
+                    gen.output_media.file.save(f"muxed_{gen.output_media.id}.mp4", ContentFile(f.read()), save=True)
+                messages.success(request, "Audio track successfully embedded into video container with 48kHz sound!")
+        else:
+            messages.info(request, "Audio track linked. Synchronized playback active.")
+    except Exception as e:
+        logger.error(f"Manual mux failed: {e}")
+        messages.error(request, f"Could not mux audio: {e}")
+
+    return redirect('generations:detail', pk=gen.id)

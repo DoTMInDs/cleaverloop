@@ -27,6 +27,7 @@ urlpatterns = [
     path('generations/', include('apps.generations.urls', namespace='generations')),
     path('editor/', include('apps.editor.urls', namespace='editor')),
     path('agent/', include('apps.ai.urls', namespace='agent')),
+    path('voices/', include('apps.voices.urls', namespace='voices')),
     path('adminpanel/', include('apps.adminpanel.urls', namespace='adminpanel')),
 
     # REST APIs & Universal Webhooks

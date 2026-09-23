@@ -1,5 +1,6 @@
 import logging
 import httpx
+import uuid
 from typing import Optional, Dict, Any
 from django.conf import settings
 from apps.providers.base import (
@@ -32,6 +33,7 @@ class FalAIProvider(BaseAIProvider):
         "fal-flux-schnell": "fal-ai/flux/schnell",
         "fal-mmaudio-v2": "fal-ai/mmaudio-v2",
         "fal-kokoro": "fal-ai/kokoro",
+        "fal-f5-tts": "fal-ai/f5-tts",
         "fal-stable-audio": "fal-ai/stable-audio",
         "fal-sync-lipsync": "fal-ai/sync-lipsync",
         "fal-latentsync": "fal-ai/latentsync",
@@ -47,6 +49,77 @@ class FalAIProvider(BaseAIProvider):
             "Content-Type": "application/json"
         }
 
+    def clone_voice_speech(
+        self,
+        text: str,
+        ref_audio_path_or_url: str,
+        model_type: str = "F5-TTS",
+        remove_silence: bool = True
+    ) -> ProviderJobResult:
+        """
+        Zero-Shot Neural Voice Cloning via Fal.ai F5-TTS / E2-TTS.
+        Takes any audio reference sample (recorded wav/mp3 from user/character)
+        and synthesizes custom text in that exact voice.
+        """
+        if not self.api_key:
+            return ProviderJobResult(
+                external_job_id="",
+                status="failed",
+                error_message="Fal.ai API key (FAL_KEY) is not configured.",
+                retryable=False
+            )
+
+        if not ref_audio_path_or_url:
+            return ProviderJobResult(
+                external_job_id="",
+                status="failed",
+                error_message="Reference audio sample is required for voice cloning.",
+                retryable=False
+            )
+
+        try:
+            import os
+            import fal_client
+            os.environ['FAL_KEY'] = self.api_key
+
+            ref_url = self._upload_local_media_to_fal(ref_audio_path_or_url)
+            logger.info(f"Synthesizing zero-shot voice clone via fal-ai/f5-tts with ref: {ref_url}")
+
+            result = fal_client.subscribe(
+                "fal-ai/f5-tts",
+                arguments={
+                    "gen_text": text,
+                    "ref_audio_url": ref_url,
+                    "model_type": model_type or "F5-TTS",
+                    "remove_silence": remove_silence
+                }
+            )
+            audio_info = result.get("audio_url") or {}
+            output_url = audio_info.get("url", "")
+            if not output_url and isinstance(result.get("audio"), dict):
+                output_url = result["audio"].get("url", "")
+
+            if output_url:
+                return ProviderJobResult(
+                    external_job_id=f"f5-tts-{uuid.uuid4().hex[:8]}",
+                    status="completed",
+                    output_media_url=output_url,
+                    raw_response=result
+                )
+            else:
+                return ProviderJobResult(
+                    external_job_id="",
+                    status="failed",
+                    error_message=f"F5-TTS returned no audio URL: {result}"
+                )
+        except Exception as exc:
+            logger.error(f"F5-TTS voice clone failed: {exc}", exc_info=True)
+            return ProviderJobResult(
+                external_job_id="",
+                status="failed",
+                error_message=str(exc)
+            )
+
     def generate_audio(self, model_id: str, request: GenerationRequest) -> ProviderJobResult:
         if not self.api_key:
             return ProviderJobResult(
@@ -55,6 +128,20 @@ class FalAIProvider(BaseAIProvider):
                 error_message="Fal.ai API key (FAL_KEY) is not configured.",
                 retryable=False
             )
+
+        # 1. Zero-shot neural voice cloning with reference audio sample
+        ref_sample = (
+            request.extra_params.get('ref_audio_url')
+            or request.extra_params.get('voice_sample_path')
+            or (request.reference_image_urls[0] if request.reference_image_urls and any(ext in request.reference_image_urls[0].lower() for ext in ('.wav', '.mp3', '.ogg', 'audio/')) else "")
+        )
+        if ref_sample or "f5" in model_id.lower() or "clone" in model_id.lower():
+            if ref_sample:
+                return self.clone_voice_speech(
+                    text=request.prompt,
+                    ref_audio_path_or_url=ref_sample,
+                    model_type=request.extra_params.get('model_type', 'F5-TTS')
+                )
 
         if "mmaudio" in model_id:
             video_url = None
@@ -188,7 +275,11 @@ class FalAIProvider(BaseAIProvider):
 
         # 1. Neural Lip-Sync & Video Dubbing
         if "lipsync" in model_id.lower() or "latentsync" in model_id.lower():
-            target_model = self.MODEL_MAP.get(model_id, "fal-ai/sync-lipsync")
+            # Prefer latentsync (higher quality full-face deformation) over sync-lipsync (faster but lower quality)
+            if "latentsync" in model_id.lower():
+                target_model = self.MODEL_MAP.get("fal-latentsync", "fal-ai/latentsync")
+            else:
+                target_model = self.MODEL_MAP.get(model_id, "fal-ai/latentsync")
             endpoint = f"{self.BASE_QUEUE_URL}/{target_model}"
             video_url = request.extra_params.get("video_url") or ""
             audio_url = request.extra_params.get("audio_url") or ""
@@ -208,6 +299,14 @@ class FalAIProvider(BaseAIProvider):
                     elif not audio_url:
                         audio_url = ref
 
+            if not video_url or not audio_url:
+                logger.warning(f"LatentSync job missing video_url={bool(video_url)} or audio_url={bool(audio_url)} — skipping.")
+                return ProviderJobResult(
+                    external_job_id="",
+                    status="failed",
+                    error_message="LatentSync requires both a video URL and an audio URL. One or both are missing."
+                )
+
             # Upload local files to Fal CDN so request payload doesn't exceed size limits
             video_url = self._upload_local_media_to_fal(video_url)
             audio_url = self._upload_local_media_to_fal(audio_url)
@@ -215,8 +314,14 @@ class FalAIProvider(BaseAIProvider):
             payload: Dict[str, Any] = {
                 "video_url": video_url,
                 "audio_url": audio_url,
-                "sync_mode": request.extra_params.get("sync_mode", "cut_off"),
+                # High-fidelity face restoration settings
+                "face_restoration": True,
+                "codeformer_fidelity": 0.92,   # Higher = sharper restored face (vs default 0.5)
+                "smooth": True,
+                "guidance_scale": 2.0,          # Controls adherence to audio landmarks
             }
+            # sync_mode: 'cut_off' trims video to audio, 'loop' extends, 'bounce' bounces
+            payload["sync_mode"] = request.extra_params.get("sync_mode", "cut_off")
             return self._submit_queue_job(endpoint, target_model, payload)
 
         # 2. Standard Text-to-Video & Image-to-Video
@@ -238,12 +343,31 @@ class FalAIProvider(BaseAIProvider):
             "aspect_ratio": aspect_map.get(request.aspect_ratio, "16:9")
         }
 
+        # Use neg prompt from request if available
+        neg_prompt = request.negative_prompt or ""
         if is_i2v:
             ref_url = request.reference_image_urls[0]
-            if ref_url.startswith(('http://', 'https://')):
+            # Upload local/localhost files to Fal CDN for proper access
+            uploaded_ref = self._upload_local_media_to_fal(ref_url)
+            if uploaded_ref and (uploaded_ref.startswith(('http://', 'https://')) and '127.0.0.1' not in uploaded_ref and 'localhost' not in uploaded_ref):
+                payload["image_url"] = uploaded_ref
+            elif ref_url.startswith(('http://', 'https://')) and '127.0.0.1' not in ref_url and 'localhost' not in ref_url:
                 payload["image_url"] = ref_url
             else:
+                # Final fallback to data URI
                 payload["image_url"] = load_image_as_data_uri(ref_url) or ref_url
+
+        # Add negative prompt if supported by model
+        if neg_prompt and "wan" in model_id:
+            payload["negative_prompt"] = neg_prompt
+
+        # Wan 2.1: Request higher quality inference steps
+        if "wan" in model_id:
+            payload["num_inference_steps"] = 50
+            payload["guidance_scale"] = 7.0
+            # Seed for reproducibility when re-generating same character
+            if request.seed:
+                payload["seed"] = request.seed
 
         return self._submit_queue_job(endpoint, target_model, payload)
 

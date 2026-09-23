@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 import io
@@ -6,6 +7,8 @@ from typing import Dict, Any
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from PIL import Image, ImageDraw, ImageFont
+
+logger = logging.getLogger(__name__)
 
 from apps.providers.base import (
     BaseAIProvider,
@@ -183,6 +186,17 @@ class MockAIProvider(BaseAIProvider):
         _MOCK_JOBS[job_id] = result
         return result
 
+    def clone_voice(self, name: str, description: str = "", audio_file_paths: list = None, labels: dict = None) -> str:
+        """Simulate creating a cloned voice profile offline."""
+        mock_voice_id = f"mock-voice-{uuid.uuid4().hex[:12]}"
+        logger.info(f"Mock voice cloned for '{name}' with ID: {mock_voice_id}")
+        return mock_voice_id
+
+    def delete_voice(self, voice_id: str) -> bool:
+        """Simulate deleting a cloned voice profile offline."""
+        logger.info(f"Mock voice deleted with ID: {voice_id}")
+        return True
+
     def get_status(self, external_job_id: str) -> ProviderJobResult:
         if external_job_id in _MOCK_JOBS:
             return _MOCK_JOBS[external_job_id]
@@ -208,3 +222,6 @@ class MockAIProvider(BaseAIProvider):
 
     def health_check(self) -> bool:
         return True
+
+
+MockProvider = MockAIProvider

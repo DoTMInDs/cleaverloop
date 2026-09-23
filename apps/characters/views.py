@@ -25,12 +25,26 @@ class CharacterListView(LoginRequiredMixin, ListView):
 
 class CharacterCreateView(LoginRequiredMixin, CreateView):
     model = Character
-    fields = ['name', 'description', 'appearance_description', 'clothing_description', 'personality', 'avatar']
+    fields = ['name', 'description', 'appearance_description', 'clothing_description', 'personality', 'avatar', 'voice_profile']
     template_name = 'characters/form.html'
     success_url = reverse_lazy('characters:list')
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.voices.models import VoiceProfile
+        ctx['cloned_voices'] = VoiceProfile.objects.filter(user=self.request.user, status='ready')
+        return ctx
+
     def form_valid(self, form):
         form.instance.owner = self.request.user
+
+        # Bind Voice Profile if passed
+        voice_id = self.request.POST.get('voice_profile') or self.request.POST.get('voice_profile_id')
+        if voice_id:
+            from apps.voices.models import VoiceProfile
+            form.instance.voice_profile = VoiceProfile.objects.filter(user=self.request.user, id=voice_id).first()
+        elif 'voice_profile' in self.request.POST and not voice_id:
+            form.instance.voice_profile = None
         
         # Persist generated metadata (poses, subject isolation, full body standing URL, face lock)
         full_body_url = ''
@@ -49,6 +63,13 @@ class CharacterCreateView(LoginRequiredMixin, CreateView):
                         form.instance.metadata['original_face_url'] = face_anchor_url
             except Exception:
                 pass
+
+        # Persist selected style preset in metadata
+        style_preset = self.request.POST.get('style_preset', '').strip()
+        if style_preset:
+            if not form.instance.metadata:
+                form.instance.metadata = {}
+            form.instance.metadata['style_preset'] = style_preset
 
         # The primary character visual MUST be the regenerated full-body character figure
         target_visual = full_body_url or self.request.POST.get('generated_avatar_url', '').strip()
@@ -74,13 +95,27 @@ class CharacterDetailView(LoginRequiredMixin, DetailView):
 
 class CharacterUpdateView(LoginRequiredMixin, UpdateView):
     model = Character
-    fields = ['name', 'description', 'appearance_description', 'clothing_description', 'personality', 'avatar']
+    fields = ['name', 'description', 'appearance_description', 'clothing_description', 'personality', 'avatar', 'voice_profile']
     template_name = 'characters/form.html'
 
     def get_queryset(self):
         return Character.objects.filter(owner=self.request.user)
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.voices.models import VoiceProfile
+        ctx['cloned_voices'] = VoiceProfile.objects.filter(user=self.request.user, status='ready')
+        return ctx
+
     def form_valid(self, form):
+        # Bind Voice Profile if passed
+        voice_id = self.request.POST.get('voice_profile') or self.request.POST.get('voice_profile_id')
+        if voice_id:
+            from apps.voices.models import VoiceProfile
+            form.instance.voice_profile = VoiceProfile.objects.filter(user=self.request.user, id=voice_id).first()
+        elif 'voice_profile' in self.request.POST and not voice_id:
+            form.instance.voice_profile = None
+
         full_body_url = ''
         face_anchor_url = ''
         generated_metadata_raw = self.request.POST.get('generated_metadata', '').strip()
@@ -97,6 +132,13 @@ class CharacterUpdateView(LoginRequiredMixin, UpdateView):
                         form.instance.metadata['original_face_url'] = face_anchor_url
             except Exception:
                 pass
+
+        # Persist selected style preset in metadata
+        style_preset = self.request.POST.get('style_preset', '').strip()
+        if style_preset:
+            if not form.instance.metadata:
+                form.instance.metadata = {}
+            form.instance.metadata['style_preset'] = style_preset
 
         target_visual = full_body_url or self.request.POST.get('generated_avatar_url', '').strip()
         if target_visual and not self.request.FILES.get('avatar'):

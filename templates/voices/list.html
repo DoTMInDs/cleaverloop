@@ -1,0 +1,730 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Voice Studio & Neural Cloning — CleaverLoop AI{% endblock %}
+
+{% block content %}
+<div class="space-y-8 w-full max-w-7xl mx-auto pb-12" x-data="voiceListStudioApp()">
+    <!-- Header Stage -->
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.08] w-full">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-mono mb-2">
+                <span>🎙️</span>
+                <span>Instant Neural Voice Cloning</span>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-heading font-black text-white">Neural Voice Studio</h1>
+            <p class="text-xs sm:text-sm text-slate-400 mt-1">Clone your own voice or actor voices, bind them to AI characters, and generate photorealistic lip-synced videos.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#12151a] border border-white/[0.08] text-xs font-mono text-slate-300">
+                <span class="text-orange-400 font-bold">⚡ {{ wallet.formatted_balance }}</span>
+                <span class="text-slate-500">Credits</span>
+            </div>
+            <button type="button"
+                    @click="createModalOpen = true"
+                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-5 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 shrink-0 shadow-lg cursor-pointer">
+                <span class="text-sm">+</span>
+                <span>Clone Your Voice</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Section 1: User's Cloned Voices -->
+    <div class="space-y-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <span class="text-lg">⭐</span>
+                <h2 class="text-lg font-heading font-bold text-white">My Cloned Voices</h2>
+                <span class="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-mono font-bold border border-orange-500/30">
+                    {{ cloned_voices|length }} Available
+                </span>
+            </div>
+        </div>
+
+        {% if cloned_voices %}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {% for voice in cloned_voices %}
+                    <div class="fl-composer-card rounded-2xl p-5 border border-white/[0.08] hover:border-orange-500/50 bg-[#0d0f12] shadow-xl space-y-4 transition-all duration-200 group">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/10 border border-orange-500/30 flex items-center justify-center text-xl text-orange-400 group-hover:scale-105 transition shadow-inner">
+                                    🎙️
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-heading font-bold text-white group-hover:text-orange-300 transition">{{ voice.name }}</h3>
+                                        {% if voice.is_default %}
+                                            <span class="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 text-[9px] font-mono font-bold border border-emerald-500/30">Default</span>
+                                        {% endif %}
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 font-mono">{{ voice.accent }} • {{ voice.get_gender_display }}</p>
+                                </div>
+                            </div>
+
+                            <span class="px-2 py-0.5 rounded text-[9px] font-mono font-bold {% if voice.status == 'ready' %}bg-emerald-500/15 text-emerald-400 border border-emerald-500/30{% elif voice.status == 'processing' %}bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse{% else %}bg-rose-500/15 text-rose-400 border border-rose-500/30{% endif %}">
+                                {{ voice.get_status_display }}
+                            </span>
+                        </div>
+
+                        {% if voice.description %}
+                            <p class="text-xs text-slate-300 line-clamp-2 leading-relaxed bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                                {{ voice.description }}
+                            </p>
+                        {% endif %}
+
+                        <!-- Sample Retention & Preview Bar -->
+                        <div class="space-y-2 pt-1 border-t border-white/[0.06]">
+                            <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                                <span class="flex items-center gap-1.5 text-orange-400/90 font-semibold">
+                                    <span>📁</span>
+                                    <span>{{ voice.samples.count }} Sample{{ voice.samples.count|pluralize }} Retained</span>
+                                </span>
+                                <span class="text-slate-500">ID: {{ voice.provider_voice_id|slice:":8" }}...</span>
+                            </div>
+
+                            {% if voice.preview_url %}
+                                <div class="flex items-center gap-2">
+                                    <audio controls class="flex-1 h-8 accent-orange-500 bg-black/50 rounded-lg" preload="none">
+                                        <source src="{{ voice.preview_url }}" type="audio/mpeg">
+                                        <source src="{{ voice.preview_url }}" type="audio/wav">
+                                    </audio>
+                                    <form action="{% url 'voices:delete' voice.pk %}" method="POST" onsubmit="return confirm('Are you sure you want to delete cloned voice \'{{ voice.name|escapejs }}\'?');" class="shrink-0 inline">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                                title="Delete voice profile"
+                                                class="w-8 h-8 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 hover:text-rose-300 border border-rose-500/20 flex items-center justify-center text-xs transition cursor-pointer">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </button>
+                                    </form>
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Card Action Footer -->
+                        <div class="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
+                            <a href="{% url 'voices:detail' voice.pk %}" class="px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-orange-500/20 text-xs font-semibold text-slate-200 hover:text-white border border-white/10 transition flex items-center gap-1.5">
+                                <span>🔍</span>
+                                <span>Inspect & Audition</span>
+                            </a>
+                            <div class="flex items-center gap-2">
+                                <a href="{% url 'studio:create' %}?voice={{ voice.provider_voice_id|default:voice.id }}" class="px-3 py-1.5 rounded-lg bg-orange-500/15 hover:bg-orange-500/30 text-xs font-bold text-orange-400 border border-orange-500/30 transition flex items-center gap-1.5">
+                                    <span>🎬</span>
+                                    <span>Use in Video</span>
+                                </a>
+                                <form action="{% url 'voices:delete' voice.pk %}" method="POST" onsubmit="return confirm('Are you sure you want to delete cloned voice \'{{ voice.name|escapejs }}\'?');" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            title="Delete voice profile"
+                                            class="p-2 rounded-lg bg-white/[0.04] hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 border border-white/10 hover:border-rose-500/30 transition flex items-center justify-center cursor-pointer">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <!-- Empty State Prompt -->
+            <div class="rounded-3xl p-8 md:p-12 text-center bg-[#0d0f12] border border-dashed border-white/15 space-y-4">
+                <div class="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-3xl text-orange-400 mx-auto shadow-lg shadow-orange-500/10">
+                    🎙️
+                </div>
+                <div class="max-w-md mx-auto space-y-1">
+                    <h3 class="text-lg font-heading font-bold text-white">No Cloned Voices Yet</h3>
+                    <p class="text-xs text-slate-400">Record a 1-minute clip from your microphone or upload audio files to clone your voice with neural fidelity.</p>
+                </div>
+                <div>
+                    <button type="button"
+                            @click="createModalOpen = true"
+                            class="fl-gradient-orange-btn fl-glow-orange text-white rounded-xl px-5 py-2.5 font-heading font-black text-xs uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer">
+                        <span>+</span>
+                        <span>Clone Your First Voice</span>
+                    </button>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- Section 2: Studio Preset Library -->
+    <div class="space-y-4 pt-6 border-t border-white/[0.08]">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <span class="text-lg">🎧</span>
+                <h2 class="text-lg font-heading font-bold text-white">CleaverLoop Studio Presets</h2>
+                <span class="text-xs text-slate-400 font-mono">Neural Cinema Personas</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {% for p in preset_voices %}
+                <div class="rounded-xl p-4 bg-[#0a0c0f] border border-white/[0.06] hover:border-white/20 transition flex items-center justify-between gap-3 group">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-sm font-bold text-orange-400 font-mono">
+                            {{ p.name|slice:":2"|upper }}
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-1.5">
+                                <h4 class="text-xs font-bold text-white group-hover:text-orange-400 transition">{{ p.name }}</h4>
+                                <span class="px-1.5 py-0.2 rounded bg-white/[0.06] text-slate-300 text-[9px] font-mono">{{ p.badge }}</span>
+                            </div>
+                            <p class="text-[11px] text-slate-400 truncate max-w-[200px]">{{ p.desc }}</p>
+                        </div>
+                    </div>
+
+                    <a href="{% url 'studio:create' %}?voice={{ p.id }}" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-orange-500/20 text-[11px] font-semibold text-slate-300 hover:text-white border border-white/10 transition shrink-0">
+                        Use →
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ==============================================================
+         CLONE VOICE MODAL (Opens right on this same /voices/ page)
+         ============================================================== -->
+    <div x-show="createModalOpen"
+         x-cloak
+         @keydown.escape.window="createModalOpen = false"
+         class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-hidden"
+         aria-modal="true" role="dialog">
+        
+        <!-- Backdrop Blur Overlay -->
+        <div x-show="createModalOpen"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0"
+             x-transition:enter-end="opacity-100"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             @click="createModalOpen = false"
+             class="fixed inset-0 bg-black/85 backdrop-blur-xl"></div>
+
+        <!-- Animated Moving Gold Border Card Wrapper -->
+        <div x-show="createModalOpen"
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 scale-95 translate-y-4"
+             x-transition:enter-end="opacity-100 scale-100 translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100 scale-100 translate-y-0"
+             x-transition:leave-end="opacity-0 scale-95 translate-y-4"
+             class="gold-beam-wrapper relative w-full max-w-3xl z-10 my-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3.5rem)] flex flex-col min-h-0">
+            
+            <!-- Inner Modal Box (Fixed Header + Scrollable Body + Fixed Footer) -->
+            <div class="gold-beam-inner relative z-10 w-full flex-1 flex flex-col min-h-0 border border-white/[0.08] shadow-2xl">
+                
+                <!-- Fixed Header at Top -->
+                <div class="gold-beam-header flex items-center justify-between px-5 sm:px-7 py-4 bg-[#0c0e12]/95 backdrop-blur-xl border-b border-white/[0.08] shrink-0 z-20">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-500/25 to-orange-500/20 border border-amber-500/40 flex items-center justify-center text-xl text-amber-300 shadow-lg shadow-amber-500/10">
+                            🎙️
+                        </div>
+                        <div>
+                            <h2 class="text-lg sm:text-xl font-heading font-black text-white flex items-center gap-2">
+                                <span>Clone Your Voice</span>
+                                <span class="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 font-mono text-[10px] font-bold border border-amber-500/30">
+                                    ⚡ {{ clone_cost|default:50 }} Credits
+                                </span>
+                            </h2>
+                            <p class="text-xs text-slate-400">Record a short clip from your microphone or upload audio files to forge your AI voice clone.</p>
+                        </div>
+                    </div>
+
+                    <!-- Close Modal Button -->
+                    <button type="button"
+                            @click="createModalOpen = false"
+                            class="w-8 h-8 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-white border border-white/10 flex items-center justify-center text-sm transition cursor-pointer">
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Form Wrapping Scrollable Body & Fixed Bottom Footer -->
+                <form id="clone-voice-modal-form"
+                      action="{% url 'voices:create' %}"
+                      method="POST"
+                      enctype="multipart/form-data"
+                      @submit="handleSubmit($event)"
+                      class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    {% csrf_token %}
+
+                    <!-- Scrollable Modal Body -->
+                    <div class="flex-1 min-h-0 overflow-y-auto p-5 sm:p-7 space-y-6 custom-scrollbar">
+                        <!-- Input Source Tabs: Record vs Upload -->
+                        <div class="rounded-2xl bg-[#12151a] border border-white/[0.08] p-4 sm:p-5 space-y-4">
+                            <div class="flex items-center justify-between border-b border-white/[0.06] pb-3">
+                                <span class="text-xs font-heading font-bold text-white uppercase tracking-wider">Audio Capture Mode</span>
+                                <div class="flex items-center gap-1.5 bg-black/60 p-1 rounded-xl border border-white/10">
+                                    <button type="button" @click="activeTab = 'record'"
+                                            :class="activeTab === 'record' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40 shadow-sm' : 'text-slate-400 hover:text-white border-transparent'"
+                                            class="px-3 py-1 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                                        <span>🎙️</span>
+                                        <span>Record Mic</span>
+                                    </button>
+                                    <button type="button" @click="activeTab = 'upload'"
+                                            :class="activeTab === 'upload' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40 shadow-sm' : 'text-slate-400 hover:text-white border-transparent'"
+                                            class="px-3 py-1 rounded-lg border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                                        <span>📁</span>
+                                        <span>Upload Files</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Tab 1: Live Microphone Studio -->
+                            <div x-show="activeTab === 'record'" class="space-y-4" x-transition>
+                                <div class="rounded-xl bg-black/50 border border-white/[0.06] p-4 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <span class="relative flex h-2.5 w-2.5">
+                                                <span x-show="isRecording" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                                <span :class="isRecording ? 'bg-rose-500' : 'bg-slate-600'" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
+                                            </span>
+                                            <span class="text-xs font-mono font-bold uppercase" :class="isRecording ? 'text-rose-400' : 'text-slate-400'" x-text="isRecording ? 'Recording Live Speech...' : (hasRecording ? 'Recording Ready' : 'Microphone Ready')"></span>
+                                        </div>
+                                        <div class="font-mono text-xs font-bold text-white bg-black/70 px-2.5 py-0.5 rounded-lg border border-white/10" x-text="formattedDuration">00:00</div>
+                                    </div>
+
+                                    <!-- Waveform Canvas -->
+                                    <div class="relative w-full h-20 bg-black/80 rounded-xl overflow-hidden border border-white/10 flex items-center justify-center">
+                                        <canvas x-ref="visualizerCanvas" class="w-full h-full"></canvas>
+                                        <div x-show="!isRecording && !hasRecording" class="absolute inset-0 flex items-center justify-center text-xs text-slate-500 font-mono">
+                                            Click Record and speak clearly into your mic
+                                        </div>
+                                    </div>
+
+                                    <!-- Audio Review Player (with Delete Icon close to Ellipsis) -->
+                                    <div x-show="hasRecording" class="p-3 bg-orange-500/10 rounded-xl border border-orange-500/20 space-y-2" x-transition>
+                                        <div class="flex items-center justify-between text-xs text-orange-300 font-mono">
+                                            <span class="flex items-center gap-1.5 font-bold">
+                                                <span>🎙️</span>
+                                                <span>Audio Review:</span>
+                                            </span>
+                                            <span x-text="`Duration: ${recordedSeconds}s`"></span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <audio x-ref="recordedPlayer" controls class="flex-1 h-8 accent-orange-500 bg-black/50 rounded-lg"></audio>
+                                            <button type="button"
+                                                    @click="discardRecording()"
+                                                    title="Delete voice recording"
+                                                    class="w-8 h-8 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 text-rose-400 hover:text-rose-300 border border-rose-500/30 flex items-center justify-center text-xs transition cursor-pointer shrink-0 shadow-sm"
+                                                    aria-label="Delete voice recording">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Controls -->
+                                    <div class="flex items-center justify-center gap-3 pt-1">
+                                        <template x-if="!isRecording">
+                                            <button type="button" @click="startRecording()"
+                                                    class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-heading font-black text-xs uppercase tracking-wider transition shadow-lg shadow-rose-600/30 flex items-center gap-2 cursor-pointer">
+                                                <span class="w-2.5 h-2.5 rounded-full bg-white animate-pulse"></span>
+                                                <span x-text="hasRecording ? 'Re-Record Clip' : 'Start Recording'">Start Recording</span>
+                                            </button>
+                                        </template>
+
+                                        <template x-if="isRecording">
+                                            <button type="button" @click="stopRecording()"
+                                                    class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white border border-white/20 font-heading font-black text-xs uppercase tracking-wider transition flex items-center gap-2 cursor-pointer">
+                                                <span class="w-2.5 h-2.5 bg-white rounded-sm"></span>
+                                                <span>Stop Recording</span>
+                                            </button>
+                                        </template>
+                                    </div>
+
+                                    <!-- Script Teleprompter Card -->
+                                    <div class="rounded-xl bg-[#090b0e] border border-white/[0.06] p-3 space-y-1.5">
+                                        <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                                            <span class="text-orange-400 font-bold">📜 Suggested Reading Script</span>
+                                            <span>Natural, clear cadence</span>
+                                        </div>
+                                        <p class="text-[11px] text-slate-300 italic leading-relaxed">
+                                            "The rainbow is a division of white light into many beautiful colors. When sunlight strikes raindrops in the atmosphere, they act as tiny prisms and form a vivid arch across the sky. Throughout centuries, storytellers and adventurers have sought the legendary pot of gold resting at its edge."
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Hidden file input for recorded blob -->
+                                <input type="file" name="recorded_audio" x-ref="recordedAudioInput" class="hidden">
+                            </div>
+
+                            <!-- Tab 2: Audio File Upload Dropzone -->
+                            <div x-show="activeTab === 'upload'" class="space-y-3" x-transition>
+                                <div @dragover.prevent="isDragging = true"
+                                     @dragleave.prevent="isDragging = false"
+                                     @drop.prevent="handleFileDrop($event)"
+                                     :class="isDragging ? 'border-orange-500 bg-orange-500/10' : 'border-white/10 bg-black/40 hover:border-white/20'"
+                                     class="border-2 border-dashed rounded-2xl p-6 text-center transition cursor-pointer relative">
+                                    <input type="file" name="audio_samples" multiple accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac"
+                                           @change="handleFileSelect($event)" x-ref="fileInput"
+                                           class="absolute inset-0 opacity-0 cursor-pointer">
+                                    <div class="space-y-2 pointer-events-none">
+                                        <div class="w-12 h-12 rounded-xl bg-orange-500/15 border border-orange-500/30 flex items-center justify-center text-xl text-orange-400 mx-auto">
+                                            📁
+                                        </div>
+                                        <div>
+                                            <p class="text-xs font-bold text-white">Drag & drop high-quality audio files, or <span class="text-orange-400 underline">browse</span></p>
+                                            <p class="text-[10px] text-slate-400 mt-0.5">Supports WAV, MP3, M4A, FLAC (Clean voice samples, 1-5 minutes recommended)</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Selected Files List -->
+                                <div x-show="selectedFiles.length > 0" class="space-y-1.5 pt-1">
+                                    <span class="text-[10px] font-mono text-slate-400 uppercase font-bold">Selected Audio Samples:</span>
+                                    <div class="space-y-1">
+                                        <template x-for="(file, idx) in selectedFiles" :key="idx">
+                                            <div class="flex items-center justify-between p-2 rounded-lg bg-black/60 border border-white/10 text-xs">
+                                                <span class="text-slate-200 truncate font-mono text-[11px]" x-text="file.name"></span>
+                                                <span class="text-slate-400 font-mono text-[10px]" x-text="`${(file.size / 1024 / 1024).toFixed(2)} MB`"></span>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Voice Persona Metadata Fields -->
+                        <div class="rounded-2xl bg-[#12151a] border border-white/[0.08] p-4 sm:p-5 space-y-4">
+                            <h3 class="text-xs font-heading font-bold text-white uppercase tracking-wider">Voice Persona Dossier</h3>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="space-y-1">
+                                    <label class="text-[11px] font-mono uppercase text-slate-300 font-bold">Voice Name *</label>
+                                    <input type="text" name="name" required placeholder="e.g. Liam Sterling, Anya (Epic Narrator)"
+                                           class="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500 placeholder-slate-500">
+                                </div>
+
+                                <div class="space-y-1">
+                                    <label class="text-[11px] font-mono uppercase text-slate-300 font-bold">Gender Persona</label>
+                                    <select name="gender" class="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500">
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="neutral">Gender-Neutral</option>
+                                    </select>
+                                </div>
+
+                                <div class="space-y-1">
+                                    <label class="text-[11px] font-mono uppercase text-slate-300 font-bold">Accent / Cadence</label>
+                                    <input type="text" name="accent" placeholder="e.g. American, British, Australian, Cinematic"
+                                           class="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500 placeholder-slate-500">
+                                </div>
+
+                                <div class="space-y-1">
+                                    <label class="text-[11px] font-mono uppercase text-slate-300 font-bold">Persona Description</label>
+                                    <input type="text" name="description" placeholder="e.g. Warm, authoritative tone for documentary narration"
+                                           class="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white text-xs focus:outline-none focus:border-orange-500 placeholder-slate-500">
+                                </div>
+                            </div>
+
+                            <!-- Ethics & Consent Declaration -->
+                            <div class="p-3 bg-amber-500/10 rounded-xl border border-amber-500/20 flex items-start gap-2.5">
+                                <input type="checkbox" name="consent" id="consent_checkbox_modal" required
+                                       class="mt-0.5 rounded border-white/20 text-orange-500 focus:ring-0 cursor-pointer">
+                                <label for="consent_checkbox_modal" class="text-[11px] text-amber-200/90 leading-relaxed cursor-pointer select-none">
+                                    I confirm that I possess the explicit legal rights and consent to clone this voice. I will not use this synthesized voice persona for fraud, impersonation, or deceptive practices.
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fixed / Sticky Footer at Bottom -->
+                    <div class="gold-beam-footer shrink-0 px-5 sm:px-7 py-3.5 bg-[#0e1014]/95 backdrop-blur-xl border-t border-white/[0.08] flex items-center justify-between gap-4 z-20 shadow-[0_-10px_25px_rgba(0,0,0,0.5)]">
+                        <button type="button" @click="createModalOpen = false"
+                                class="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-300 hover:text-white text-xs font-semibold transition cursor-pointer">
+                            Cancel
+                        </button>
+
+                        <button type="submit" :disabled="isSubmitting"
+                                class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-6 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 flex items-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer">
+                            <span x-show="!isSubmitting">⚡ Clone Voice Persona ({{ clone_cost|default:50 }} Credits)</span>
+                            <span x-show="isSubmitting" class="flex items-center gap-2">
+                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <span>Forging Voice Persona...</span>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@keyframes goldBeamRotate {
+    0% {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+    100% {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+}
+
+@keyframes goldAuraGlow {
+    0%, 100% {
+        box-shadow: 0 0 35px rgba(245, 158, 11, 0.3), 0 25px 70px rgba(0, 0, 0, 0.95);
+    }
+    50% {
+        box-shadow: 0 0 65px rgba(251, 191, 36, 0.5), 0 25px 80px rgba(0, 0, 0, 0.98);
+    }
+}
+
+.gold-beam-wrapper {
+    position: relative;
+    border-radius: 28px;
+    padding: 2.5px;
+    background: rgba(245, 158, 11, 0.15);
+    overflow: hidden;
+    animation: goldAuraGlow 4s ease-in-out infinite;
+}
+
+.gold-beam-inner {
+    border-radius: 25.5px;
+    background-color: #0c0e12;
+    overflow: hidden;
+}
+
+.gold-beam-header {
+    border-top-left-radius: 25.5px;
+    border-top-right-radius: 25.5px;
+}
+
+.gold-beam-footer {
+    border-bottom-left-radius: 25.5px;
+    border-bottom-right-radius: 25.5px;
+}
+
+.gold-beam-wrapper::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2500px;
+    height: 2500px;
+    background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        transparent 210deg,
+        rgba(217, 119, 6, 0.25) 240deg,
+        rgba(245, 158, 11, 0.6) 280deg,
+        #f59e0b 315deg,
+        #ffd700 338deg,
+        #fffbeb 350deg,
+        #fbbf24 358deg,
+        transparent 360deg
+    );
+    animation: goldBeamRotate 4s linear infinite;
+    z-index: 0;
+    pointer-events: none;
+    will-change: transform;
+}
+
+.gold-beam-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2500px;
+    height: 2500px;
+    background: conic-gradient(
+        from 180deg,
+        transparent 0deg,
+        transparent 210deg,
+        rgba(217, 119, 6, 0.25) 240deg,
+        rgba(245, 158, 11, 0.6) 280deg,
+        #f59e0b 315deg,
+        #ffd700 338deg,
+        #fffbeb 350deg,
+        #fbbf24 358deg,
+        transparent 360deg
+    );
+    animation: goldBeamRotate 4s linear infinite;
+    z-index: 0;
+    pointer-events: none;
+    will-change: transform;
+}
+</style>
+</div>
+
+<script>
+function voiceListStudioApp() {
+    return {
+        createModalOpen: false,
+        activeTab: 'record',
+        isRecording: false,
+        hasRecording: false,
+        recordedSeconds: 0,
+        isDragging: false,
+        selectedFiles: [],
+        isSubmitting: false,
+        mediaRecorder: null,
+        audioChunks: [],
+        audioContext: null,
+        analyser: null,
+        animFrameId: null,
+        timerInterval: null,
+
+        init() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('create') || window.location.hash === '#create') {
+                this.createModalOpen = true;
+            }
+        },
+
+        get formattedDuration() {
+            const m = Math.floor(this.recordedSeconds / 60).toString().padStart(2, '0');
+            const s = (this.recordedSeconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        },
+
+        async startRecording() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                this.audioChunks = [];
+                this.recordedSeconds = 0;
+                this.isRecording = true;
+                this.hasRecording = false;
+
+                // Setup Web Audio API Visualizer
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                this.analyser = this.audioContext.createAnalyser();
+                const source = this.audioContext.createMediaStreamSource(stream);
+                source.connect(this.analyser);
+                this.analyser.fftSize = 64;
+                this.drawVisualizer();
+
+                // Setup MediaRecorder
+                this.mediaRecorder = new MediaRecorder(stream);
+                this.mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) this.audioChunks.push(e.data);
+                };
+
+                this.mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(this.audioChunks, { type: 'audio/wav' });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    if (this.$refs.recordedPlayer) {
+                        this.$refs.recordedPlayer.src = audioUrl;
+                    }
+                    this.hasRecording = true;
+                    this.isRecording = false;
+
+                    // Convert blob to file in the hidden input
+                    const file = new File([audioBlob], `recorded_sample_${Date.now()}.wav`, { type: 'audio/wav' });
+                    const container = new DataTransfer();
+                    container.items.add(file);
+                    if (this.$refs.recordedAudioInput) {
+                        this.$refs.recordedAudioInput.files = container.files;
+                    }
+
+                    // Stop mic tracks
+                    stream.getTracks().forEach(t => t.stop());
+                    cancelAnimationFrame(this.animFrameId);
+                };
+
+                this.mediaRecorder.start(250);
+
+                // Timer
+                this.timerInterval = setInterval(() => {
+                    this.recordedSeconds++;
+                }, 1000);
+
+            } catch (err) {
+                alert("Microphone access was denied or is unavailable. Please grant microphone permissions in your browser.");
+                console.error(err);
+            }
+        },
+
+        stopRecording() {
+            if (this.mediaRecorder && this.isRecording) {
+                this.mediaRecorder.stop();
+                clearInterval(this.timerInterval);
+            }
+        },
+
+        discardRecording() {
+            this.hasRecording = false;
+            this.recordedSeconds = 0;
+            this.audioChunks = [];
+            if (this.$refs.recordedPlayer) {
+                this.$refs.recordedPlayer.pause();
+                this.$refs.recordedPlayer.src = '';
+            }
+            if (this.$refs.recordedAudioInput) {
+                this.$refs.recordedAudioInput.value = '';
+                try {
+                    this.$refs.recordedAudioInput.files = new DataTransfer().files;
+                } catch (e) {}
+            }
+            const canvas = this.$refs.visualizerCanvas;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#05070a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+        },
+
+        drawVisualizer() {
+            const canvas = this.$refs.visualizerCanvas;
+            if (!canvas || !this.analyser) return;
+            const ctx = canvas.getContext('2d');
+            const bufferLength = this.analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const renderFrame = () => {
+                this.animFrameId = requestAnimationFrame(renderFrame);
+                this.analyser.getByteFrequencyData(dataArray);
+
+                ctx.fillStyle = '#05070a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 2;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = (dataArray[i] / 255) * canvas.height * 0.85;
+                    ctx.fillStyle = '#f97316';
+                    ctx.fillRect(x, canvas.height - barHeight, barWidth - 1, barHeight);
+                    x += barWidth;
+                }
+            };
+            renderFrame();
+        },
+
+        handleFileSelect(e) {
+            this.selectedFiles = Array.from(e.target.files);
+        },
+
+        handleFileDrop(e) {
+            this.isDragging = false;
+            if (e.dataTransfer.files.length > 0) {
+                this.$refs.fileInput.files = e.dataTransfer.files;
+                this.selectedFiles = Array.from(e.dataTransfer.files);
+            }
+        },
+
+        handleSubmit(e) {
+            if (this.activeTab === 'record' && !this.hasRecording) {
+                e.preventDefault();
+                alert("Please record audio before submitting, or switch to the Upload tab.");
+                return;
+            }
+            if (this.activeTab === 'upload' && this.selectedFiles.length === 0) {
+                e.preventDefault();
+                alert("Please choose at least one audio file to clone.");
+                return;
+            }
+            this.isSubmitting = true;
+        }
+    };
+}
+</script>
+{% endblock %}
+

@@ -29,6 +29,13 @@ class Character(models.Model):
         on_delete=models.SET_NULL,
         related_name='character_voice_for'
     )
+    voice_profile = models.ForeignKey(
+        'voices.VoiceProfile',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='characters'
+    )
     reference_images = models.ManyToManyField(
         'media.Media',
         blank=True,

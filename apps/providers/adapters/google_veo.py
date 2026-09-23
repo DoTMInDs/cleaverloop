@@ -142,7 +142,15 @@ class GoogleVeoProvider(BaseAIProvider):
             # Google Veo duration must be 4 or 8 seconds
             duration_sec = 4 if (request.duration or 5) <= 5 else 8
 
-            instance_data = {"prompt": request.prompt}
+            effective_prompt = request.prompt
+            dialogue = request.extra_params.get('dialogue') if request.extra_params else None
+            if dialogue:
+                effective_prompt = (
+                    f"{request.prompt}. In-character spoken line: \"{dialogue}\" "
+                    f"with natural synchronized mouth articulation, expressive jaw movement, and native cinematic voice."
+                )
+
+            instance_data = {"prompt": effective_prompt}
             if request.reference_image_urls:
                 ref_path = request.reference_image_urls[0]
                 b64_str = load_image_as_base64(ref_path)
