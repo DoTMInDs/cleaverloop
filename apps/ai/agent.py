@@ -28,7 +28,6 @@ class SuperAgent:
     @classmethod
     def _call_llm_decomposer(cls, user_prompt: str, aspect_ratio: str, api_key: str, character: object = None) -> StoryboardPlan:
         """Calls Google Gemini LLM with structured output schema including characters."""
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
         char_instruction = ""
         if character:
             char_instruction = (
@@ -51,28 +50,36 @@ class SuperAgent:
             "systemInstruction": {"parts": [{"text": system_instruction}]},
             "generationConfig": {"responseMimeType": "application/json"}
         }
-        with httpx.Client(timeout=25.0) as client:
-            headers = {"x-goog-api-key": api_key}
-            resp = client.post(endpoint, json=payload, headers=headers)
-            if resp.status_code == 200:
-                text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                elif text.startswith("```"):
-                    text = text[3:]
-                if text.endswith("```"):
-                    text = text[:-3]
-                text = text.strip()
-                data = json.loads(text)
-                plan = StoryboardPlan(**data)
-                if character:
-                    plan.selected_character_id = str(getattr(character, 'id', ''))
-                # Compute duration and credits dynamically from models
-                total_sec = sum(s.duration for s in plan.scenes)
-                plan.estimated_total_duration = total_sec
-                plan.estimated_total_credits = cls._compute_plan_credits(plan.scenes)
-                return plan
-            raise RuntimeError(f"Gemini error: {resp.text[:200]}")
+        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+        last_error = None
+        for model in models_to_try:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            try:
+                with httpx.Client(timeout=25.0) as client:
+                    headers = {"x-goog-api-key": api_key}
+                    resp = client.post(endpoint, json=payload, headers=headers)
+                    if resp.status_code == 200:
+                        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        if text.startswith("```json"):
+                            text = text[7:]
+                        elif text.startswith("```"):
+                            text = text[3:]
+                        if text.endswith("```"):
+                            text = text[:-3]
+                        text = text.strip()
+                        data = json.loads(text)
+                        plan = StoryboardPlan(**data)
+                        if character:
+                            plan.selected_character_id = str(getattr(character, 'id', ''))
+                        # Compute duration and credits dynamically from models
+                        total_sec = sum(s.duration for s in plan.scenes)
+                        plan.estimated_total_duration = total_sec
+                        plan.estimated_total_credits = cls._compute_plan_credits(plan.scenes)
+                        return plan
+                    last_error = f"Gemini error ({model}): {resp.text[:200]}"
+            except Exception as e:
+                last_error = str(e)
+        raise RuntimeError(last_error or "Gemini decomposition failed")
 
     @classmethod
     def _rule_based_decomposer(cls, prompt: str, aspect_ratio: str, character: object = None) -> StoryboardPlan:

@@ -175,7 +175,7 @@ class CreateStudioView(LoginRequiredMixin, TemplateView):
         ctx['available_voices'] = ElevenLabsProvider.get_available_voices()
         ctx['characters'] = Character.objects.filter(owner=user)
         ctx['projects'] = Project.objects.filter(owner=user)
-        ctx['recent_generations'] = Generation.objects.filter(user=user, parent_generation__isnull=True).select_related('output_media', 'model', 'provider')[:4]
+        ctx['recent_generations'] = Generation.objects.filter(user=user, parent_generation__isnull=True).select_related('output_media', 'model', 'provider')[:12]
         ctx['trending_presets'] = [
             {
                 'id': 'vintage_cartoon',
@@ -247,20 +247,18 @@ class ExploreView(TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         user = self.request.user if self.request.user.is_authenticated else None
-        
-        # 1. Dynamically query completed generations from ALL users
+
+        # 1. Query real completed generations with output media from ALL platform users
         db_gens = Generation.objects.filter(
             status='completed',
             output_media__isnull=False
-        ).select_related('output_media', 'model', 'provider', 'user', 'character', 'project').order_by('-created_at')[:40]
-
-        ctx['db_generations'] = db_gens
+        ).select_related('output_media', 'model', 'provider', 'user', 'character', 'project').order_by('-created_at')[:80]
 
         dynamic_user_items = []
         for gen in db_gens:
             if not gen.output_media:
                 continue
-            
+
             media_url = gen.output_media.file.url if gen.output_media.file else (gen.output_media.url or '')
             if not media_url:
                 continue
@@ -269,36 +267,65 @@ class ExploreView(TemplateView):
             creator_name = f"@{username}"
             avatar_letter = username[0].upper() if username else 'C'
 
-            # Classify style / category based on prompt keywords
             p_low = gen.prompt.lower()
-            if 'clay' in p_low or 'stop-motion' in p_low:
-                category = 'Stop-Motion Clay'
-            elif 'cartoon' in p_low or 'anime' in p_low or 'vintage' in p_low or 'rubber hose' in p_low:
-                category = 'Animation'
-            elif 'portrait' in p_low or 'face' in p_low or 'ugc' in p_low or 'vlog' in p_low or 'beach' in p_low:
-                category = 'Viral Social VFX'
-            elif 'fantasy' in p_low or 'knight' in p_low or 'dragon' in p_low or 'magic' in p_low:
-                category = 'Dark Fantasy'
-            elif '3d' in p_low or 'pixar' in p_low:
-                category = '3D Animation'
+            
+            # Team Classification (Marketing Teams, Agencies, Creators)
+            if any(w in p_low for w in ['ad', 'ugc', 'product', 'marketing', 'promo', 'ecommerce', 'retail', 'sale', 'cream', 'skincare', 'energy drink', 'snack', 'certificate', 'interview']):
+                team = 'marketing'
+            elif any(w in p_low for w in ['commercial', 'brand', 'luxury', 'car', 'hypercar', 'amg', 'cinematic', 'film', 'trailer', 'director', '8k', '4k', 'anamorphic', 'corporate']):
+                team = 'agencies'
             else:
-                category = 'Cyberpunk / Sci-Fi'
+                team = 'creators'
 
-            # Title from project name or prompt snippet
+            # Format Classification
+            if any(w in p_low for w in ['ugc', 'review', 'selfie', 'phone', 'cream', 'skincare', 'walk']):
+                produce_format = 'ugc_ads'
+            elif any(w in p_low for w in ['drama', 'suspense', 'cliffhanger', 'episode', 'talking', 'dialogue', 'story']):
+                produce_format = 'micro_drama'
+            elif any(w in p_low for w in ['explainer', 'tutorial', 'breakdown', 'concept', 'guide', 'learn']):
+                produce_format = 'explainer_video'
+            elif any(w in p_low for w in ['short film', 'film', 'cinema', 'movie', 'narrative', 'quest']):
+                produce_format = 'short_film'
+            elif any(w in p_low for w in ['social', 'tiktok', 'reel', 'dance', 'viral', 'street', 'accra']):
+                produce_format = 'social_content'
+            elif gen.generation_type == 'image' or any(w in p_low for w in ['photo', 'portrait', 'still', 'billboard']):
+                produce_format = 'brand_images'
+            else:
+                produce_format = 'brand_video'
+
+            # Genre category
+            if 'clay' in p_low or 'stop-motion' in p_low:
+                category = 'Claymation'
+            elif 'anime' in p_low or 'sports' in p_low or 'katana' in p_low:
+                category = 'Sports Anime'
+            elif 'stickman' in p_low or 'cave' in p_low or 'trojan' in p_low:
+                category = 'Stickman Cartoon'
+            elif 'watercolor' in p_low or 'parchment' in p_low:
+                category = 'Watercolor'
+            elif 'paper' in p_low or 'collage' in p_low:
+                category = 'Paper Collage'
+            elif 'hand drawn' in p_low or 'sketch' in p_low:
+                category = 'Hand Drawn'
+            elif 'ugc' in p_low or 'ad' in p_low or 'product' in p_low:
+                category = 'UGC & Social Ads'
+            elif 'commercial' in p_low or 'brand' in p_low or 'luxury' in p_low:
+                category = 'Brand Commercials'
+            else:
+                category = 'Micro Drama'
+
+            # Title
             if gen.project and gen.project.name:
                 title = gen.project.name
             else:
-                # First clean sentence or 40 characters
                 clean_p = gen.prompt.split('.')[0].strip()
                 title = clean_p[:45] + ('...' if len(clean_p) > 45 else '')
 
-            # Like calculation from seed or id
             hash_val = abs(hash(str(gen.id)))
-            likes_count = (hash_val % 3500) + 420
+            likes_count = (hash_val % 4200) + 380
 
             dynamic_user_items.append({
                 'id': str(gen.id),
-                'title': title or 'AI Generation',
+                'title': title or 'Community Creation',
                 'creator': creator_name,
                 'avatar_letter': avatar_letter,
                 'type': gen.generation_type or 'video',
@@ -306,8 +333,10 @@ class ExploreView(TemplateView):
                 'model_name': gen.model.display_name if gen.model else 'AI Engine',
                 'model_badge': gen.model.display_name if gen.model else 'Veo Cinema',
                 'aspect_ratio': gen.aspect_ratio or '16:9',
-                'duration': gen.duration or 0,
+                'duration': gen.duration or 5,
                 'category': category,
+                'team': team,
+                'produce_format': produce_format,
                 'likes': likes_count,
                 'is_staff_pick': bool(gen.character is not None or (gen.duration and gen.duration >= 10)),
                 'character_name': gen.character.name if gen.character else '',
@@ -317,241 +346,274 @@ class ExploreView(TemplateView):
                 'is_user_generated': True
             })
 
-        # Curated community showcase items fallback/supplement
-        curated_showcase = [
+        # 2. Produce Formats for Section 1 ("SEE WHAT YOU CAN PRODUCE ON FLASHLOOP")
+        first_video_url = next((u['media_url'] for u in dynamic_user_items if u['type'] == 'video'), '/static/images/showcase/old_cartoon.jpg')
+        first_ugc_url = next((u['media_url'] for u in dynamic_user_items if u['produce_format'] == 'ugc_ads'), first_video_url)
+        first_drama_url = next((u['media_url'] for u in dynamic_user_items if u['produce_format'] == 'micro_drama'), first_video_url)
+
+        ctx['produce_formats'] = [
             {
-                'id': 'exp-1',
-                'title': 'Night Forest Campfire Clay Story',
-                'creator': '@clay_tales',
-                'avatar_letter': 'C',
-                'type': 'video',
-                'media_url': '/static/images/showcase/everyday_life.jpg',
-                'model_name': 'Veo 3.1 Cinematic',
-                'model_badge': 'Tactile Stop-Mo',
+                'id': 'ugc_ads',
+                'label': 'UGC ADS',
+                'heading': 'UGC ADS',
+                'desc': 'High-converting creator testimonials and product unboxings that blend seamlessly into social feeds.',
+                'media_url': first_ugc_url,
+                'media_type': 'video' if first_ugc_url.endswith(('.mp4', '.mov', '.webm')) else 'image',
+                'create_prompt': 'Authentic smartphone selfie UGC creator unboxing and reviewing product with natural lighting',
                 'aspect_ratio': '9:16',
-                'duration': 5,
-                'category': 'Stop-Motion Clay',
-                'likes': 1920,
-                'is_staff_pick': True,
-                'character_name': 'Leo & Mia',
-                'prompt': 'Charming stop-motion claymation miniature of two adventurous clay children sitting beside a glowing campfire in a dark pine forest under starry night sky, warm firelight flicker on handcrafted clay coats.',
-                'negative_prompt': 'digital 3d, smooth plastic, CGI, oversaturated',
-                'seed': 120938491
             },
             {
-                'id': 'exp-2',
-                'title': 'Summer Beach Skincare UGC Reel',
-                'creator': '@chloe_creatives',
-                'avatar_letter': 'C',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/55ec271bc3ba.jpg',
-                'model_name': 'Kling 3.0 Ultra',
-                'model_badge': 'Photoreal UGC',
+                'id': 'micro_drama',
+                'label': 'MICRO DRAMA',
+                'heading': 'MICRO DRAMA',
+                'desc': 'High-stakes episodic cliffhangers and character face-offs designed for hyper-retention vertical streaming.',
+                'media_url': first_drama_url,
+                'media_type': 'video' if first_drama_url.endswith(('.mp4', '.mov', '.webm')) else 'image',
+                'create_prompt': 'Intense dramatic confrontation between two characters, emotional close-up, cinematic lighting, 9:16 vertical',
                 'aspect_ratio': '9:16',
-                'duration': 15,
-                'category': 'Viral Social VFX',
-                'likes': 3420,
-                'is_staff_pick': True,
-                'character_name': 'Chloe Vance',
-                'prompt': 'A joyful creator holding up a luxury skincare lotion tube under bright Mediterranean sunshine at a coastal beach resort, beaming natural smile, sparkling sea bokeh in background, authentic 4k smartphone UGC style.',
-                'negative_prompt': 'bad lighting, blurred product, distorted fingers',
-                'seed': 884910293
             },
             {
-                'id': 'exp-3',
-                'title': 'Midnight Ethereal Winged Gliders',
-                'creator': '@sky_alchemist',
-                'avatar_letter': 'S',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/0b2bd9ae33ab.png',
-                'model_name': 'Google Veo 3.1',
-                'model_badge': 'Veo 3.1 Cinema',
+                'id': 'explainer_video',
+                'label': 'EXPLAINER VIDEO',
+                'heading': 'EXPLAINER VIDEO',
+                'desc': 'Crisp visual breakdowns and kinetic motion concepts that make complex products intuitive in seconds.',
+                'media_url': first_video_url,
+                'media_type': 'video' if first_video_url.endswith(('.mp4', '.mov', '.webm')) else 'image',
+                'create_prompt': 'Dynamic motion explainer video with sleek 3D holographic UI interfaces, clean modern camera motion',
                 'aspect_ratio': '16:9',
-                'duration': 10,
-                'category': 'Cyberpunk / Sci-Fi',
-                'likes': 2890,
-                'is_staff_pick': True,
-                'character_name': 'Zephyr Wing',
-                'prompt': 'Cinematic shot of celestial aerial adventurers with glowing crystalline fairy wings soaring through a stormy twilight sky anchored by heavy iron clockwork pulleys, volumetric lightning illumination, magical particles.',
-                'negative_prompt': 'blurry, flat lighting, artifacts, 2d cartoon',
-                'seed': 384910294
             },
             {
-                'id': 'exp-4',
-                'title': 'Street Phone Call Drama',
-                'creator': '@urban_cinema',
-                'avatar_letter': 'U',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/1a541e74d169.png',
-                'model_name': 'Kling 3.0 Ultra',
-                'model_badge': 'Commercial Pro',
-                'aspect_ratio': '9:16',
-                'duration': 8,
-                'category': 'Viral Social VFX',
-                'likes': 1680,
-                'is_staff_pick': False,
-                'character_name': 'Marcus & Elena',
-                'prompt': 'Cinematic tracking shot along a sunlit New York brownstone sidewalk as two executives in modern suits have an animated conversation on a smartphone, soft golden hour lens flares, anamorphic bokeh.',
-                'negative_prompt': 'lowres, grainy, distorted facial features',
-                'seed': 748192048
-            },
-            {
-                'id': 'exp-5',
-                'title': 'Urban Street Energy Drink Commercial',
-                'creator': '@beast_mode',
-                'avatar_letter': 'B',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/33b3f2fc7152.png',
-                'model_name': 'Google Veo 3.1',
-                'model_badge': 'Commercial Pro',
-                'aspect_ratio': '9:16',
-                'duration': 10,
-                'category': 'Viral Social VFX',
-                'likes': 2450,
-                'is_staff_pick': False,
-                'character_name': 'Kenji Sato',
-                'prompt': 'Dynamic handheld camera shot of a stylish young creator in a yellow athletic jersey holding up a sleek glowing purple energy drink can in downtown city street at golden hour, confident smile, cinematic motion blur.',
-                'negative_prompt': 'low quality, blurry label, oversaturated face',
-                'seed': 662910481
-            },
-            {
-                'id': 'exp-6',
-                'title': 'Medieval Tavern Knight Victory Toast',
-                'creator': '@valiant_lore',
-                'avatar_letter': 'V',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/358ecb8a0783.png',
-                'model_name': 'Flux 1.1 Pro Ultra',
-                'model_badge': 'Photoreal 8K',
+                'id': 'short_film',
+                'label': 'SHORT FILM',
+                'heading': 'SHORT FILM',
+                'desc': 'Festival-grade cinematic short stories with persistent cast characters and director-level camera moves.',
+                'media_url': first_video_url,
+                'media_type': 'video' if first_video_url.endswith(('.mp4', '.mov', '.webm')) else 'image',
+                'create_prompt': 'Cinematic narrative short film, slow atmospheric tracking shot at dawn, 35mm film grain, 4k master',
                 'aspect_ratio': '16:9',
-                'duration': 0,
-                'category': 'Dark Fantasy',
-                'likes': 3100,
-                'is_staff_pick': True,
-                'character_name': 'Sir Galahad',
-                'prompt': 'Atmospheric fantasy anime scene of medieval knights in royal blue tunics and steel armor raising wooden tankards of ale in a cozy candlelit tavern, royal eagle banner in background, hearty laughter, warm amber lighting.',
-                'negative_prompt': '3D CGI, low quality, deformed hands',
-                'seed': 991823011
             },
             {
-                'id': 'exp-7',
-                'title': '30s Cyberpunk Autonomous EV Infiltrator',
-                'creator': '@neon_director',
-                'avatar_letter': 'N',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/3c0696f309a1.png',
-                'model_name': 'Google Veo 3.1',
-                'model_badge': 'Veo 3.1 Cinema',
-                'aspect_ratio': '16:9',
-                'duration': 10,
-                'category': 'Cyberpunk / Sci-Fi',
-                'likes': 4420,
-                'is_staff_pick': True,
-                'character_name': 'Kaelen Vance',
-                'prompt': 'An autonomous electric hypercar with FLASHLOOP.AI livery gliding through a rainy futuristic neo-Tokyo at midnight, rain droplets beading on aerodynamic carbon fiber, red LED taillights glowing, accelerating into a misty tunnel.',
-                'negative_prompt': 'blurry, low resolution, artifacts, distorted geometry, cartoonish',
-                'seed': 489218491
-            },
-            {
-                'id': 'exp-8',
-                'title': 'Anime Electric Katana Clash',
-                'creator': '@sakura_blade',
-                'avatar_letter': 'K',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/3d638a185fab.png',
-                'model_name': 'Seedance 2.5 Pro',
-                'model_badge': 'Anime Action',
-                'aspect_ratio': '16:9',
-                'duration': 5,
-                'category': 'Cyberpunk / Sci-Fi',
-                'likes': 4200,
-                'is_staff_pick': True,
-                'character_name': 'Ren Kurogane',
-                'prompt': 'Extreme dynamic close-up anime shot of an electric katana blade reflecting glowing cyan lightning sparks across a warrior\'s determined eyes, shattering rock particles flying past camera in slow-motion, Ufotable studio aesthetic.',
-                'negative_prompt': '3D CGI, blurry lines, low framerate',
-                'seed': 449102941
-            },
-            {
-                'id': 'exp-9',
-                'title': 'Poolside Villa Claymation Holiday',
-                'creator': '@clay_paradise',
-                'avatar_letter': 'P',
-                'type': 'video',
-                'media_url': '/static/images/showcase/fruit_love_island.jpg',
-                'model_name': 'Veo 3.1 Cinematic',
-                'model_badge': 'Tactile Stop-Mo',
-                'aspect_ratio': '1:1',
-                'duration': 5,
-                'category': 'Stop-Motion Clay',
-                'likes': 2190,
-                'is_staff_pick': False,
-                'character_name': 'Barnaby & Lola',
-                'prompt': 'Charming claymation stop-motion scene of a relaxing couple lounging by a luxury turquoise swimming pool outside a modern white villa, eating grapes under swaying palm trees, handcrafted clay textures, bright warm sunlight.',
-                'negative_prompt': 'photoreal human, flat 2d, digital rendering',
-                'seed': 193849102
-            },
-            {
-                'id': 'exp-10',
-                'title': 'Nova Pop Hologram Candy Snack',
-                'creator': '@candy_wave',
-                'avatar_letter': 'N',
-                'type': 'video',
-                'media_url': '/media/uploads/1/reference/42cbce215816.png',
-                'model_name': 'Kling 3.0 Ultra',
-                'model_badge': 'Photoreal UGC',
+                'id': 'social_content',
+                'label': 'SOCIAL CONTENT',
+                'heading': 'SOCIAL CONTENT',
+                'desc': 'Daily viral reels, memes, and trend-jacking hooks generated in seconds to keep your channels always ahead.',
+                'media_url': first_video_url,
+                'media_type': 'video' if first_video_url.endswith(('.mp4', '.mov', '.webm')) else 'image',
+                'create_prompt': 'Fast-paced viral social video with dynamic camera cuts, eye-catching visual hooks, trending aesthetic',
                 'aspect_ratio': '9:16',
-                'duration': 10,
-                'category': 'Viral Social VFX',
-                'likes': 3820,
-                'is_staff_pick': True,
-                'character_name': 'Yuki Star',
-                'prompt': 'Close-up UGC video of a trendy girl with blue hair in a cap holding up a colorful purple Nova Pop candy pouch under sparkling crystal chandelier lights, playful expression, glowing neon aesthetic.',
-                'negative_prompt': 'blurry pouch, distorted eyes, bad colors',
-                'seed': 558192049
             },
             {
-                'id': 'exp-11',
-                'title': '1930s Rubber Hose Cartoon Bakery',
-                'creator': '@retro_toon',
-                'avatar_letter': 'R',
-                'type': 'video',
-                'media_url': '/static/images/showcase/old_cartoon.jpg',
-                'model_name': 'Seedance 2.5 Pro',
-                'model_badge': 'Rubber Hose',
-                'aspect_ratio': '16:9',
-                'duration': 5,
-                'category': '1930s Animation',
-                'likes': 1750,
-                'is_staff_pick': True,
-                'character_name': 'Barnaby Baker',
-                'prompt': 'Classic 1930s black-and-white rubber hose animation short. A cheerful cartoon baker in oversized gloves is chased around a vintage kitchen by dancing cupcakes, bouncy squash-and-stretch physics, authentic grain.',
-                'negative_prompt': 'modern 3d, colors, HD sharp CGI, realistic human',
-                'seed': 338192049
-            },
-            {
-                'id': 'exp-12',
-                'title': 'Neon Holographic Skeleton Dance',
-                'creator': '@vfx_alchemist',
-                'avatar_letter': 'V',
-                'type': 'video',
-                'media_url': '/static/images/showcase/viral_skeleton.jpg',
-                'model_name': 'Kling 3.0 Ultra',
-                'model_badge': 'Physics Engine',
+                'id': 'brand_images',
+                'label': 'BRAND IMAGES',
+                'heading': 'BRAND IMAGES',
+                'desc': 'Studio-grade key art, luxury lookbook portraits, and hyper-detailed product renders with perfect zero-drift lighting.',
+                'media_url': '/media/characters/avatars/marcus_vance_fullbody.jpg',
+                'media_type': 'image',
+                'create_prompt': 'Full-length luxury fashion editorial portrait in a minimalist architectural studio, cinematic softbox lighting, 8k masterpiece',
                 'aspect_ratio': '9:16',
-                'duration': 15,
-                'category': 'Viral Social VFX',
-                'likes': 5840,
-                'is_staff_pick': True,
-                'character_name': 'Maya Lin',
-                'prompt': 'A high-energy glowing electric cyan and orange holographic skeletal dancer performing synchronized choreography in an abandoned cyberpunk subway terminal, volumetric laser strobe lighting and wet puddle reflections.',
-                'negative_prompt': 'static camera, jitter, watermark, dull lighting',
-                'seed': 774892019
+            },
+            {
+                'id': 'brand_video',
+                'label': 'BRAND VIDEO',
+                'heading': 'BRAND VIDEO',
+                'desc': 'On-brand spots that look like an agency built them, minus the agency.',
+                'media_url': '/static/images/showcase/brand_video_car.jpg',
+                'media_type': 'image',
+                'create_prompt': 'Luxury automotive commercial tracking a sleek matte black sports coupe through rain-slicked city streets at night, glowing red taillights, cinematic 8k',
+                'aspect_ratio': '16:9',
             }
         ]
 
-        # Combine dynamic user creations with curated items (putting user creations first)
-        combined_showcase = dynamic_user_items + [item for item in curated_showcase if not any(u.get('id') == item.get('id') for u in dynamic_user_items)]
-        ctx['community_showcase'] = combined_showcase
+        # 3. Who It's For Segments (Screenshot 2)
+        ctx['who_its_for_segments'] = [
+            {
+                'id': 'marketing',
+                'title': 'Marketing Teams',
+                'icon_url': '/static/images/showcase/icon_marketing.jpg',
+                'description': 'Fill the content calendar with formats proven to pull views. No crew, no shoot days, no edit bay. Ship daily, learn fast.',
+                'badge_color': 'emerald',
+                'count': sum(1 for u in dynamic_user_items if u['team'] == 'marketing')
+            },
+            {
+                'id': 'agencies',
+                'title': 'Agencies',
+                'icon_url': '/static/images/showcase/icon_agency.jpg',
+                'description': 'Turn trend jacking around the same day. Pitch and deliver client work built on formats already generating millions of views.',
+                'badge_color': 'amber',
+                'count': sum(1 for u in dynamic_user_items if u['team'] == 'agencies')
+            },
+            {
+                'id': 'creators',
+                'title': 'Creators',
+                'icon_url': '/static/images/showcase/icon_creator.jpg',
+                'description': 'Ride every wave first. New viral formats land constantly, so your channel never misses a trend worth posting.',
+                'badge_color': 'rose',
+                'count': sum(1 for u in dynamic_user_items if u['team'] == 'creators')
+            }
+        ]
+
+        # 4. Top Trends (Screenshot 4)
+        ctx['top_trends'] = [
+            {
+                'id': 'sports_anime_1',
+                'category': 'sports_anime',
+                'label': 'Sports Anime',
+                'image_url': '/static/images/showcase/unhinged_cartoon.jpg',
+                'prompt': 'High-energy sports anime animation of players in royal blue uniforms inside a modern locker room, intense expressions, dynamic lighting',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'sports_anime_2',
+                'category': 'sports_anime',
+                'label': 'Sports Anime',
+                'image_url': '/media/characters/avatars/marcus_vance_walking.jpg',
+                'prompt': 'Dynamic sports anime warriors colliding with glowing cyan and blue energy blades, electrifying sparks flying, intense rivalry, anime speed lines',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'sports_anime_3',
+                'category': 'sports_anime',
+                'label': 'Sports Anime',
+                'image_url': '/static/images/showcase/unhinged_cartoon.jpg',
+                'prompt': 'Emotional anime character in pouring rain, dramatic tears streaming down cheeks, golden collar insignia, cinematic lighting, masterpiece',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'stickman_cartoon_1',
+                'category': 'stickman_cartoon',
+                'label': 'Stickman Cartoon',
+                'image_url': '/static/images/showcase/old_cartoon.jpg',
+                'prompt': 'Whimsical storybook stickman cartoon carving ancient symbols into seaside cliff cave, textured paper storybook illustration',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'stickman_cartoon_2',
+                'category': 'stickman_cartoon',
+                'label': 'Stickman Cartoon',
+                'image_url': '/static/images/showcase/old_cartoon.jpg',
+                'prompt': 'Minimalist stickman cartoon astronomer peering through a tall brass wooden telescope at starry night sky, cozy storybook atmosphere',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'stickman_cartoon_3',
+                'category': 'stickman_cartoon',
+                'label': 'Stickman Cartoon',
+                'image_url': '/static/images/showcase/old_cartoon.jpg',
+                'prompt': 'Whimsical cartoon soldiers climbing out of a wooden Trojan horse outside stone fortress walls, charming storybook line art style',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'claymation_1',
+                'category': 'claymation',
+                'label': 'Claymation',
+                'image_url': '/static/images/showcase/everyday_life.jpg',
+                'prompt': 'Tactile stop-motion claymation mother gently patting a swaddled clay baby in a wooden crib, warm candlelight, clay fingerprint textures, 35mm lighting',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'claymation_2',
+                'category': 'claymation',
+                'label': 'Claymation',
+                'image_url': '/static/images/showcase/everyday_life.jpg',
+                'prompt': 'Stop-motion claymation passengers riding a vintage green city bus through rain-streaked windows, nostalgic tactile characters, warm film lighting',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'claymation_3',
+                'category': 'claymation',
+                'label': 'Claymation',
+                'image_url': '/static/images/showcase/everyday_life.jpg',
+                'prompt': 'Charming bearded claymation scholar at a wooden library desk examining miniature planet through brass telescope, warm oil lamp glow',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'watercolor_1',
+                'category': 'watercolor',
+                'label': 'Watercolor',
+                'image_url': '/static/images/showcase/fruit_love_island.jpg',
+                'prompt': 'Delicate scientific watercolor illustration of hand pointing to circular petri dish on vintage aged parchment paper, antique manuscript look',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'watercolor_2',
+                'category': 'watercolor',
+                'label': 'Watercolor',
+                'image_url': '/static/images/showcase/fruit_love_island.jpg',
+                'prompt': 'Artistic antique watercolor world map with muted grey and blue continents on textured parchment, vintage explorer cartography',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'watercolor_3',
+                'category': 'watercolor',
+                'label': 'Watercolor',
+                'image_url': '/static/images/showcase/fruit_love_island.jpg',
+                'prompt': 'Peaceful soft watercolor painting of solitary white lighthouse on rocky grassy coastline overlooking calm ocean water, gentle wash tones',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'paper_collage_1',
+                'category': 'paper_collage',
+                'label': 'Paper Collage',
+                'image_url': '/static/images/showcase/viral_skeleton.jpg',
+                'prompt': 'Cutout layered paper craft illustration of man speaking into vintage telegraph microphone communicating with child below, split-level room',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'paper_collage_2',
+                'category': 'paper_collage',
+                'label': 'Paper Collage',
+                'image_url': '/static/images/showcase/viral_skeleton.jpg',
+                'prompt': 'Handcrafted paper collage of boy looking curiously at wooden pantry shelves filled with paper cutout bottles, boxes, and jars',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'paper_collage_3',
+                'category': 'paper_collage',
+                'label': 'Paper Collage',
+                'image_url': '/static/images/showcase/viral_skeleton.jpg',
+                'prompt': 'Layered 3D paper collage scene of students seated at wooden school desks writing in notebooks as another enters blue doorway, tactile shadows',
+                'aspect_ratio': '9:16'
+            },
+            {
+                'id': 'hand_drawn_1',
+                'category': 'hand_drawn',
+                'label': 'Hand Drawn',
+                'image_url': '/static/images/showcase/old_cartoon.jpg',
+                'prompt': 'Fine black-and-white technical pencil and ink architectural sketch of office desk with modern desktop printer and price tags hanging, cross-hatching',
+                'aspect_ratio': '9:16'
+            }
+        ]
+
+        # 5. Categorized Carousels Data
+        ctx['carousel_categories'] = [
+            {
+                'id': 'all',
+                'label': '🔥 All Trending',
+                'items': dynamic_user_items[:20]
+            },
+            {
+                'id': 'ugc_ads',
+                'label': '📱 UGC & Social Ads',
+                'items': [u for u in dynamic_user_items if u['produce_format'] == 'ugc_ads' or u['team'] == 'marketing'][:15]
+            },
+            {
+                'id': 'micro_drama',
+                'label': '🎭 Micro Drama & Cinema',
+                'items': [u for u in dynamic_user_items if u['produce_format'] in ('micro_drama', 'short_film') or u['team'] == 'agencies'][:15]
+            },
+            {
+                'id': 'brand_commercials',
+                'label': '✨ Brand Commercials',
+                'items': [u for u in dynamic_user_items if u['produce_format'] in ('brand_video', 'brand_images') or u['team'] == 'agencies'][:15]
+            },
+            {
+                'id': 'animation_vfx',
+                'label': '⚡ Animation & VFX',
+                'items': [u for u in dynamic_user_items if u['category'] in ('Claymation', 'Sports Anime', 'Stickman Cartoon', 'Watercolor', 'Paper Collage', 'Hand Drawn') or u['team'] == 'creators'][:15]
+            }
+        ]
+
+        ctx['community_showcase'] = dynamic_user_items
         return ctx
 
 

@@ -31,16 +31,34 @@ class CharacterCreateView(LoginRequiredMixin, CreateView):
 
     def form_valid(self, form):
         form.instance.owner = self.request.user
-        # Check if AI avatar URL was generated and no file was uploaded
-        generated_avatar = self.request.POST.get('generated_avatar_url', '').strip()
-        if generated_avatar and not self.request.FILES.get('avatar'):
-            # Extract relative media path e.g. 'characters/avatars/ai_...'
+        
+        # Persist generated metadata (poses, subject isolation, full body standing URL, face lock)
+        full_body_url = ''
+        face_anchor_url = ''
+        generated_metadata_raw = self.request.POST.get('generated_metadata', '').strip()
+        if generated_metadata_raw:
+            try:
+                meta = json.loads(generated_metadata_raw)
+                if isinstance(meta, dict):
+                    if not form.instance.metadata:
+                        form.instance.metadata = {}
+                    form.instance.metadata.update(meta)
+                    full_body_url = meta.get('full_body_url', '')
+                    face_anchor_url = meta.get('face_anchor_url', '') or meta.get('original_face_url', '')
+                    if face_anchor_url:
+                        form.instance.metadata['original_face_url'] = face_anchor_url
+            except Exception:
+                pass
+
+        # The primary character visual MUST be the regenerated full-body character figure
+        target_visual = full_body_url or self.request.POST.get('generated_avatar_url', '').strip()
+        if target_visual and not self.request.FILES.get('avatar'):
             media_url = getattr(settings, 'MEDIA_URL', '/media/')
-            if generated_avatar.startswith(media_url):
-                rel_path = generated_avatar[len(media_url):]
+            if target_visual.startswith(media_url):
+                rel_path = target_visual[len(media_url):]
                 form.instance.avatar = rel_path
-            elif 'characters/avatars/' in generated_avatar:
-                rel_path = generated_avatar[generated_avatar.find('characters/avatars/'):]
+            elif 'characters/' in target_visual:
+                rel_path = target_visual[target_visual.find('characters/'):]
                 form.instance.avatar = rel_path
 
         messages.success(self.request, f"Character '{form.instance.name}' forged successfully.")
@@ -63,15 +81,33 @@ class CharacterUpdateView(LoginRequiredMixin, UpdateView):
         return Character.objects.filter(owner=self.request.user)
 
     def form_valid(self, form):
-        generated_avatar = self.request.POST.get('generated_avatar_url', '').strip()
-        if generated_avatar and not self.request.FILES.get('avatar'):
+        full_body_url = ''
+        face_anchor_url = ''
+        generated_metadata_raw = self.request.POST.get('generated_metadata', '').strip()
+        if generated_metadata_raw:
+            try:
+                meta = json.loads(generated_metadata_raw)
+                if isinstance(meta, dict):
+                    if not form.instance.metadata:
+                        form.instance.metadata = {}
+                    form.instance.metadata.update(meta)
+                    full_body_url = meta.get('full_body_url', '')
+                    face_anchor_url = meta.get('face_anchor_url', '') or meta.get('original_face_url', '')
+                    if face_anchor_url:
+                        form.instance.metadata['original_face_url'] = face_anchor_url
+            except Exception:
+                pass
+
+        target_visual = full_body_url or self.request.POST.get('generated_avatar_url', '').strip()
+        if target_visual and not self.request.FILES.get('avatar'):
             media_url = getattr(settings, 'MEDIA_URL', '/media/')
-            if generated_avatar.startswith(media_url):
-                rel_path = generated_avatar[len(media_url):]
+            if target_visual.startswith(media_url):
+                rel_path = target_visual[len(media_url):]
                 form.instance.avatar = rel_path
-            elif 'characters/avatars/' in generated_avatar:
-                rel_path = generated_avatar[generated_avatar.find('characters/avatars/'):]
+            elif 'characters/' in target_visual:
+                rel_path = target_visual[target_visual.find('characters/'):]
                 form.instance.avatar = rel_path
+
         return super().form_valid(form)
 
     def get_success_url(self):
@@ -141,3 +177,35 @@ def generate_character_ai_view(request):
     except Exception as exc:
         logger.exception("Character synthesis error")
         return JsonResponse({'error': str(exc)}, status=500)
+
+
+@login_required
+@require_POST
+def set_primary_pose_view(request, pk):
+    """Sets a selected pose as the character's primary active avatar."""
+    character = get_object_or_404(Character, pk=pk, owner=request.user)
+    try:
+        data = json.loads(request.body.decode('utf-8'))
+        pose_id = data.get('pose_id', '')
+        image_url = data.get('image_url', '')
+
+        poses = character.metadata.get('poses', [])
+        found_pose = next((p for p in poses if p.get('id') == pose_id or p.get('image_url') == image_url), None)
+
+        if found_pose and found_pose.get('image_url'):
+            url = found_pose['image_url']
+            media_prefix = getattr(settings, 'MEDIA_URL', '/media/')
+            if url.startswith(media_prefix):
+                rel_path = url[len(media_prefix):]
+            elif 'characters/avatars/' in url:
+                rel_path = url[url.find('characters/avatars/'):]
+            else:
+                rel_path = url
+            character.avatar = rel_path
+            character.metadata['active_pose'] = pose_id
+            character.save()
+            return JsonResponse({'status': 'ok', 'active_pose': pose_id, 'avatar_url': character.avatar.url})
+        return JsonResponse({'error': 'Pose not found'}, status=404)
+    except Exception as exc:
+        return JsonResponse({'error': str(exc)}, status=500)
+

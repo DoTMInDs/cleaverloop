@@ -67,7 +67,7 @@
 
     <div class="relative z-10 flex min-h-screen flex-col">
         {% block nav %}
-        {% if not hide_navbar and '/accounts/' not in request.path %}
+        {% if not hide_navbar %}
         {% include 'partials/nav.html' %}
         {% endif %}
         {% endblock %}
@@ -88,12 +88,12 @@
 
         <!-- Main Workspace -->
         <main
-            class="{% block main_classes %}flex-1 w-full max-w-7xl mx-auto px-4 lg:px-8 py-6 pb-24 md:pb-8{% endblock %}">
+            class="{% block main_classes %}flex-1 w-full px-3 sm:px-6 lg:px-8 xl:px-10 py-6 pb-24 md:pb-8 max-w-none{% endblock %}">
             {% block content %}{% endblock %}
         </main>
 
         {% block mobile_nav %}
-        {% if not hide_navbar and '/accounts/' not in request.path %}
+        {% if not hide_navbar %}
         <!-- Bottom Navigation Bar for Mobile (React Native Look & Feel) -->
         <nav
             class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface/90 backdrop-blur-xl border-t border-white/10 px-4 py-2 flex items-center justify-around">

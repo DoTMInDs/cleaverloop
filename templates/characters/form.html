@@ -4,7 +4,7 @@
 {% block title %}{% if object %}Edit {{ object.name }}{% else %}Forge AI Character{% endif %} — CleaverLoop AI (Flashloop Edition){% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-8 relative" x-data="{
+<div class="w-full space-y-8 relative" x-data="{
     charName: '{{ form.name.value|default:''|escapejs }}',
     appearance: '{{ form.appearance_description.value|default:''|escapejs }}',
     clothing: '{{ form.clothing_description.value|default:''|escapejs }}',
@@ -12,6 +12,13 @@
     description: '{{ form.description.value|default:''|escapejs }}',
     avatarPreview: '{% if object and object.avatar %}{{ object.avatar.url }}{% endif %}',
     generatedAvatarUrl: '',
+    faceAnchorUrl: '{% if object and object.metadata.original_face_url %}{{ object.metadata.original_face_url }}{% elif object and object.metadata.face_anchor_url %}{{ object.metadata.face_anchor_url }}{% endif %}',
+    charGender: '{{ object.metadata.gender|default:'female'|escapejs }}',
+    bodyType: '{{ object.metadata.body_type|default:''|escapejs }}',
+    subjectIsolation: '',
+    fullBodyUrl: '{% if object and object.metadata.full_body_url %}{{ object.metadata.full_body_url }}{% endif %}',
+    fullBodyPrompt: '',
+    generatedMetadata: '',
     
     // AI Magic Forge state
     forgeTab: 'photo', // 'photo' or 'prompt'
@@ -28,24 +35,42 @@
     isDragging: false,
     extraLore: '',
 
-    archetypes: [
+    promptSparks: [
         {
-            title: '⚡ Cyberpunk Operative',
-            prompt: 'A cyberpunk infiltrator who navigates the neon shadows of Neo-Tokyo with cybernetic enhancements and a glowing ocular interface.'
+            title: '👩 Camille (French Architect)',
+            category: 'Female',
+            prompt: '25-year-old French female architect named Camille Laurent in a tailored beige trenchcoat over black turtleneck, dark wavy hair, expressive hazel eyes, natural warm smile, standing in a relaxed real-life contrapposto pose with architectural sketchbook.'
         },
         {
-            title: '🔍 Hardboiled Noir Detective',
-            prompt: 'A gritty 1940s noir detective in a heavy trenchcoat investigating shadowy conspiracies with an analytical mind.'
+            title: '🔬 Amina (AI Researcher)',
+            category: 'Female',
+            prompt: '24-year-old Black female AI research scholar named Amina Diallo with center-parted braided bun topknot, expressive dark eyes, wearing an ivory ribbed knit sweater tucked into high-waisted dark tailored trousers, poised academic demeanor.'
         },
         {
-            title: '✨ Neon Street Dancer',
-            prompt: 'A charismatic urban dancer in holographic streetwear with electric purple hair and radiant stage energy.'
+            title: '⚡ Elena (Cyber Netrunner)',
+            category: 'Female',
+            prompt: '27-year-old female cyber-operative named Elena Kurogane with sleek raven-black hair, glowing cyan cybernetic ocular eye, wearing a matte-black ballistic leather bomber jacket with neon amber lining, sharp confident stance.'
         },
         {
-            title: '🚀 Deep Space Commander',
-            prompt: 'A visionary starship commander leading deep space expeditions in a gold-trimmed naval composite uniform.'
+            title: '🌿 Astrid (Nordic Designer)',
+            category: 'Female',
+            prompt: '24-year-old Scandinavian female interior designer named Astrid Lindholm with platinum blonde hair in loose low ponytail, wearing an oversized cream knit cardigan over olive linen trousers and white canvas sneakers, standing with relaxed confident posture.'
+        },
+        {
+            title: '💼 Marcus (Tech Founder)',
+            category: 'Male',
+            prompt: '35-year-old tech entrepreneur named Marcus Vance with sharp defined jawline, short textured fade haircut, wearing a bespoke charcoal wool tailored suit with crisp white collarless shirt, confident athletic walking stride.'
         }
     ],
+
+    applyPromptSpark(spark) {
+        this.magicPrompt = spark.prompt;
+    },
+
+    async runPromptSpark(spark) {
+        this.magicPrompt = spark.prompt;
+        await this.synthesizeWithAI();
+    },
 
     applyArchetype(a) {
         this.magicPrompt = a.prompt;
@@ -131,11 +156,26 @@
             this.clothing = data.clothing_description;
             this.personality = data.personality;
             this.description = data.description;
-            if (data.avatar_url) {
-                this.avatarPreview = data.avatar_url;
-                this.generatedAvatarUrl = data.avatar_url;
-                this.photoPreview = data.avatar_url;
-            }
+            this.charGender = data.gender || 'female';
+            this.bodyType = data.body_type || '';
+            this.subjectIsolation = data.subject_isolation || '';
+            this.fullBodyUrl = data.full_body_url || data.avatar_url || '';
+            this.fullBodyPrompt = data.full_body_prompt || '';
+            this.faceAnchorUrl = data.face_anchor_url || '';
+            this.avatarPreview = this.fullBodyUrl;
+            this.generatedAvatarUrl = this.fullBodyUrl;
+            this.photoPreview = this.faceAnchorUrl || data.avatar_url || '';
+
+            this.generatedMetadata = JSON.stringify({
+                gender: this.charGender,
+                body_type: this.bodyType,
+                subject_isolation: data.subject_isolation || '',
+                full_body_url: this.fullBodyUrl,
+                original_face_url: this.faceAnchorUrl,
+                face_anchor_url: this.faceAnchorUrl,
+                full_body_prompt: data.full_body_prompt || '',
+                poses: data.poses || []
+            });
             this.photoAnalysisNotice = true;
             this.aiSuccessNotice = true;
             setTimeout(() => {
@@ -158,7 +198,7 @@
 
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         const formData = new FormData();
-        formData.append('brief', this.magicPrompt);
+        formData.append('brief', this.magicPrompt.trim());
         formData.append('style_preset', this.stylePreset);
 
         try {
@@ -172,7 +212,7 @@
 
             if (!res.ok) {
                 const errData = await res.json();
-                throw new Error(errData.error || 'Failed to synthesize character');
+                throw new Error(errData.error || 'Failed to synthesize character from prompt');
             }
 
             const data = await res.json();
@@ -181,12 +221,29 @@
             this.clothing = data.clothing_description;
             this.personality = data.personality;
             this.description = data.description;
-            if (data.avatar_url) {
-                this.avatarPreview = data.avatar_url;
-                this.generatedAvatarUrl = data.avatar_url;
-            }
+            this.charGender = data.gender || 'female';
+            this.bodyType = data.body_type || '';
+            this.subjectIsolation = data.subject_isolation || '';
+            this.fullBodyUrl = data.full_body_url || data.avatar_url || '';
+            this.fullBodyPrompt = data.full_body_prompt || '';
+            this.faceAnchorUrl = data.face_anchor_url || '';
+            this.avatarPreview = this.fullBodyUrl || data.avatar_url || '';
+            this.generatedAvatarUrl = this.fullBodyUrl || data.avatar_url || '';
+            this.photoPreview = this.faceAnchorUrl || data.avatar_url || '';
+
+            this.generatedMetadata = JSON.stringify({
+                gender: this.charGender,
+                body_type: this.bodyType,
+                subject_isolation: data.subject_isolation || '',
+                full_body_url: this.fullBodyUrl,
+                original_face_url: this.faceAnchorUrl,
+                face_anchor_url: this.faceAnchorUrl,
+                full_body_prompt: data.full_body_prompt || '',
+                poses: data.poses || []
+            });
+
             this.aiSuccessNotice = true;
-            setTimeout(() => { this.aiSuccessNotice = false; }, 4500);
+            setTimeout(() => { this.aiSuccessNotice = false; }, 5000);
         } catch (err) {
             this.errorMessage = err.message;
         } finally {
@@ -264,39 +321,67 @@
          =================================================== -->
     <div class="fl-composer-card rounded-3xl p-5 sm:p-6 space-y-5 shadow-2xl relative border-orange-500/40">
         
-        <!-- Header & Mode Switcher Tabs -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
-            <div class="flex items-center gap-2.5">
-                <span class="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500/30 to-amber-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400 text-base font-bold shadow-md">
-                    <span x-text="forgeTab === 'photo' ? '📸' : '✨'"></span>
-                </span>
-                <div>
-                    <h2 class="text-sm font-bold text-white flex items-center gap-2">
-                        <span>Autonomous Character Forge</span>
-                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/30 uppercase tracking-wider">Multimodal AI</span>
-                    </h2>
-                    <p class="text-[11px] text-slate-400" x-text="forgeTab === 'photo' ? 'Upload any human face photo to extract bone structure, demeanor, and persona' : 'Describe your character idea in simple natural words'"></p>
-                </div>
-            </div>
-
-            <!-- Mode Selector Tabs -->
-            <div class="flex items-center gap-1 p-1 bg-[#090a0c] border border-white/[0.08] rounded-2xl shrink-0 self-start sm:self-auto">
-                <button type="button"
-                        @click="forgeTab = 'photo'"
-                        :class="forgeTab === 'photo' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
-                        class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
+        <!-- Mode Switcher Tabs (Side-by-side interactive hero cards) -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 bg-[#090b0e] rounded-2xl border border-white/[0.08]">
+            <!-- Mode 1: Photo Face Forge -->
+            <button type="button"
+                    @click="forgeTab = 'photo'"
+                    :class="forgeTab === 'photo' 
+                        ? 'bg-gradient-to-r from-orange-500/20 via-amber-500/15 to-orange-500/10 border-orange-500/50 shadow-lg shadow-orange-500/10 text-white' 
+                        : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'"
+                    class="p-3 rounded-xl border text-left transition-all duration-200 flex items-center gap-3 group relative cursor-pointer">
+                <div :class="forgeTab === 'photo' ? 'bg-orange-500 text-white shadow-md' : 'bg-white/[0.05] text-slate-400 group-hover:text-white'"
+                     class="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 transition">
                     <span>📸</span>
-                    <span>Photo Face Forge</span>
-                    <span class="px-1.5 py-0.2 rounded text-[8px] bg-black/30 font-mono text-orange-200">NEW</span>
-                </button>
-                <button type="button"
-                        @click="forgeTab = 'prompt'"
-                        :class="forgeTab === 'prompt' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold shadow-sm' : 'text-slate-400 hover:text-white'"
-                        class="px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition">
-                    <span>✨</span>
-                    <span>Text Prompt Forge</span>
-                </button>
-            </div>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold font-heading tracking-wide uppercase"
+                              :class="forgeTab === 'photo' ? 'text-orange-300' : 'text-slate-300'">
+                            1. Photo Reference Face Forge
+                        </span>
+                        <span class="px-1.5 py-0.2 rounded text-[8px] font-mono font-bold bg-orange-500/30 text-orange-200 border border-orange-500/40">
+                            VISION
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-0.5 leading-snug line-clamp-1">
+                        Upload photo → AI isolates face geometry & regenerates character
+                    </p>
+                </div>
+                <div class="shrink-0" x-show="forgeTab === 'photo'">
+                    <span class="w-2.5 h-2.5 rounded-full bg-orange-400 block animate-pulse"></span>
+                </div>
+            </button>
+
+            <!-- Mode 2: Prompt Character Forge -->
+            <button type="button"
+                    @click="forgeTab = 'prompt'"
+                    :class="forgeTab === 'prompt' 
+                        ? 'bg-gradient-to-r from-orange-500/20 via-amber-500/15 to-orange-500/10 border-orange-500/50 shadow-lg shadow-orange-500/10 text-white' 
+                        : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-white/[0.02]'"
+                    class="p-3 rounded-xl border text-left transition-all duration-200 flex items-center gap-3 group relative cursor-pointer">
+                <div :class="forgeTab === 'prompt' ? 'bg-orange-500 text-white shadow-md' : 'bg-white/[0.05] text-slate-400 group-hover:text-white'"
+                     class="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 transition">
+                    <span>✍️</span>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold font-heading tracking-wide uppercase"
+                              :class="forgeTab === 'prompt' ? 'text-orange-300' : 'text-slate-300'">
+                            2. Concept Prompt Character Forge
+                        </span>
+                        <span class="px-1.5 py-0.2 rounded text-[8px] font-mono font-bold bg-amber-500/30 text-amber-200 border border-amber-500/40">
+                            SPECIFICS
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-0.5 leading-snug line-clamp-1">
+                        Describe prompt specifics → AI generates exact identity & poses
+                    </p>
+                </div>
+                <div class="shrink-0" x-show="forgeTab === 'prompt'">
+                    <span class="w-2.5 h-2.5 rounded-full bg-orange-400 block animate-pulse"></span>
+                </div>
+            </button>
         </div>
 
         <!-- TAB 1: PHOTO FACE FORGE (Multimodal Biometric Extraction) -->
@@ -394,61 +479,120 @@
             </div>
         </div>
 
-        <!-- TAB 2: TEXT PROMPT FORGE (Classic Natural Language Synthesis) -->
+        <!-- TAB 2: TEXT PROMPT FORGE (Exact Specifics Natural Language Synthesis) -->
         <div x-show="forgeTab === 'prompt'" x-transition class="space-y-4">
-            <div class="flex items-center justify-between">
-                <p class="text-[11px] text-slate-400">Describe character archetype or choose a quick spark:</p>
+            <!-- Sparks Row -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                        <span>💡</span>
+                        <span>Prompt Specifics Quick Sparks</span>
+                        <span class="text-[10px] text-slate-400 font-normal font-mono hidden sm:inline">(Click to fill prompt specifics)</span>
+                    </span>
+                    <span class="text-[10px] text-orange-400 font-mono">Strict Detail Retention Active</span>
+                </div>
+                
                 <!-- Quick Preset Archetypes (Pill Buttons) -->
-                <div class="hidden md:flex items-center gap-2 text-xs">
-                    <span class="text-[10px] text-slate-500 font-mono">Quick Sparks:</span>
-                    <template x-for="a in archetypes" :key="a.title">
+                <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar">
+                    <template x-for="s in promptSparks" :key="s.title">
                         <button type="button"
-                                @click="applyArchetype(a)"
-                                class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-orange-500/15 border border-white/[0.08] hover:border-orange-500/40 text-[11px] text-slate-300 hover:text-orange-300 transition"
-                                x-text="a.title">
+                                @click="applyPromptSpark(s)"
+                                class="px-3 py-1.5 rounded-xl bg-[#090b0e] hover:bg-orange-500/15 border border-white/[0.08] hover:border-orange-500/40 text-[11px] text-slate-300 hover:text-orange-300 transition shrink-0 flex items-center gap-1.5 group cursor-pointer shadow-sm">
+                            <span x-text="s.title"></span>
+                            <span class="opacity-0 group-hover:opacity-100 text-[9px] text-orange-400 font-mono transition">↗</span>
                         </button>
                     </template>
                 </div>
             </div>
 
-            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <div class="relative flex-1">
-                    <input type="text"
-                           x-model="magicPrompt"
-                           @keydown.enter.prevent="synthesizeWithAI()"
-                           placeholder="e.g. A cyberpunk street samurai with silver hair, glowing blue katana, and matte carbon-fiber trenchcoat..."
-                           class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.1] focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 text-sm text-white px-4 py-3.5 outline-none transition placeholder-slate-500">
+            <!-- Multi-line Prompt Composer Input -->
+            <div class="space-y-3">
+                <div class="relative">
+                    <textarea x-model="magicPrompt"
+                              rows="3"
+                              placeholder="Describe your character specifics with precision:
+• Name & Age: e.g. 25-year-old French female architect named Camille
+• Wardrobe: e.g. Tailored beige trenchcoat, black turtleneck, high-waisted charcoal trousers, leather ankle boots
+• Facial Features & Hair: e.g. Dark wavy hair, hazel eyes, natural warm smile
+• Pose & Vibe: e.g. Authentic real-life female pose with relaxed contrapposto stance, carrying sketchbook..."
+                              class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.1] focus:border-orange-500 focus:ring-1 focus:ring-orange-500/30 text-xs sm:text-sm text-white px-4 py-3 outline-none transition placeholder-slate-500 leading-relaxed resize-none"></textarea>
+                    
+                    <div class="absolute bottom-3 right-3 flex items-center gap-2 pointer-events-none">
+                        <span class="text-[10px] text-slate-500 font-mono" x-show="magicPrompt.length > 0" x-text="magicPrompt.length + ' chars'"></span>
+                    </div>
                 </div>
 
-                <!-- Style Selector -->
-                <select x-model="stylePreset"
-                        class="rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3 py-3.5 outline-none focus:border-orange-500/50">
-                    <option value="cinematic">Cinematic 8K Photoreal</option>
-                    <option value="anime">Modern Anime / Manga</option>
-                    <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
-                    <option value="fantasy">Dark High Fantasy</option>
-                    <option value="pixar_3d">Stylized 3D Animation</option>
-                    <option value="vintage_cartoon">1930s Rubber-Hose</option>
-                </select>
+                <!-- Prompt Specifics Extraction Checklist / Trust Badges -->
+                <div class="flex items-center gap-3 text-[10px] font-mono text-slate-400 overflow-x-auto pb-1 flex-wrap">
+                    <span class="flex items-center gap-1 text-slate-300">
+                        <span class="text-orange-400">✓</span>
+                        <span>Name & Persona</span>
+                    </span>
+                    <span>•</span>
+                    <span class="flex items-center gap-1 text-slate-300">
+                        <span class="text-orange-400">✓</span>
+                        <span>Gender Morphology</span>
+                    </span>
+                    <span>•</span>
+                    <span class="flex items-center gap-1 text-slate-300">
+                        <span class="text-orange-400">✓</span>
+                        <span>Exact Wardrobe Fabric</span>
+                    </span>
+                    <span>•</span>
+                    <span class="flex items-center gap-1 text-slate-300">
+                        <span class="text-orange-400">✓</span>
+                        <span>Authentic Real-Life Posing</span>
+                    </span>
+                    <span>•</span>
+                    <span class="flex items-center gap-1 text-emerald-400">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Zero Prompt Drift</span>
+                    </span>
+                </div>
 
-                <!-- Generate Button -->
-                <button type="button"
-                        @click="synthesizeWithAI()"
-                        :disabled="isSynthesizing || !magicPrompt.trim()"
-                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed">
-                    <template x-if="isSynthesizing">
-                        <span class="loading loading-spinner loading-xs"></span>
-                    </template>
-                    <template x-if="!isSynthesizing">
-                        <span>✨</span>
-                    </template>
-                    <span x-text="isSynthesizing ? 'Synthesizing DNA...' : 'Generate Character & Avatar'"></span>
-                </button>
+                <!-- Action Controls Row -->
+                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                    <div class="flex items-center gap-2 flex-1">
+                        <span class="text-xs text-slate-400 shrink-0 font-mono">Visual Aesthetic:</span>
+                        <!-- Style Selector -->
+                        <select x-model="stylePreset"
+                                class="w-full sm:w-auto flex-1 rounded-2xl bg-[#0e1012] border border-white/[0.1] text-xs text-slate-200 px-3.5 py-3 outline-none focus:border-orange-500/50">
+                            <option value="cinematic">Cinematic 8K Photoreal</option>
+                            <option value="anime">Modern Anime / Manga</option>
+                            <option value="cyberpunk">Cyberpunk Neo-Tokyo</option>
+                            <option value="fantasy">Dark High Fantasy</option>
+                            <option value="pixar_3d">Stylized 3D Animation</option>
+                            <option value="vintage_cartoon">1930s Rubber-Hose</option>
+                        </select>
+                    </div>
+
+                    <!-- Generate Button -->
+                    <button type="button"
+                            @click="synthesizeWithAI()"
+                            :disabled="isSynthesizing || !magicPrompt.trim()"
+                            class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-3 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg">
+                        <template x-if="isSynthesizing">
+                            <span class="loading loading-spinner loading-xs"></span>
+                        </template>
+                        <template x-if="!isSynthesizing">
+                            <span>⚡</span>
+                        </template>
+                        <span x-text="isSynthesizing ? 'Synthesizing Prompt Specifics...' : 'Generate Character from Prompt Specifics'"></span>
+                    </button>
+                </div>
             </div>
         </div>
 
         <!-- Notification / Success / Error Banners -->
-        <div x-show="photoAnalysisNotice" x-transition class="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5 font-mono shadow-sm">
+        <div x-show="subjectIsolation" x-transition class="p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-200 text-xs flex items-start gap-2.5 font-mono shadow-sm">
+            <span class="text-base shrink-0">🎯</span>
+            <div>
+                <strong class="text-white block font-sans">Primary Subject Isolated (Multi-Person Disambiguation)</strong>
+                <span x-text="subjectIsolation"></span>
+            </div>
+        </div>
+
+        <div x-show="photoAnalysisNotice && !subjectIsolation" x-transition class="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2.5 font-mono shadow-sm">
             <span class="text-base">✨</span>
             <div>
                 <strong class="text-white block font-sans">Face Biometrics Analyzed!</strong>
@@ -457,7 +601,7 @@
         </div>
         <div x-show="aiSuccessNotice && !photoAnalysisNotice" x-transition class="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2 font-mono">
             <span>✅</span>
-            <span>Character DNA and AI Avatar Portrait synthesized successfully! Review traits below and save.</span>
+            <span>Character DNA, wardrobe, silhouette, and real-life poses synthesized strictly from your prompt specifics! Review details below before saving.</span>
         </div>
         <div x-show="errorMessage" x-transition class="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
             <span>⚠️</span>
@@ -475,6 +619,7 @@
             <form method="POST" enctype="multipart/form-data" class="fl-composer-card rounded-3xl p-5 sm:p-7 space-y-6 relative shadow-2xl">
                 {% csrf_token %}
                 <input type="hidden" name="generated_avatar_url" :value="generatedAvatarUrl">
+                <input type="hidden" name="generated_metadata" :value="generatedMetadata">
 
                 <!-- Card Header -->
                 <div class="flex items-center justify-between pb-4 border-b border-white/[0.06]">
@@ -641,30 +786,54 @@
                     </span>
                 </div>
 
-                <!-- Avatar Hero -->
-                <div class="flex items-start gap-4">
-                    <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#1b1e22] to-[#0c0d0f] border-2 border-orange-500/40 p-1 shrink-0 shadow-lg relative overflow-hidden flex items-center justify-center">
-                        <template x-if="avatarPreview">
-                            <img :src="avatarPreview" class="w-full h-full object-cover rounded-xl">
-                        </template>
-                        <template x-if="!avatarPreview">
-                            <span class="text-3xl text-orange-400">👤</span>
-                        </template>
-                    </div>
+                <!-- Full-Length Character Showcase Viewport -->
+                <div class="relative w-full aspect-[3/4] max-h-72 rounded-2xl bg-gradient-to-b from-[#1b1e22] via-[#101215] to-[#0a0b0d] border border-orange-500/30 overflow-hidden shadow-lg flex flex-col items-center justify-end group">
+                    <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(249,115,22,0.12),transparent_70%)] pointer-events-none"></div>
+                    <div class="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none z-10"></div>
 
-                    <div class="space-y-1.5 min-w-0 flex-1">
-                        <h3 class="text-lg font-extrabold text-white truncate" x-text="charName || 'Unnamed Character'"></h3>
-                        <div class="flex flex-wrap gap-1.5">
-                            <span class="px-2 py-0.5 rounded bg-orange-500/20 border border-orange-500/30 text-orange-300 text-[10px] font-bold uppercase tracking-wider">
-                                Lead Cast
-                            </span>
-                            <span class="px-2 py-0.5 rounded bg-white/[0.06] text-slate-300 text-[10px] font-mono" x-text="personality ? personality.split(',')[0] : 'Hero Protagonist'"></span>
+                    <template x-if="fullBodyUrl || avatarPreview">
+                        <img :src="fullBodyUrl || avatarPreview" class="w-full h-full object-cover object-top transition duration-300">
+                    </template>
+                    <template x-if="!fullBodyUrl && !avatarPreview">
+                        <div class="h-full w-full flex flex-col items-center justify-center text-slate-500 space-y-1">
+                            <span class="text-4xl text-orange-400/50">🧍</span>
+                            <span class="text-[10px] font-mono text-slate-500">Full-Body Standing Figure</span>
                         </div>
+                    </template>
+
+                    <!-- Top Inset Badge: Verified Isolated Face Anchor -->
+                    <template x-if="faceAnchorUrl || avatarPreview">
+                        <div class="absolute top-2.5 right-2.5 p-1 rounded-xl bg-black/80 backdrop-blur-md border border-orange-500/50 shadow-lg z-20 flex items-center gap-1.5" title="Face Anchor Locked">
+                            <div class="w-10 h-10 rounded-lg overflow-hidden border border-white/10 shrink-0">
+                                <img :src="faceAnchorUrl || avatarPreview" class="w-full h-full object-cover">
+                            </div>
+                            <span class="text-[9px] font-mono font-bold text-orange-400 pr-1 hidden sm:inline">🔒 FACE LOCK</span>
+                        </div>
+                    </template>
+
+                    <!-- Overlay Name & Lead Cast Tag -->
+                    <div class="absolute bottom-2.5 inset-x-3 z-20 flex items-center justify-between">
+                        <div class="min-w-0 flex-1 mr-2">
+                            <h3 class="text-base font-black text-white truncate drop-shadow" x-text="charName || 'Unnamed Character'"></h3>
+                            <span class="text-[10px] text-orange-300 font-mono" x-text="personality ? personality.split(',')[0] : 'Hero Protagonist'"></span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded bg-orange-500/20 border border-orange-500/30 text-orange-300 text-[9px] font-bold uppercase tracking-wider shrink-0">
+                            Lead Cast
+                        </span>
                     </div>
                 </div>
 
                 <!-- DNA Traits Grid -->
                 <div class="space-y-2.5 text-xs">
+                    <!-- Morphology & Gender Badge -->
+                    <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] flex items-center justify-between">
+                        <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Morphology:</span>
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold"
+                              :class="charGender === 'female' ? 'bg-pink-500/15 border border-pink-500/30 text-pink-300' : 'bg-blue-500/15 border border-blue-500/30 text-blue-300'">
+                            <span x-text="charGender === 'female' ? '♀ Feminine Silhouette' : '♂ Masculine Silhouette'"></span>
+                        </span>
+                    </div>
+
                     <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] space-y-1">
                         <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Physical Identity:</span>
                         <p class="text-slate-200 text-[11px] leading-relaxed" x-text="appearance || 'No appearance traits defined yet. Use the Magic Forge above to generate.'"></p>

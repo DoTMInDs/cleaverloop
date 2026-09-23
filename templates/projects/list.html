@@ -4,7 +4,7 @@
 {% block title %}Creative Projects — CleaverLoop AI (Flashloop Edition){% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto space-y-8 relative" x-data="{
+<div class="w-full space-y-8 relative" x-data="{
     newProjectModalOpen: {% if request.GET.new or request.GET.create %}true{% else %}false{% endif %},
     aspectRatio: '16:9',
     projectName: '',
@@ -21,10 +21,10 @@
     <!-- ===================================================
          FLASHLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE
          =================================================== -->
-    <div class="relative pt-2 pb-6 overflow-hidden text-center select-none">
+    <div class="relative pt-2 pb-6 overflow-hidden text-center select-none w-full">
         <!-- Ambient Flashloop Arch Lighting Background -->
         <div class="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center opacity-70">
-            <svg class="w-full max-w-5xl h-48 sm:h-64" viewBox="0 0 1200 320" fill="none" preserveAspectRatio="none">
+            <svg class="w-full h-48 sm:h-64" viewBox="0 0 1200 320" fill="none" preserveAspectRatio="none">
                 <defs>
                     <radialGradient id="fl-proj-glow" cx="50%" cy="0%" r="90%">
                         <stop offset="0%" stop-color="#fb923c" stop-opacity="0.35" />
@@ -105,10 +105,10 @@
          PROJECTS GALLERY GRID (fl-composer-card)
          =================================================== -->
     {% if projects %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 w-full">
             {% for proj in projects %}
                 <a href="{% url 'projects:detail' proj.pk %}"
-                   class="fl-composer-card rounded-3xl p-5 sm:p-6 hover:border-orange-500/40 transition-all duration-200 flex flex-col justify-between group shadow-xl relative overflow-hidden">
+                   class="fl-composer-card rounded-2xl p-5 hover:border-orange-500/50 transition-all duration-300 flex flex-col justify-between group shadow-xl relative overflow-hidden">
                     
                     <!-- Card Top Flare on Hover -->
                     <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500/0 to-transparent group-hover:via-orange-500 transition-all duration-300"></div>

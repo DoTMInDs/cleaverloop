@@ -1,16 +1,18 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Explore Community AI Cinema & Prompts — CleaverLoop AI (Flashloop Edition){% endblock %}
+{% block title %}Explore Community AI Cinema & Prompts — CleaverLoop AI (CLeaverloop Edition){% endblock %}
 
 {% block main_classes %}flex-1 w-full px-3 sm:px-6 lg:px-8 xl:px-10 py-6 pb-24 md:pb-8{% endblock %}
 
 {% block content %}
 {{ community_showcase|json_script:'community-showcase-data' }}
+{{ produce_formats|json_script:'produce-formats-data' }}
 
-<div class="w-full max-w-[1920px] mx-auto space-y-8 relative" x-data="{
+<div class="w-full space-y-16 relative" x-data="{
     searchQuery: '',
     activeTab: 'all',
+    selectedTeam: 'all',
     selectedCategory: 'all',
     sortBy: 'trending',
     likedItems: {},
@@ -18,16 +20,28 @@
     inspectModalOpen: false,
     activeItem: null,
     showcaseItems: [],
+    produceFormats: [],
+    activeFormatId: 'brand_video',
+    activeFormatData: null,
 
     init() {
-        const el = document.getElementById('community-showcase-data');
-        if (el) {
-            try {
-                this.showcaseItems = JSON.parse(el.textContent || '[]');
-            } catch (e) {
-                this.showcaseItems = [];
-            }
+        const showcaseEl = document.getElementById('community-showcase-data');
+        if (showcaseEl) {
+            try { this.showcaseItems = JSON.parse(showcaseEl.textContent || '[]'); }
+            catch (e) { this.showcaseItems = []; }
         }
+        const formatsEl = document.getElementById('produce-formats-data');
+        if (formatsEl) {
+            try {
+                this.produceFormats = JSON.parse(formatsEl.textContent || '[]');
+                this.activeFormatData = this.produceFormats.find(f => f.id === this.activeFormatId) || this.produceFormats[0];
+            } catch (e) { this.produceFormats = []; }
+        }
+    },
+
+    selectFormat(id) {
+        this.activeFormatId = id;
+        this.activeFormatData = this.produceFormats.find(f => f.id === id) || this.activeFormatData;
     },
 
     toggleLike(id) {
@@ -46,767 +60,520 @@
     },
 
     filteredItems() {
-        const rawItems = this.showcaseItems || [];
-        return rawItems.filter(item => {
-            // Tab filter
-            if (this.activeTab !== 'all' && item.type !== this.activeTab) {
-                return false;
-            }
-            // Category filter
-            if (this.selectedCategory !== 'all' && item.category !== this.selectedCategory) {
-                return false;
-            }
-            // Search query
+        const raw = this.showcaseItems || [];
+        return raw.filter(item => {
+            if (this.activeTab !== 'all' && item.type !== this.activeTab) return false;
+            if (this.selectedTeam !== 'all' && item.team !== this.selectedTeam) return false;
+            if (this.selectedCategory !== 'all' && item.category !== this.selectedCategory) return false;
             if (this.searchQuery.trim()) {
                 const q = this.searchQuery.toLowerCase();
-                const matchTitle = item.title.toLowerCase().includes(q);
-                const matchPrompt = item.prompt.toLowerCase().includes(q);
-                const matchModel = item.model_name.toLowerCase().includes(q);
-                const matchChar = item.character_name && item.character_name.toLowerCase().includes(q);
-                if (!matchTitle && !matchPrompt && !matchModel && !matchChar) return false;
+                const mTitle = (item.title || '').toLowerCase().includes(q);
+                const mPrompt = (item.prompt || '').toLowerCase().includes(q);
+                const mModel = (item.model_name || '').toLowerCase().includes(q);
+                const mCreator = (item.creator || '').toLowerCase().includes(q);
+                if (!mTitle && !mPrompt && !mModel && !mCreator) return false;
             }
             return true;
         }).sort((a, b) => {
             if (this.sortBy === 'likes') {
-                const likesA = a.likes + (this.likedItems[a.id] ? 1 : 0);
-                const likesB = b.likes + (this.likedItems[b.id] ? 1 : 0);
+                const likesA = (a.likes || 0) + (this.likedItems[a.id] ? 1 : 0);
+                const likesB = (b.likes || 0) + (this.likedItems[b.id] ? 1 : 0);
                 return likesB - likesA;
             }
             return 0;
         });
+    },
+
+    scrollCarousel(id, direction) {
+        const el = document.getElementById(id);
+        if (el) {
+            const scrollAmount = direction === 'left' ? -420 : 420;
+            el.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
     }
 }">
 
-    <!-- ===================================================
-         CLEAVERLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE
-         =================================================== -->
-    <div class="relative pt-2 pb-6 overflow-hidden text-center select-none">
-        <!-- Ambient CLEAVERloop Arch Lighting Background -->
-        <div class="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center opacity-75">
-            <svg class="w-full max-w-6xl h-48 sm:h-64" viewBox="0 0 1200 320" fill="none" preserveAspectRatio="none">
-                <defs>
-                    <radialGradient id="fl-explore-glow" cx="50%" cy="0%" r="90%">
-                        <stop offset="0%" stop-color="#fb923c" stop-opacity="0.4" />
-                        <stop offset="50%" stop-color="#ea580c" stop-opacity="0.15" />
-                        <stop offset="100%" stop-color="#111315" stop-opacity="0" />
-                    </radialGradient>
-                    <linearGradient id="fl-explore-beam" x1="0%" y1="0%" x2="0%" y2="100%">
-                        <stop offset="0%" stop-color="#f97316" stop-opacity="0.7" />
-                        <stop offset="100%" stop-color="#f97316" stop-opacity="0" />
-                    </linearGradient>
-                </defs>
-                <path d="M 100 320 Q 600 20 1100 320" stroke="url(#fl-explore-beam)" stroke-width="2" stroke-linecap="round" fill="none" />
-                <path d="M 0 320 Q 600 -30 1200 320" fill="url(#fl-explore-glow)" opacity="0.85" />
-            </svg>
+    <!-- =========================================================================
+         SECTION 1: SEE WHAT YOU CAN PRODUCE ON CLeaverLOOP (Matching Screenshot 1)
+         ========================================================================= -->
+    <section class="relative rounded-3xl p-6 sm:p-10 lg:p-12 overflow-hidden border border-white/[0.08] bg-[#0c0d10] shadow-2xl">
+        <!-- Subtle Grid Matrix Backdrop -->
+        <div class="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none"></div>
+        <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-96 h-96 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+        <!-- Section Title Header -->
+        <div class="text-center relative z-10 pb-8 sm:pb-12">
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-heading font-black tracking-tight text-white uppercase">
+                See What You Can Produce on <span class="text-orange-500">CLeaverloop</span>
+            </h2>
         </div>
 
-        <!-- Skewed Pill Badge -->
-        <div class="inline-flex items-center justify-center mb-4">
-            <div class="fl-badge-skew px-3.5 py-1 text-xs font-heading font-extrabold uppercase tracking-wider text-white shadow-lg shadow-orange-500/25 flex items-center gap-1.5">
-                <span>⚡</span>
-                <span class="fl-badge-unskew inline-block">Flashloop Discovery Feed • Trending AI Cinema & Prompts</span>
-            </div>
-        </div>
-
-        <!-- Main Heading -->
-        <h1 class="text-3xl sm:text-5xl md:text-6xl font-heading font-black tracking-tight text-white max-w-4xl mx-auto leading-tight">
-            Explore Cinematic <span class="bg-clip-text text-transparent bg-gradient-to-r from-orange-400 via-amber-300 to-yellow-400">AI Masterpieces</span>
-        </h1>
-
-        <!-- Subtitle -->
-        <p class="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto mt-3 leading-relaxed">
-            Discover viral multi-scene stories, photorealistic concept art, and high-retention video prompts generated across Google Veo 3.1, Kling 3.0 Ultra, and Flux 1.1 Pro.
-        </p>
-
-        <!-- Live Intelligence Ribbon -->
-        <div class="mt-6 flex items-center justify-center overflow-hidden py-2 border-y border-white/[0.05] bg-black/40">
-            <div class="flex items-center gap-6 text-[11px] text-slate-400 font-mono flex-wrap justify-center px-4">
-                <div class="flex items-center gap-1.5 text-orange-400">
-                    <span class="w-2 h-2 rounded-full bg-orange-400 animate-pulse"></span>
-                    <span>✨ Daily Staff Picks</span>
-                </div>
-                <span>•</span>
-                <div class="flex items-center gap-1.5 text-slate-300">
-                    <span>🔥 Viral Prompts</span>
-                </div>
-                <span>•</span>
-                <div class="flex items-center gap-1.5 text-amber-400">
-                    <span>🎭 Consistent Cast Showcase</span>
-                </div>
-                <span>•</span>
-                <div class="flex items-center gap-1.5 text-cyan-400">
-                    <span>🚀 1-Click Prompt Remake</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
-     <!-- ===================================================
-         DISCOVERY FILTER & SEARCH CONTROLS BAR
-         =================================================== -->
-    <div class="fl-composer-card rounded-3xl p-4 sm:p-5 space-y-4 shadow-2xl relative border-white/[0.08]">
-        <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <!-- Interactive 2-Column Showcase Matrix -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center relative z-10">
             
-            <!-- Live Search Bar -->
-            <div class="relative flex-1">
-                <input type="text"
-                       x-model="searchQuery"
-                       placeholder="Search prompts, engines, styles, creators, or characters (e.g. Cyberpunk, Claymation, Veo 3.1)..."
-                       class="w-full rounded-2xl bg-[#090a0c] border border-white/[0.08] focus:border-orange-500/60 focus:ring-1 focus:ring-orange-500/30 text-xs sm:text-sm text-white pl-10 pr-4 py-3 outline-none transition placeholder-slate-500">
-                <span class="absolute left-3.5 top-3.5 text-slate-500 text-sm">🔍</span>
-            </div>
-
-            <!-- Modality Filter Buttons -->
-            <div class="inline-flex p-1 rounded-2xl bg-[#0a0c0e] border border-white/[0.08] shrink-0 self-start md:self-auto">
-                <button type="button"
-                        @click="activeTab = 'all'"
-                        :class="activeTab === 'all' ? 'fl-gradient-orange-btn text-white font-bold' : 'text-slate-400 hover:text-white'"
-                        class="px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
-                    <span>🌐</span>
-                    <span>All</span>
-                </button>
-                <button type="button"
-                        @click="activeTab = 'video'"
-                        :class="activeTab === 'video' ? 'fl-gradient-orange-btn text-white font-bold' : 'text-slate-400 hover:text-white'"
-                        class="px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
-                    <span>🎬</span>
-                    <span>Videos</span>
-                </button>
-                <button type="button"
-                        @click="activeTab = 'image'"
-                        :class="activeTab === 'image' ? 'fl-gradient-orange-btn text-white font-bold' : 'text-slate-400 hover:text-white'"
-                        class="px-3.5 py-2 rounded-xl text-xs font-semibold transition flex items-center gap-1.5">
-                    <span>🖼️</span>
-                    <span>Images</span>
-                </button>
-            </div>
-
-            <!-- Sort Dropdown -->
-            <div class="shrink-0 self-start md:self-auto">
-                <select x-model="sortBy" class="rounded-2xl bg-[#0a0c0e] border border-white/[0.08] text-xs text-slate-200 px-3 py-2.5 outline-none focus:border-orange-500/50">
-                    <option value="trending">🔥 Most Trending</option>
-                    <option value="likes">⭐ Most Liked</option>
-                    <option value="newest">🕒 Newest First</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Category & Genre Chips -->
-        <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs no-scrollbar border-t border-white/[0.04] pt-3">
-            <span class="text-[11px] text-slate-500 font-mono shrink-0 mr-1">Genres:</span>
-            
-            <button type="button"
-                    @click="selectedCategory = 'all'"
-                    :class="selectedCategory === 'all' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 font-bold' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white'"
-                    class="px-3 py-1 rounded-xl border text-xs transition shrink-0">
-                All Genres
-            </button>
-
-            <button type="button"
-                    @click="selectedCategory = 'Cyberpunk / Sci-Fi'"
-                    :class="selectedCategory === 'Cyberpunk / Sci-Fi' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 font-bold' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white'"
-                    class="px-3 py-1 rounded-xl border text-xs transition shrink-0 flex items-center gap-1">
-                <span>⚡</span> Cyberpunk & Sci-Fi
-            </button>
-
-            <button type="button"
-                    @click="selectedCategory = 'Stop-Motion Clay'"
-                    :class="selectedCategory === 'Stop-Motion Clay' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 font-bold' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white'"
-                    class="px-3 py-1 rounded-xl border text-xs transition shrink-0 flex items-center gap-1">
-                <span>🧸</span> Claymation
-            </button>
-
-            <button type="button"
-                    @click="selectedCategory = 'Viral Social VFX'"
-                    :class="selectedCategory === 'Viral Social VFX' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 font-bold' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white'"
-                    class="px-3 py-1 rounded-xl border text-xs transition shrink-0 flex items-center gap-1">
-                <span>📱</span> Viral Social VFX
-            </button>
-
-            <button type="button"
-                    @click="selectedCategory = '1930s Animation'"
-                    :class="selectedCategory === '1930s Animation' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 font-bold' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white'"
-                    class="px-3 py-1 rounded-xl border text-xs transition shrink-0 flex items-center gap-1">
-                <span>🎞️</span> 1930s Rubber Hose
-            </button>
-
-            <button type="button"
-                    @click="selectedCategory = 'Dark Fantasy'"
-                    :class="selectedCategory === 'Dark Fantasy' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 font-bold' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white'"
-                    class="px-3 py-1 rounded-xl border text-xs transition shrink-0 flex items-center gap-1">
-                <span>🌌</span> Dark Fantasy
-            </button>
-        </div>
-    </div>
-
-    <!-- ===================================================
-         CLEAVERLOOP 2-TIER INTERACTIVE SCROLLABLE AUTO-CAROUSEL
-         (Full Viewport Width with Soft Edge Blur & User Scroll / Drag)
-         =================================================== -->
-    <div class="fl-carousel-viewport relative overflow-hidden py-4 space-y-4 select-none"
-         x-data="{
-             row1Speed: 0.75,
-             row2Speed: -0.75
-         }">
-        
-        <!-- Ambient Blur Glows Behind Carousel -->
-        <div class="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
-            <div class="absolute top-1/2 left-1/4 -translate-y-1/2 w-[600px] h-[340px] bg-orange-600/15 rounded-full blur-[120px]"></div>
-            <div class="absolute top-1/2 right-1/4 -translate-y-1/2 w-[600px] h-[340px] bg-amber-500/12 rounded-full blur-[120px]"></div>
-        </div>
-
-        <!-- Left & Right Edge Blur + Gradient Fade Masks -->
-        <div class="pointer-events-none absolute inset-y-0 left-0 w-20 sm:w-48 bg-gradient-to-r from-[#08090d] via-[#08090d]/80 to-transparent backdrop-blur-[3px] z-20"></div>
-        <div class="pointer-events-none absolute inset-y-0 right-0 w-20 sm:w-48 bg-gradient-to-l from-[#08090d] via-[#08090d]/80 to-transparent backdrop-blur-[3px] z-20"></div>
-
-        <!-- Carousel Row 1 (Scrolling Forward / User Scrollable) -->
-        <div class="relative group/r1" x-data="{
-            speed: 0.8,
-            isPaused: false,
-            isDragging: false,
-            startX: 0,
-            startScrollLeft: 0,
-            hasDragged: false,
-            rafId: null,
-            resumeTimeout: null,
-
-            init() {
-                const el = this.$refs.track1;
-                if (!el) return;
-
-                const step = () => {
-                    if (!this.isPaused && !this.isDragging) {
-                        el.scrollLeft += this.speed;
-                        const maxHalf = (el.scrollWidth - el.clientWidth) / 2;
-                        if (maxHalf > 100 && el.scrollLeft >= maxHalf) {
-                            el.scrollLeft -= maxHalf;
-                        } else if (el.scrollLeft <= 0) {
-                            el.scrollLeft += maxHalf;
-                        }
-                    }
-                    this.rafId = requestAnimationFrame(step);
-                };
-                this.rafId = requestAnimationFrame(step);
-
-                // Mouse wheel support for horizontal scroll
-                el.addEventListener('wheel', (e) => {
-                    this.isPaused = true;
-                    el.scrollLeft += (e.deltaX !== 0 ? e.deltaX : e.deltaY);
-                    this.queueResume();
-                }, { passive: true });
-            },
-
-            queueResume() {
-                clearTimeout(this.resumeTimeout);
-                this.resumeTimeout = setTimeout(() => { this.isPaused = false; }, 2200);
-            },
-
-            scrollLeftNav() {
-                this.isPaused = true;
-                this.$refs.track1.scrollBy({ left: -420, behavior: 'smooth' });
-                this.queueResume();
-            },
-
-            scrollRightNav() {
-                this.isPaused = true;
-                this.$refs.track1.scrollBy({ left: 420, behavior: 'smooth' });
-                this.queueResume();
-            },
-
-            startDrag(e) {
-                this.isDragging = true;
-                this.isPaused = true;
-                this.hasDragged = false;
-                this.startX = e.pageX || (e.touches && e.touches[0].pageX);
-                this.startScrollLeft = this.$refs.track1.scrollLeft;
-            },
-
-            onDrag(e) {
-                if (!this.isDragging) return;
-                const currentX = e.pageX || (e.touches && e.touches[0].pageX);
-                const dx = currentX - this.startX;
-                if (Math.abs(dx) > 5) this.hasDragged = true;
-                this.$refs.track1.scrollLeft = this.startScrollLeft - dx;
-            },
-
-            stopDrag() {
-                if (!this.isDragging) return;
-                this.isDragging = false;
-                this.queueResume();
-            },
-
-            handleCardClick(item) {
-                if (!this.hasDragged) {
-                    openInspectModal(item);
-                }
-            }
-        }">
-            <!-- Left & Right Hover Quick Scroll Arrow Buttons -->
-            <button type="button"
-                    @click="scrollLeftNav()"
-                    class="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-2xl bg-black/80 hover:bg-orange-600 border border-white/10 hover:border-orange-400/60 text-white items-center justify-center backdrop-blur-xl shadow-2xl opacity-0 group-hover/r1:opacity-100 transition-all duration-300 hover:scale-110">
-                <span class="text-xl font-bold">‹</span>
-            </button>
-            <button type="button"
-                    @click="scrollRightNav()"
-                    class="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-2xl bg-black/80 hover:bg-orange-600 border border-white/10 hover:border-orange-400/60 text-white items-center justify-center backdrop-blur-xl shadow-2xl opacity-0 group-hover/r1:opacity-100 transition-all duration-300 hover:scale-110">
-                <span class="text-xl font-bold">›</span>
-            </button>
-
-            <!-- Scrollable Track Container -->
-            <div x-ref="track1"
-                 @mouseenter="isPaused = true"
-                 @mouseleave="if (!isDragging) isPaused = false"
-                 @mousedown="startDrag($event)"
-                 @mousemove="onDrag($event)"
-                 @mouseup="stopDrag()"
-                 @mouseleave="stopDrag()"
-                 @touchstart="startDrag($event)"
-                 @touchmove="onDrag($event)"
-                 @touchend="stopDrag()"
-                 class="overflow-x-auto flex items-center gap-3 sm:gap-4 pl-6 pr-6 no-scrollbar cursor-grab active:cursor-grabbing py-1 scroll-smooth">
-                
-                <!-- Repeat showcase items for seamless infinite scroll stream -->
-                <template x-for="item in (showcaseItems.concat(showcaseItems))" :key="'r1-' + Math.random() + item.id">
-                    <div @click="handleCardClick(item)"
-                         class="rounded-2xl sm:rounded-3xl bg-[#111316] border border-white/[0.08] hover:border-orange-500/70 overflow-hidden cursor-pointer shrink-0 transition-all duration-300 group shadow-2xl relative"
-                         :style="item.aspect_ratio === '9:16' ? 'width: 175px; height: 260px;' : (item.aspect_ratio === '21:9' ? 'width: 480px; height: 260px;' : (item.aspect_ratio === '1:1' ? 'width: 260px; height: 260px;' : 'width: 390px; height: 260px;'))">
-                        
-                        <template x-if="item.media_url && (item.media_url.endsWith('.mp4') || item.media_url.endsWith('.webm') || item.type === 'video')">
-                            <video :src="item.media_url" autoplay loop muted playsinline class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"></video>
-                        </template>
-                        <template x-if="!item.media_url || (!item.media_url.endsWith('.mp4') && !item.media_url.endsWith('.webm') && item.type !== 'video')">
-                            <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none">
-                        </template>
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent opacity-80 group-hover:opacity-95 transition-opacity"></div>
-                        
-                        <!-- Top Badges -->
-                        <div class="absolute top-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono pointer-events-none">
-                            <span class="px-2.5 py-1 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-white font-bold" x-text="item.type === 'video' ? '🎬 ' + item.duration + 's' : '🖼️ 4K'"></span>
-                            <span class="px-2 py-1 rounded-xl bg-orange-500/30 backdrop-blur-md text-orange-300 font-bold" x-text="item.aspect_ratio"></span>
-                        </div>
-
-                        <!-- Bottom Content -->
-                        <div class="absolute bottom-3 left-3 right-3 space-y-1 pointer-events-none">
-                            <div class="text-xs font-bold text-white group-hover:text-orange-300 transition truncate" x-text="item.title"></div>
-                            <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                                <span class="truncate max-w-[140px]" x-text="item.creator || item.model_name"></span>
-                                <span class="text-orange-400 font-bold group-hover:underline flex items-center gap-1 shrink-0">
-                                    <span>Remake</span>
-                                    <span>↗</span>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        <!-- Carousel Row 2 (Scrolling Reverse / User Scrollable) -->
-        <div class="relative group/r2" x-data="{
-            speed: -0.8,
-            isPaused: false,
-            isDragging: false,
-            startX: 0,
-            startScrollLeft: 0,
-            hasDragged: false,
-            rafId: null,
-            resumeTimeout: null,
-
-            init() {
-                const el = this.$refs.track2;
-                if (!el) return;
-
-                // Set initial center offset for smooth reverse motion
-                setTimeout(() => {
-                    const half = (el.scrollWidth - el.clientWidth) / 2;
-                    if (half > 100) el.scrollLeft = half;
-                }, 100);
-
-                const step = () => {
-                    if (!this.isPaused && !this.isDragging) {
-                        el.scrollLeft += this.speed;
-                        const maxHalf = (el.scrollWidth - el.clientWidth) / 2;
-                        if (maxHalf > 100 && el.scrollLeft <= 0) {
-                            el.scrollLeft += maxHalf;
-                        } else if (maxHalf > 100 && el.scrollLeft >= maxHalf * 2) {
-                            el.scrollLeft -= maxHalf;
-                        }
-                    }
-                    this.rafId = requestAnimationFrame(step);
-                };
-                this.rafId = requestAnimationFrame(step);
-
-                // Mouse wheel support
-                el.addEventListener('wheel', (e) => {
-                    this.isPaused = true;
-                    el.scrollLeft += (e.deltaX !== 0 ? e.deltaX : e.deltaY);
-                    this.queueResume();
-                }, { passive: true });
-            },
-
-            queueResume() {
-                clearTimeout(this.resumeTimeout);
-                this.resumeTimeout = setTimeout(() => { this.isPaused = false; }, 2200);
-            },
-
-            scrollLeftNav() {
-                this.isPaused = true;
-                this.$refs.track2.scrollBy({ left: -420, behavior: 'smooth' });
-                this.queueResume();
-            },
-
-            scrollRightNav() {
-                this.isPaused = true;
-                this.$refs.track2.scrollBy({ left: 420, behavior: 'smooth' });
-                this.queueResume();
-            },
-
-            startDrag(e) {
-                this.isDragging = true;
-                this.isPaused = true;
-                this.hasDragged = false;
-                this.startX = e.pageX || (e.touches && e.touches[0].pageX);
-                this.startScrollLeft = this.$refs.track2.scrollLeft;
-            },
-
-            onDrag(e) {
-                if (!this.isDragging) return;
-                const currentX = e.pageX || (e.touches && e.touches[0].pageX);
-                const dx = currentX - this.startX;
-                if (Math.abs(dx) > 5) this.hasDragged = true;
-                this.$refs.track2.scrollLeft = this.startScrollLeft - dx;
-            },
-
-            stopDrag() {
-                if (!this.isDragging) return;
-                this.isDragging = false;
-                this.queueResume();
-            },
-
-            handleCardClick(item) {
-                if (!this.hasDragged) {
-                    openInspectModal(item);
-                }
-            }
-        }">
-            <!-- Left & Right Hover Quick Scroll Arrow Buttons -->
-            <button type="button"
-                    @click="scrollLeftNav()"
-                    class="hidden sm:flex absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-2xl bg-black/80 hover:bg-orange-600 border border-white/10 hover:border-orange-400/60 text-white items-center justify-center backdrop-blur-xl shadow-2xl opacity-0 group-hover/r2:opacity-100 transition-all duration-300 hover:scale-110">
-                <span class="text-xl font-bold">‹</span>
-            </button>
-            <button type="button"
-                    @click="scrollRightNav()"
-                    class="hidden sm:flex absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-2xl bg-black/80 hover:bg-orange-600 border border-white/10 hover:border-orange-400/60 text-white items-center justify-center backdrop-blur-xl shadow-2xl opacity-0 group-hover/r2:opacity-100 transition-all duration-300 hover:scale-110">
-                <span class="text-xl font-bold">›</span>
-            </button>
-
-            <!-- Scrollable Track Container -->
-            <div x-ref="track2"
-                 @mouseenter="isPaused = true"
-                 @mouseleave="if (!isDragging) isPaused = false"
-                 @mousedown="startDrag($event)"
-                 @mousemove="onDrag($event)"
-                 @mouseup="stopDrag()"
-                 @mouseleave="stopDrag()"
-                 @touchstart="startDrag($event)"
-                 @touchmove="onDrag($event)"
-                 @touchend="stopDrag()"
-                 class="overflow-x-auto flex items-center gap-3 sm:gap-4 pl-6 pr-6 no-scrollbar cursor-grab active:cursor-grabbing py-1 scroll-smooth">
-                
-                <template x-for="item in (showcaseItems.slice().reverse().concat(showcaseItems.slice().reverse()))" :key="'r2-' + Math.random() + item.id">
-                    <div @click="handleCardClick(item)"
-                         class="rounded-2xl sm:rounded-3xl bg-[#111316] border border-white/[0.08] hover:border-orange-500/70 overflow-hidden cursor-pointer shrink-0 transition-all duration-300 group shadow-2xl relative"
-                         :style="item.aspect_ratio === '9:16' ? 'width: 175px; height: 260px;' : (item.aspect_ratio === '21:9' ? 'width: 480px; height: 260px;' : (item.aspect_ratio === '1:1' ? 'width: 260px; height: 260px;' : 'width: 390px; height: 260px;'))">
-                        
-                        <template x-if="item.media_url && (item.media_url.endsWith('.mp4') || item.media_url.endsWith('.webm') || item.type === 'video')">
-                            <video :src="item.media_url" autoplay loop muted playsinline class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none"></video>
-                        </template>
-                        <template x-if="!item.media_url || (!item.media_url.endsWith('.mp4') && !item.media_url.endsWith('.webm') && item.type !== 'video')">
-                            <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 pointer-events-none">
-                        </template>
-                        <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent opacity-80 group-hover:opacity-95 transition-opacity"></div>
-                        
-                        <!-- Top Badges -->
-                        <div class="absolute top-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono pointer-events-none">
-                            <span class="px-2.5 py-1 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-white font-bold" x-text="item.type === 'video' ? '🎬 ' + item.duration + 's' : '🖼️ 4K'"></span>
-                            <span class="px-2 py-1 rounded-xl bg-orange-500/30 backdrop-blur-md text-orange-300 font-bold" x-text="item.aspect_ratio"></span>
-                        </div>
-
-                        <!-- Bottom Content -->
-                        <div class="absolute bottom-3 left-3 right-3 space-y-1 pointer-events-none">
-                            <div class="text-xs font-bold text-white group-hover:text-orange-300 transition truncate" x-text="item.title"></div>
-                            <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                                <span class="truncate max-w-[140px]" x-text="item.creator || item.model_name"></span>
-                                <span class="text-orange-400 font-bold group-hover:underline flex items-center gap-1 shrink-0">
-                                    <span>Remake</span>
-                                    <span>↗</span>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-    </div>
-
-    <!-- ===================================================
-         MASONRY SHOWCASE GALLERY GRID (Full Width, Compact Multi-Column)
-         =================================================== -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3.5 sm:gap-4">
-        <template x-for="item in filteredItems()" :key="item.id">
-            <div class="fl-composer-card rounded-2xl overflow-hidden hover:border-orange-500/50 transition-all duration-250 group flex flex-col justify-between shadow-xl relative border-white/[0.07]">
-                
-                <!-- Media Viewport Header (Compact 16:10) -->
-                <div class="relative bg-black aspect-[16/10] overflow-hidden cursor-pointer"
-                     @click="openInspectModal(item)">
-                    
-                    <!-- Media Asset (Image / Video Preview) -->
-                    <template x-if="item.media_url && (item.media_url.endsWith('.mp4') || item.media_url.endsWith('.webm') || item.type === 'video')">
-                        <video :src="item.media_url" autoplay loop muted playsinline class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"></video>
-                    </template>
-                    <template x-if="!item.media_url || (!item.media_url.endsWith('.mp4') && !item.media_url.endsWith('.webm') && item.type !== 'video')">
-                        <img :src="item.media_url" :alt="item.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
-                    </template>
-
-                    <!-- Overlay Gradient Protection -->
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none"></div>
-
-                    <!-- Top Badges -->
-                    <div class="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none">
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider bg-black/75 backdrop-blur-md border border-white/10 text-white font-mono flex items-center gap-1">
-                                <span x-text="item.type === 'video' ? '🎬 ' + item.duration + 's' : '🖼️ 4K'"></span>
-                            </span>
-                            <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-orange-500/30 backdrop-blur-md border border-orange-500/40 text-orange-300 font-mono truncate max-w-[100px]"
-                                  x-text="item.model_name"></span>
-                        </div>
-
-                        <!-- Staff Pick Star Badge -->
-                        <template x-if="item.is_staff_pick">
-                            <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-500/25 backdrop-blur-md border border-amber-500/40 text-amber-300 flex items-center gap-0.5 font-mono">
-                                <span>⭐</span>
-                            </span>
-                        </template>
-                    </div>
-
-                    <!-- Quick Play / Inspect Center Icon -->
-                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <div class="w-9 h-9 rounded-xl bg-orange-500/85 backdrop-blur-md flex items-center justify-center text-white text-sm shadow-xl transform scale-90 group-hover:scale-100 transition-transform">
-                            <span x-text="item.type === 'video' ? '▶' : '🔍'"></span>
-                        </div>
-                    </div>
-
-                    <!-- Bottom Media Info: Aspect Ratio & Character -->
-                    <div class="absolute bottom-1.5 left-2 right-2 flex items-center justify-between text-[10px] text-slate-300 pointer-events-none">
-                        <span class="font-mono text-[9px] bg-black/70 px-1.5 py-0.5 rounded backdrop-blur-sm" x-text="item.aspect_ratio"></span>
-                        <template x-if="item.character_name">
-                            <span class="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-300 text-[9px] font-mono flex items-center gap-0.5 truncate max-w-[110px]">
-                                <span>👤</span>
-                                <span x-text="item.character_name"></span>
-                            </span>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Card Body & Prompt Breakdown -->
-                <div class="p-3.5 space-y-2.5 flex-1 flex flex-col justify-between">
-                    <div class="space-y-1.5">
-                        <!-- Creator Row & Likes -->
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center gap-1.5 min-w-0">
-                                <div class="w-5 h-5 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 text-white font-bold text-[9px] flex items-center justify-center shrink-0"
-                                     x-text="item.avatar_letter"></div>
-                                <span class="text-[11px] font-semibold text-slate-300 truncate" x-text="item.creator"></span>
-                            </div>
-
-                            <!-- Interactive Heart / Like Button -->
-                            <button type="button"
-                                    @click="toggleLike(item.id)"
-                                    class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/[0.04] hover:bg-rose-500/10 border border-white/[0.06] text-[10px] transition group/heart shrink-0">
-                                <span :class="likedItems[item.id] ? 'text-rose-500 scale-125' : 'text-slate-400 group-hover/heart:text-rose-400'" class="transition-transform duration-150">❤️</span>
-                                <span class="font-mono" :class="likedItems[item.id] ? 'text-rose-300 font-bold' : 'text-slate-400'"
-                                      x-text="item.likes + (likedItems[item.id] ? 1 : 0)"></span>
-                            </button>
-                        </div>
-
-                        <!-- Title & Prompt Snippet -->
-                        <h3 class="text-xs font-bold text-white group-hover:text-orange-300 transition line-clamp-1" x-text="item.title"></h3>
-                        <p class="text-[11px] text-slate-400 line-clamp-2 leading-relaxed" x-text="item.prompt"></p>
-                    </div>
-
-                    <!-- Action Bar: Remake in Studio + Copy Prompt -->
-                    <div class="pt-2 border-t border-white/[0.05] flex items-center justify-between gap-1.5">
-                        <!-- Copy Prompt Button -->
+            <!-- Left Column (5 cols): Format Tab Switcher -->
+            <div class="lg:col-span-5 space-y-4">
+                <template x-for="fmt in produceFormats" :key="fmt.id">
+                    <div class="transition-all duration-300">
                         <button type="button"
-                                @click="copyPrompt(item.prompt, item.id)"
-                                class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 text-[10px] font-semibold transition flex items-center gap-1">
-                            <span x-text="copiedId === item.id ? '✓' : '📋'"></span>
-                            <span x-text="copiedId === item.id ? 'Copied' : 'Prompt'"></span>
+                                @click="selectFormat(fmt.id)"
+                                class="text-left w-full transition-all duration-200 group flex flex-col py-1">
+                            <span class="text-base sm:text-lg font-heading font-black tracking-wider uppercase transition-colors"
+                                  :class="activeFormatId === fmt.id ? 'text-white text-xl sm:text-2xl' : 'text-slate-500 hover:text-slate-300'"
+                                  x-text="fmt.label">
+                            </span>
                         </button>
 
-                        <!-- Remake in Studio Button -->
-                        <a :href="'{% url 'studio:create' %}?prompt=' + encodeURIComponent(item.prompt) + '&type=' + item.type + '&aspect=' + encodeURIComponent(item.aspect_ratio || '16:9') + '&duration=' + (item.duration || 5)"
-                           class="fl-gradient-orange-btn text-white rounded-lg px-3 py-1 font-heading font-black text-[10px] uppercase tracking-wider transition-all duration-200 hover:scale-105 flex items-center gap-1 shadow-sm">
-                            <span>✨</span>
-                            <span>Remake</span>
-                        </a>
+                        <!-- Expanded Active Info Box -->
+                        <div x-show="activeFormatId === fmt.id"
+                             x-collapse
+                             class="pt-1.5 pb-3 space-y-2.5">
+                            <p class="text-xs sm:text-sm text-slate-300 leading-relaxed" x-text="fmt.desc"></p>
+                            <a :href="'{% url 'studio:create' %}?format=' + fmt.id + '&prompt=' + encodeURIComponent(fmt.create_prompt) + '&aspect_ratio=' + fmt.aspect_ratio"
+                               class="inline-flex items-center gap-1.5 text-xs font-bold text-orange-400 hover:text-orange-300 group/link transition">
+                                <span>Create this</span>
+                                <span class="group-hover/link:translate-x-1 transition-transform">→</span>
+                            </a>
+                        </div>
                     </div>
-                </div>
+                </template>
             </div>
-        </template>
-    </div>
 
-    <!-- ===================================================
-         INSPECTOR MASTERPIECE MODAL DIALOG
-         =================================================== -->
-    <div x-show="inspectModalOpen"
-         x-transition:enter="transition ease-out duration-200"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-150"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         @keydown.escape.window="inspectModalOpen = false"
-         class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-md"
-         style="display: none;">
-        
-        <template x-if="activeItem">
-            <div @click.outside="inspectModalOpen = false"
-                 class="fl-composer-card rounded-3xl max-w-3xl w-full space-y-5 shadow-2xl relative border-orange-500/40 overflow-hidden max-h-[90vh] flex flex-col">
-                
-                <!-- Ambient Flare -->
-                <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent"></div>
+            <!-- Right Column (7 cols): Cinematic Media Frame -->
+            <div class="lg:col-span-7">
+                <div class="relative w-full aspect-video rounded-2xl bg-black border border-white/10 overflow-hidden shadow-2xl flex items-center justify-center group">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10 pointer-events-none"></div>
 
-                <!-- Modal Header -->
-                <div class="p-5 sm:p-6 pb-0 flex items-center justify-between gap-3">
-                    <div class="flex items-center gap-2.5 min-w-0">
-                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-orange-500 to-amber-500 text-white font-bold text-xs flex items-center justify-center shrink-0"
-                             x-text="activeItem.avatar_letter"></div>
-                        <div class="min-w-0">
-                            <h3 class="text-base font-bold text-white truncate" x-text="activeItem.title"></h3>
-                            <p class="text-xs text-slate-400 font-mono" x-text="'Created by ' + activeItem.creator + ' • ' + activeItem.category"></p>
-                        </div>
-                    </div>
-
-                    <button type="button"
-                            @click="inspectModalOpen = false"
-                            class="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-400 hover:text-white flex items-center justify-center text-sm transition shrink-0">
-                        ✕
-                    </button>
-                </div>
-
-                <!-- Scrollable Modal Content -->
-                <div class="p-5 sm:p-6 space-y-5 overflow-y-auto flex-1">
-                    <!-- Media Showcase Viewport (Preserves True 9:16 / 1:1 / 16:9 / 21:9 Aspect Ratio) -->
-                    <div class="rounded-2xl overflow-hidden bg-[#060709] border border-white/10 relative flex items-center justify-center max-h-[55vh] min-h-[220px] p-2">
-                        <!-- Ambient blurred backdrop for aesthetic framing -->
-                        <div class="absolute inset-0 overflow-hidden opacity-25 blur-2xl pointer-events-none">
-                            <img :src="activeItem.media_url" class="w-full h-full object-cover">
-                        </div>
-
-                        <!-- Video Player if video file -->
-                        <template x-if="activeItem.media_url && activeItem.media_url.endsWith('.mp4')">
-                            <video :src="activeItem.media_url"
-                                   controls autoplay loop muted playsinline
-                                   class="max-h-[52vh] max-w-full w-auto h-auto rounded-xl shadow-2xl relative z-10"
-                                   :class="{
-                                       'aspect-[9/16]': activeItem.aspect_ratio === '9:16',
-                                       'aspect-square': activeItem.aspect_ratio === '1:1',
-                                       'aspect-video': activeItem.aspect_ratio === '16:9',
-                                       'aspect-[21/9]': activeItem.aspect_ratio === '21:9'
-                                   }"></video>
-                        </template>
-
-                        <!-- Image Asset in True Aspect Ratio -->
-                        <template x-if="!activeItem.media_url || !activeItem.media_url.endsWith('.mp4')">
-                            <img :src="activeItem.media_url"
-                                 :alt="activeItem.title"
-                                 class="max-h-[52vh] max-w-full w-auto h-auto object-contain rounded-xl shadow-2xl relative z-10 transition-all"
-                                 :class="{
-                                     'aspect-[9/16]': activeItem.aspect_ratio === '9:16',
-                                     'aspect-square': activeItem.aspect_ratio === '1:1',
-                                     'aspect-video': activeItem.aspect_ratio === '16:9',
-                                     'aspect-[21/9]': activeItem.aspect_ratio === '21:9'
-                                 }">
-                        </template>
-
-                        <!-- Top Right Aspect Badge -->
-                        <div class="absolute top-3 right-3 z-20 pointer-events-none">
-                            <span class="px-2.5 py-1 rounded-xl bg-black/80 backdrop-blur-md border border-white/15 text-orange-400 font-mono text-[10px] font-bold shadow-lg flex items-center gap-1">
-                                <span>📐</span>
-                                <span x-text="activeItem.aspect_ratio"></span>
-                            </span>
-                        </div>
-                    </div>
-
-                    <!-- Master Prompt Box -->
-                    <div class="space-y-2">
-                        <div class="flex items-center justify-between">
-                            <label class="text-[11px] font-bold uppercase tracking-wider text-orange-400 font-mono flex items-center gap-1.5">
-                                <span>✨ Master Directorial Prompt</span>
-                            </label>
-                            <button type="button"
-                                    @click="copyPrompt(activeItem.prompt, 'modal')"
-                                    class="text-[11px] text-slate-400 hover:text-white transition flex items-center gap-1">
-                                <span x-text="copiedId === 'modal' ? '✓ Copied' : '📋 Copy Prompt'"></span>
-                            </button>
-                        </div>
-                        <div class="p-4 rounded-2xl bg-[#0a0c0e] border border-white/[0.08] text-xs text-slate-200 leading-relaxed font-mono">
-                            <p x-text="activeItem.prompt"></p>
-                        </div>
-                    </div>
-
-                    <!-- Negative Prompt -->
-                    <template x-if="activeItem.negative_prompt">
-                        <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400 font-mono">
-                                <span>🚫 Negative Prompt</span>
-                            </label>
-                            <div class="p-3 rounded-xl bg-[#0a0c0e] border border-white/[0.06] text-xs text-slate-400 font-mono">
-                                <p x-text="activeItem.negative_prompt"></p>
-                            </div>
-                        </div>
+                    <!-- Video Preview if media is video -->
+                    <template x-if="activeFormatData && activeFormatData.media_type === 'video'">
+                        <video :src="activeFormatData.media_url"
+                               autoplay
+                               loop
+                               muted
+                               playsinline
+                               class="w-full h-full object-cover">
+                        </video>
                     </template>
 
-                    <!-- Technical Parameters Matrix -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
-                        <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] space-y-0.5">
-                            <span class="text-[10px] uppercase text-slate-500 block">Engine Model</span>
-                            <span class="text-white font-bold truncate block" x-text="activeItem.model_name"></span>
-                        </div>
-                        <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] space-y-0.5">
-                            <span class="text-[10px] uppercase text-slate-500 block">Aspect Ratio</span>
-                            <span class="text-orange-400 font-bold block" x-text="activeItem.aspect_ratio"></span>
-                        </div>
-                        <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] space-y-0.5">
-                            <span class="text-[10px] uppercase text-slate-500 block">Duration / Modality</span>
-                            <span class="text-cyan-400 font-bold block" x-text="activeItem.type === 'video' ? activeItem.duration + ' Seconds' : 'Photoreal Still'"></span>
-                        </div>
-                        <div class="p-3 rounded-xl bg-[#0c0e10] border border-white/[0.05] space-y-0.5">
-                            <span class="text-[10px] uppercase text-slate-500 block">Seed</span>
-                            <span class="text-slate-300 font-bold truncate block" x-text="activeItem.seed"></span>
-                        </div>
+                    <!-- Image Preview if media is image -->
+                    <template x-if="!activeFormatData || activeFormatData.media_type !== 'video'">
+                        <img :src="activeFormatData ? activeFormatData.media_url : '/static/images/showcase/brand_video_car.jpg'"
+                             :alt="activeFormatData ? activeFormatData.heading : 'Brand Video'"
+                             class="w-full h-full object-cover transition duration-500 group-hover:scale-105">
+                    </template>
+
+                    <!-- Bottom Overlay Badge -->
+                    <div class="absolute bottom-4 left-4 z-20 flex items-center gap-2">
+                        <span class="px-3 py-1 rounded-full bg-black/80 backdrop-blur-md border border-white/10 text-[10px] font-mono font-bold text-orange-400 flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span>
+                            <span x-text="activeFormatData ? activeFormatData.heading : 'Brand Video'"></span>
+                        </span>
                     </div>
-                </div>
 
-                <!-- Modal Footer -->
-                <div class="p-5 sm:p-6 pt-0 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-white/[0.06] pt-4">
-                    <button type="button"
-                            @click="inspectModalOpen = false"
-                            class="text-xs text-slate-400 hover:text-white transition order-2 sm:order-1">
-                        Close Inspector
-                    </button>
-
-                    <a :href="'{% url 'studio:create' %}?prompt=' + encodeURIComponent(activeItem.prompt) + '&type=' + activeItem.type + '&aspect=' + encodeURIComponent(activeItem.aspect_ratio || '16:9') + '&duration=' + (activeItem.duration || 5)"
-                       class="fl-gradient-orange-btn fl-glow-orange text-white border-none rounded-xl px-7 py-3 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] flex items-center justify-center gap-2 w-full sm:w-auto shadow-2xl order-1 sm:order-2">
-                        <span>🚀</span>
-                        <span>Open & Remake in Studio</span>
+                    <!-- Quick 1-Click Remix Button in Corner -->
+                    <a :href="'{% url 'studio:create' %}?prompt=' + encodeURIComponent(activeFormatData ? activeFormatData.create_prompt : '')"
+                       class="absolute bottom-4 right-4 z-20 fl-gradient-orange-btn fl-glow-orange text-white text-[11px] font-bold px-3.5 py-1.5 rounded-xl flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span>⚡</span>
+                        <span>Remix</span>
                     </a>
                 </div>
             </div>
-        </template>
+        </div>
+    </section>
+
+    <!-- =========================================================================
+         SECTION: CLeaverLOOP STUDIO SUITE & CAPABILITIES (Matching User Screenshot)
+         ========================================================================= -->
+    <section class="relative">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            
+            <!-- Left Card: CLeaverLOOP STUDIO Spotlight Card (5 cols on lg) -->
+            <div class="lg:col-span-5 rounded-3xl bg-[#0e1117] border border-white/[0.08] p-6 sm:p-7 relative overflow-hidden flex flex-col justify-between group shadow-2xl">
+                <!-- Warm Amber Background Glow -->
+                <div class="absolute -right-8 -top-8 w-60 h-60 bg-orange-600/15 rounded-full blur-[70px] pointer-events-none"></div>
+                <div class="absolute -left-8 -bottom-8 w-48 h-48 bg-amber-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center relative z-10 h-full">
+                    <!-- Left Column: Copy & CTA -->
+                    <div class="sm:col-span-7 flex flex-col justify-between h-full py-1 space-y-6">
+                        <div class="space-y-2.5">
+                            <h3 class="text-2xl sm:text-3xl font-heading font-black tracking-tight text-white uppercase leading-none">
+                                CLeaverloop Studio
+                            </h3>
+                            <p class="text-xs sm:text-sm text-slate-400 font-normal leading-relaxed max-w-[220px]">
+                                Recurring characters, series built to binge, and audiences that come back.
+                            </p>
+                        </div>
+
+                        <div>
+                            <a href="{% url 'studio:create' %}"
+                               class="inline-flex items-center gap-2 bg-[#f95716] hover:bg-[#ea4908] text-white font-bold text-xs sm:text-sm px-5 py-2.5 rounded-xl shadow-lg shadow-orange-500/25 transition-all group/btn">
+                                <span>Try now</span>
+                                <span class="group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform font-mono text-sm">↗</span>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Character Badges on Amber Checkerboard Graphic -->
+                    <div class="sm:col-span-5 relative h-40 sm:h-48 rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-black/40">
+                        <img src="{% static 'images/showcase/studio_feature_characters.jpg' %}"
+                             alt="CLeaverloop Studio Recurring Characters"
+                             class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#0e1117]/60 via-transparent to-transparent pointer-events-none"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Grid: 6 Capability Cards (7 cols on lg, 3x2 matrix) -->
+            <div class="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                
+                <!-- Card 1: Create images (GPT Image 2) -->
+                <a href="{% url 'studio:create' %}?tab=image&model=gpt-image-2"
+                   class="group rounded-2xl bg-[#0e1117] border border-white/[0.08] hover:border-white/20 hover:bg-[#131720] p-5 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-xl">
+                    <div class="w-8 h-8 flex items-center justify-center text-white group-hover:text-orange-400 transition-colors">
+                        <!-- OpenAI GPT swirl icon -->
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M22.28 9.82a5.98 5.98 0 0 0-.51-4.91 6.05 6.05 0 0 0-6.51-2.9 6.06 6.06 0 0 0-10.28 2.18 5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.51 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.2 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.08zm-9.02 12.61a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.8.8 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.5zm-9.66-4.13a4.47 4.47 0 0 1-.54-3.01l.14.08 4.79 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.48 4.48 0 0 1 2.37-1.98v5.68a.77.77 0 0 0 .38.68l5.82 3.35-2.02 1.17a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.9zm16.1 3.85L12.6 8.38l2.02-1.17a.08.08 0 0 1 .07 0l4.83 2.79a4.5 4.5 0 0 1-.67 8.1v-5.67a.79.79 0 0 0-.41-.68zm2.01-3.02l-.14-.09-4.78-2.78a.78.78 0 0 0-.78 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08L8.7 5.46a.8.8 0 0 0-.39.68v6.72zm1.14-1.94L12 9.48l2.55 1.45v2.9L12 15.28l-2.55-1.45v-2.9z"/>
+                        </svg>
+                    </div>
+                    <div class="mt-4 space-y-0.5">
+                        <h4 class="text-white font-heading font-bold text-sm sm:text-base group-hover:text-orange-400 transition-colors">Create images</h4>
+                        <p class="text-xs text-slate-400 font-normal">with GPT Image 2</p>
+                    </div>
+                </a>
+
+                <!-- Card 2: Edit by typing (Nano Banana 2) -->
+                <a href="{% url 'studio:create' %}?tab=edit&model=nano-banana-2"
+                   class="group rounded-2xl bg-[#0e1117] border border-white/[0.08] hover:border-white/20 hover:bg-[#131720] p-5 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-xl">
+                    <div class="w-8 h-8 flex items-center justify-center text-white group-hover:text-orange-400 transition-colors">
+                        <!-- Sparkle ✦ icon -->
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"/>
+                        </svg>
+                    </div>
+                    <div class="mt-4 space-y-0.5">
+                        <h4 class="text-white font-heading font-bold text-sm sm:text-base group-hover:text-orange-400 transition-colors">Edit by typing</h4>
+                        <p class="text-xs text-slate-400 font-normal">with Nano Banana 2</p>
+                    </div>
+                </a>
+
+                <!-- Card 3: Multi-shot scenes (Kling 3.0) -->
+                <a href="{% url 'studio:create' %}?mode=multishot&model=kling-3"
+                   class="group rounded-2xl bg-[#0e1117] border border-white/[0.08] hover:border-white/20 hover:bg-[#131720] p-5 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-xl">
+                    <div class="w-8 h-8 flex items-center justify-center text-white group-hover:text-orange-400 transition-colors">
+                        <!-- Multi-shot rotating arcs icon -->
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <path d="M21 12a9 9 0 0 0-9-9c-2.4 0-4.6 1-6.2 2.6L7 7"/>
+                            <path d="M3 12a9 9 0 0 0 9 9c2.4 0 4.6-1 6.2-2.6L17 17"/>
+                        </svg>
+                    </div>
+                    <div class="mt-4 space-y-0.5">
+                        <h4 class="text-white font-heading font-bold text-sm sm:text-base group-hover:text-orange-400 transition-colors">Multi-shot scenes</h4>
+                        <p class="text-xs text-slate-400 font-normal">with Kling 3.0</p>
+                    </div>
+                </a>
+
+                <!-- Card 4: Connect your agent (CLeaverloop MCP) -->
+                <a href="{% url 'studio:create' %}?connect=agent-mcp"
+                   class="group rounded-2xl bg-[#0e1117] border border-white/[0.08] hover:border-white/20 hover:bg-[#131720] p-5 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-xl">
+                    <div class="w-8 h-8 flex items-center justify-center text-white group-hover:text-orange-400 transition-colors">
+                        <!-- Starburst Asterisk ✹ icon -->
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                            <line x1="12" y1="2" x2="12" y2="22"/>
+                            <line x1="2" y1="12" x2="22" y2="12"/>
+                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+                            <line x1="19.07" y1="4.93" x2="4.93" y2="19.07"/>
+                        </svg>
+                    </div>
+                    <div class="mt-4 space-y-0.5">
+                        <h4 class="text-white font-heading font-bold text-sm sm:text-base group-hover:text-orange-400 transition-colors">Connect your agent</h4>
+                        <p class="text-xs text-slate-400 font-normal">with CLeaverloop MCP</p>
+                    </div>
+                </a>
+
+                <!-- Card 5: Create your cast (Characters) -->
+                <a href="{% url 'characters:list' %}"
+                   class="group rounded-2xl bg-[#0e1117] border border-white/[0.08] hover:border-white/20 hover:bg-[#131720] p-5 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-xl">
+                    <div class="w-8 h-8 flex items-center justify-center text-white group-hover:text-orange-400 transition-colors">
+                        <!-- Cast / Group 👥 icon -->
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                            <circle cx="9" cy="7" r="4"/>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                    </div>
+                    <div class="mt-4 space-y-0.5">
+                        <h4 class="text-white font-heading font-bold text-sm sm:text-base group-hover:text-orange-400 transition-colors">Create your cast</h4>
+                        <p class="text-xs text-slate-400 font-normal">with Characters</p>
+                    </div>
+                </a>
+
+                <!-- Card 6: Create videos (Seedance 2.5) -->
+                <a href="{% url 'studio:create' %}?tab=video&model=seedance-2.5"
+                   class="group rounded-2xl bg-[#0e1117] border border-white/[0.08] hover:border-white/20 hover:bg-[#131720] p-5 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-xl">
+                    <div class="w-8 h-8 flex items-center justify-center text-white group-hover:text-orange-400 transition-colors">
+                        <!-- Waveform Equalizer ❙❙❙ icon -->
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="4" y="8" width="3.5" height="12" rx="1.75"/>
+                            <rect x="10.25" y="4" width="3.5" height="16" rx="1.75"/>
+                            <rect x="16.5" y="10" width="3.5" height="10" rx="1.75"/>
+                        </svg>
+                    </div>
+                    <div class="mt-4 space-y-0.5">
+                        <h4 class="text-white font-heading font-bold text-sm sm:text-base group-hover:text-orange-400 transition-colors">Create videos</h4>
+                        <p class="text-xs text-slate-400 font-normal">with Seedance 2.5</p>
+                    </div>
+                </a>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- =========================================================================
+         SECTION 2: BUILT FOR TEAMS THAT SHIP VIRAL (Matching Screenshot 2)
+         ========================================================================= -->
+    <section class="space-y-6">
+        <div class="space-y-1">
+            <span class="text-xs font-mono font-black uppercase tracking-wider text-orange-400">Who It's For</span>
+            <h2 class="text-2xl sm:text-3xl md:text-4xl font-heading font-black text-white tracking-tight">
+                BUILT FOR TEAMS THAT SHIP VIRAL
+            </h2>
+            <p class="text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
+                From in house marketers to full service agencies, CLeaverloop is the unfair advantage behind the feed.
+            </p>
+        </div>
+
+        <!-- 3 Interactive Team Columns with Glossy Badges -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {% for seg in who_its_for_segments %}
+            <div @click="selectedTeam = selectedTeam === '{{ seg.id }}' ? 'all' : '{{ seg.id }}'"
+                 :class="selectedTeam === '{{ seg.id }}' ? 'border-orange-500 bg-orange-500/[0.08] ring-1 ring-orange-500/40' : 'border-white/[0.08] bg-[#0c0d10] hover:border-white/20'"
+                 class="fl-composer-card rounded-2xl p-6 space-y-4 border transition-all duration-300 cursor-pointer group shadow-xl">
+                
+                <!-- Glossy Icon Avatar -->
+                <div class="w-16 h-16 rounded-2xl overflow-hidden border border-white/10 p-0.5 bg-black/40 group-hover:scale-105 transition duration-300 shadow-lg">
+                    <img src="{{ seg.icon_url }}" alt="{{ seg.title }}" class="w-full h-full object-cover rounded-xl">
+                </div>
+
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-heading font-black text-white group-hover:text-orange-400 transition">{{ seg.title }}</h3>
+                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-full border border-white/10 text-slate-400 group-hover:border-orange-500/40 group-hover:text-orange-300">
+                            {{ seg.count }} Dynamic
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-400 leading-relaxed">{{ seg.description }}</p>
+                </div>
+
+                <!-- Active Filter Indicator -->
+                <div class="pt-2 border-t border-white/[0.05] flex items-center justify-between text-[11px] font-mono">
+                    <span class="text-slate-500 group-hover:text-slate-300 transition"
+                          x-text="selectedTeam === '{{ seg.id }}' ? '● Filtering feed' : 'Click to filter feed'">
+                    </span>
+                    <span class="text-orange-400 font-bold group-hover:translate-x-1 transition-transform">Filter →</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- =========================================================================
+         SECTION 3: CATEGORIZED CAROUSELS & MOSAIC (Matching Screenshot 3)
+         ========================================================================= -->
+    <section class="space-y-8">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-white/[0.08]">
+            <div>
+                <h2 class="text-xl sm:text-2xl font-heading font-black text-white flex items-center gap-2">
+                    <span>🎬</span>
+                    <span>Community Creation Feed</span>
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">Explore real user creations across categories, remixes, and prompt blueprints.</p>
+            </div>
+
+            <!-- Category Switcher Tabs -->
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar text-xs">
+                {% for cat in carousel_categories %}
+                <button type="button"
+                        @click="selectedCategory = '{{ cat.id }}'"
+                        :class="selectedCategory === '{{ cat.id }}' ? 'bg-orange-500/20 border-orange-500/60 text-orange-300 font-bold' : 'bg-white/[0.03] border-white/[0.06] text-slate-400 hover:text-white'"
+                        class="px-3.5 py-1.5 rounded-xl border text-xs transition shrink-0 whitespace-nowrap">
+                    {{ cat.label }}
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Horizontal Scrollable Showcase Strip -->
+        <div class="relative group/carousel">
+            <!-- Left Chevron Scroll Button -->
+            <button type="button"
+                    @click="scrollCarousel('community-carousel', 'left')"
+                    class="absolute -left-3 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/80 backdrop-blur-md border border-white/20 text-white flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition shadow-2xl hover:scale-110">
+                ‹
+            </button>
+
+            <!-- Carousel Items Container -->
+            <div id="community-carousel"
+                 class="flex gap-4 overflow-x-auto pb-4 pt-1 no-scrollbar scroll-smooth">
+                <template x-for="item in filteredItems()" :key="item.id">
+                    <div class="fl-composer-card rounded-2xl overflow-hidden border border-white/10 hover:border-orange-500/50 transition-all duration-300 flex-shrink-0 w-72 sm:w-80 group/card relative flex flex-col justify-between shadow-xl cursor-pointer"
+                         @click="openInspectModal(item)">
+                        
+                        <!-- Media Viewport -->
+                        <div class="relative w-full aspect-video bg-black overflow-hidden flex items-center justify-center">
+                            <template x-if="item.type === 'video' && item.media_url.endsWith('.mp4')">
+                                <video :src="item.media_url"
+                                       muted
+                                       loop
+                                       playsinline
+                                       onmouseover="this.play()"
+                                       onmouseout="this.pause()"
+                                       class="w-full h-full object-cover transition duration-500 group-hover/card:scale-105">
+                                </video>
+                            </template>
+                            <template x-if="item.type !== 'video' || !item.media_url.endsWith('.mp4')">
+                                <img :src="item.media_url"
+                                     :alt="item.title"
+                                     class="w-full h-full object-cover transition duration-500 group-hover/card:scale-105">
+                            </template>
+
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none"></div>
+
+                            <!-- Overlay Title (Screenshot 3 Style) -->
+                            <div class="absolute bottom-2.5 inset-x-3 z-10">
+                                <span class="text-xs font-black text-white drop-shadow-md uppercase tracking-wider block truncate" x-text="item.title"></span>
+                            </div>
+
+                            <!-- Top Badges -->
+                            <div class="absolute top-2.5 inset-x-2.5 z-10 flex items-center justify-between text-[10px]">
+                                <span class="px-2 py-0.5 rounded-full bg-black/80 text-orange-400 font-mono font-bold border border-orange-500/30 uppercase"
+                                      x-text="item.type === 'video' ? '🎬 Video' : '🖼️ Image'">
+                                </span>
+                                <span class="px-2 py-0.5 rounded-full bg-black/70 text-slate-300 font-mono text-[9px]"
+                                      x-text="item.creator">
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Card Meta Bar -->
+                        <div class="p-3 bg-[#0d0f11] flex items-center justify-between text-[11px] font-mono border-t border-white/[0.04]">
+                            <span class="text-slate-400 truncate max-w-[140px]" x-text="item.category"></span>
+                            <a :href="'{% url 'studio:create' %}?prompt=' + encodeURIComponent(item.prompt)"
+                               @click.stop
+                               class="text-orange-400 font-bold hover:text-orange-300 flex items-center gap-1 transition">
+                                <span>⚡</span>
+                                <span>Remix</span>
+                            </a>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Right Chevron Scroll Button -->
+            <button type="button"
+                    @click="scrollCarousel('community-carousel', 'right')"
+                    class="absolute -right-3 top-1/2 -translate-y-1/2 z-30 w-10 h-10 rounded-full bg-black/80 backdrop-blur-md border border-white/20 text-white flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 transition shadow-2xl hover:scale-110">
+                ›
+            </button>
+        </div>
+    </section>
+
+    <!-- =========================================================================
+         SECTION 4: TOP TRENDS (Matching Screenshot 4 Exactly)
+         ========================================================================= -->
+    <section class="space-y-6">
+        <div class="flex items-center justify-between">
+            <div class="space-y-1">
+                <h2 class="text-2xl sm:text-3xl font-heading font-black tracking-tight text-white uppercase">
+                    Top <span class="text-orange-500">Trends</span>
+                </h2>
+                <p class="text-xs sm:text-sm text-slate-400">Effects riding the biggest AI trends right now, ready in one click</p>
+            </div>
+
+            <a href="{% url 'studio:create' %}" class="text-xs font-bold text-orange-400 hover:text-orange-300 flex items-center gap-1 font-mono transition">
+                <span>See all</span>
+                <span>→</span>
+            </a>
+        </div>
+
+        <!-- 2-Row Vertical Rounded Card Grid (Matching Screenshot 4) -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3 sm:gap-4">
+            {% for trend in top_trends %}
+            <a href="{% url 'studio:create' %}?prompt={{ trend.prompt|urlencode }}&aspect_ratio={{ trend.aspect_ratio|default:'9:16' }}"
+               class="group flex flex-col space-y-2 transition-all duration-200">
+                
+                <!-- Vertical Rounded Thumbnail -->
+                <div class="relative w-full aspect-[4/5] rounded-2xl overflow-hidden bg-[#111317] border border-white/10 group-hover:border-orange-500/60 shadow-lg transition duration-300">
+                    <img src="{{ trend.image_url }}"
+                         alt="{{ trend.label }}"
+                         class="w-full h-full object-cover transition duration-300 group-hover:scale-105">
+                    
+                    <div class="absolute inset-0 bg-black/20 group-hover:bg-transparent transition"></div>
+                    
+                    <!-- Hover 1-Click Remix Icon -->
+                    <div class="absolute bottom-2 right-2 w-6 h-6 rounded-lg bg-black/80 border border-orange-500/40 text-orange-400 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">
+                        ⚡
+                    </div>
+                </div>
+
+                <!-- Label Underneath (Clean Sans-Serif) -->
+                <span class="text-xs text-slate-300 group-hover:text-white font-medium transition truncate text-left">
+                    {{ trend.label }}
+                </span>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- =========================================================================
+         INSPECT & REMIX MODAL
+         ========================================================================= -->
+    <div x-show="inspectModalOpen"
+         x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+         @keydown.escape.window="inspectModalOpen = false">
+        
+        <div class="fl-composer-card rounded-3xl max-w-2xl w-full p-6 space-y-5 border-white/10 shadow-2xl relative"
+             @click.away="inspectModalOpen = false">
+            
+            <div class="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+                <h3 class="text-lg font-bold text-white truncate" x-text="activeItem ? activeItem.title : ''"></h3>
+                <button type="button" @click="inspectModalOpen = false" class="text-slate-400 hover:text-white text-lg">✕</button>
+            </div>
+
+            <!-- Modal Media Preview -->
+            <div class="w-full aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center">
+                <template x-if="activeItem && activeItem.type === 'video' && activeItem.media_url.endsWith('.mp4')">
+                    <video :src="activeItem.media_url" controls autoplay loop class="w-full h-full object-cover"></video>
+                </template>
+                <template x-if="activeItem && (activeItem.type !== 'video' || !activeItem.media_url.endsWith('.mp4'))">
+                    <img :src="activeItem.media_url" class="w-full h-full object-cover">
+                </template>
+            </div>
+
+            <!-- Prompt & Meta -->
+            <div class="space-y-2 text-xs">
+                <span class="text-[10px] font-mono text-slate-400 uppercase font-bold">Prompt:</span>
+                <p class="p-3 rounded-xl bg-[#090a0c] border border-white/[0.06] text-slate-200 font-mono leading-relaxed" x-text="activeItem ? activeItem.prompt : ''"></p>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between pt-2 border-t border-white/[0.08]">
+                <button type="button"
+                        @click="copyPrompt(activeItem.prompt, activeItem.id)"
+                        class="px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/10 text-xs font-semibold text-white transition flex items-center gap-1.5">
+                    <span x-text="copiedId === (activeItem ? activeItem.id : null) ? '✓ Copied!' : '📋 Copy Prompt'"></span>
+                </button>
+
+                <a :href="'{% url 'studio:create' %}?prompt=' + encodeURIComponent(activeItem ? activeItem.prompt : '') + '&aspect_ratio=' + (activeItem ? activeItem.aspect_ratio : '16:9')"
+                   class="fl-gradient-orange-btn fl-glow-orange text-white text-xs font-bold px-6 py-2.5 rounded-xl flex items-center gap-2">
+                    <span>⚡</span>
+                    <span>Remix in Studio</span>
+                </a>
+            </div>
+        </div>
     </div>
+
 </div>
 {% endblock %}

@@ -52,11 +52,55 @@ class Character(models.Model):
     def __str__(self):
         return f"{self.name} ({self.owner.email})"
 
-    def build_prompt_cue(self) -> str:
-        """Construct prompt modifier describing character traits."""
-        cues = [f"Character: {self.name}"]
+    @property
+    def primary_image_url(self) -> str:
+        """Returns the full-length standing character figure URL or avatar URL."""
+        if self.metadata and self.metadata.get('full_body_url'):
+            return self.metadata['full_body_url']
+        if self.avatar:
+            return self.avatar.url
+        return ""
+
+    @property
+    def face_anchor_url(self) -> str:
+        """Returns the 100% likeness isolated face anchor URL if available."""
+        if self.metadata:
+            return self.metadata.get('original_face_url') or self.metadata.get('face_anchor_url') or ""
+        return ""
+
+    def get_poses(self) -> list:
+        """Returns list of pose dictionary objects configured for this character."""
+        poses = self.metadata.get('poses', [])
+        if not poses and self.avatar:
+            poses = [{
+                'id': 'default_pose',
+                'label': 'Standing Figure',
+                'icon': '🧍',
+                'image_url': self.avatar.url,
+                'prompt_cue': 'In standard full-body standing posture.'
+            }]
+        return poses
+
+    def build_prompt_cue(self, pose_cue: str = "") -> str:
+        """Construct prompt modifier describing character traits, gender, body shape, and optional pose."""
+        gender = (self.metadata.get('gender') or '').lower()
+        if gender == 'female':
+            gender_cue = f"Female character ({self.name}, woman in an authentic realistic feminine pose with natural weight shift and graceful feminine silhouette)"
+        elif gender == 'male':
+            gender_cue = f"Male character ({self.name}, man with masculine physique)"
+        else:
+            gender_cue = f"Character: {self.name}"
+
+        cues = [gender_cue]
+
+        body_type = self.metadata.get('body_type')
+        if body_type:
+            cues.append(f"Physique: {body_type}")
+
         if self.appearance_description:
             cues.append(self.appearance_description)
         if self.clothing_description:
             cues.append(f"Wearing: {self.clothing_description}")
+        if pose_cue:
+            cues.append(f"Pose: {pose_cue}")
         return ", ".join(cues)

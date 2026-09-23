@@ -4,7 +4,7 @@
 {% block title %}Generation Inspector — CleaverLoop AI{% endblock %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto space-y-8"
+<div class="w-full space-y-8"
      x-data="generationDetailInspector({{ generation.duration|default:5 }}, '{{ generation.prompt|default:""|escapejs }}', '{{ generation.character.name|default:""|escapejs }}')">
 
     <!-- Top Navigation Header -->

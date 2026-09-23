@@ -35,14 +35,33 @@ class HomeAndDashboardViewTests(TestCase):
         self.assertIn('/accounts/login/', response.url)
 
     def test_dashboard_renders_for_authenticated_user(self):
-        self.client.login(email='creator@cleaverloop.ai', password='testpassword123')
+        self.client.force_login(self.user)
         response = self.client.get(reverse('studio:dashboard'))
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'studio/dashboard.html')
         content = response.content.decode('utf-8')
         self.assertIn('Studio Dashboard', content)
-        self.assertIn('Creative Projects', content)
-        self.assertIn('AI Characters', content)
+        self.assertIn('Character DNA', content)
+
+    def test_explore_page_renders_with_produce_showcase_and_top_trends(self):
+        """Verify Explore page renders with Flashloop produce showcase, teams, and top trends."""
+        response = self.client.get(reverse('explore'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'studio/explore.html')
+        content = response.content.decode('utf-8')
+        self.assertIn('See What You Can Produce on', content)
+        self.assertIn('BUILT FOR TEAMS THAT SHIP VIRAL', content)
+        self.assertIn('Marketing Teams', content)
+        self.assertIn('Agencies', content)
+        self.assertIn('Creators', content)
+        self.assertIn('Top', content)
+        self.assertIn('Trends', content)
+        self.assertIn('Sports Anime', content)
+        self.assertIn('Stickman Cartoon', content)
+        self.assertIn('Claymation', content)
+        self.assertIn('Watercolor', content)
+        self.assertIn('Paper Collage', content)
+        self.assertIn('Hand Drawn', content)
 
     def test_local_offline_scripts_served(self):
         """Verify that HTMX and Alpine.js are served locally from static files and not from unpkg CDN."""

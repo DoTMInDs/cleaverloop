@@ -65,8 +65,6 @@ class AIDialogueDirector:
         style: str,
         api_key: str
     ) -> Optional[Dict[str, Any]]:
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-        
         system_instruction = (
             "You are an award-winning Hollywood film director and screenwriter. "
             "Your task is to analyze a visual video shot prompt and deduce what the character is doing, feeling, "
@@ -91,25 +89,31 @@ class AIDialogueDirector:
             "generationConfig": {"responseMimeType": "application/json"}
         }
 
-        with httpx.Client(timeout=12.0) as client:
-            headers = {"x-goog-api-key": api_key}
-            resp = client.post(endpoint, json=payload, headers=headers)
-            if resp.status_code == 200:
-                raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                data = json.loads(raw_text)
-                dialogue = data.get("dialogue", "").strip().strip('"').strip("'")
-                words = dialogue.split()
-                if len(words) > target_words + 2:
-                    dialogue = " ".join(words[:target_words]) + "..."
-                return {
-                    "dialogue": dialogue,
-                    "suggested_voice": data.get("suggested_voice", "adam"),
-                    "emotion": data.get("emotion", "Focused"),
-                    "word_count": len(dialogue.split()),
-                    "estimated_seconds": round(len(dialogue.split()) / 2.3, 1),
-                    "duration": duration,
-                    "provider": "gemini"
-                }
+        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+        for model in models_to_try:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            try:
+                with httpx.Client(timeout=12.0) as client:
+                    headers = {"x-goog-api-key": api_key}
+                    resp = client.post(endpoint, json=payload, headers=headers)
+                    if resp.status_code == 200:
+                        raw_text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        data = json.loads(raw_text)
+                        dialogue = data.get("dialogue", "").strip().strip('"').strip("'")
+                        words = dialogue.split()
+                        if len(words) > target_words + 2:
+                            dialogue = " ".join(words[:target_words]) + "..."
+                        return {
+                            "dialogue": dialogue,
+                            "suggested_voice": data.get("suggested_voice", "adam"),
+                            "emotion": data.get("emotion", "Focused"),
+                            "word_count": len(dialogue.split()),
+                            "estimated_seconds": round(len(dialogue.split()) / 2.3, 1),
+                            "duration": duration,
+                            "provider": "gemini"
+                        }
+            except Exception:
+                continue
         return None
 
     @classmethod

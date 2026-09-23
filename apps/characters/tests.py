@@ -90,3 +90,57 @@ class CharacterCRUDTests(TestCase):
         })
         self.assertEqual(resp.status_code, 400)
         self.assertIn('Unsupported image format', resp.json().get('error', ''))
+
+    def test_generate_ai_primary_face_isolation_and_full_body_regeneration(self):
+        """Verify multi-person disambiguation, smart face isolation, and full-body regeneration."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        import io
+
+        # Create a valid 200x300 image
+        img = Image.new('RGB', (200, 300), color=(180, 80, 40))
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG')
+        photo = SimpleUploadedFile("group_photo.jpg", buffer.getvalue(), content_type="image/jpeg")
+
+        url = reverse('characters:generate_ai')
+        resp = self.client.post(url, {
+            'photo': photo,
+            'style_preset': 'cinematic',
+            'brief': 'Scholar at library with braids'
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('name', data)
+        self.assertIn('appearance_description', data)
+        self.assertIn('clothing_description', data)
+        self.assertIn('avatar_url', data)
+        self.assertTrue('characters/avatars/face_isolated_' in data['avatar_url'])
+        self.assertIn('subject_isolation', data)
+        self.assertTrue(len(data['subject_isolation']) > 0)
+        self.assertIn('full_body_prompt', data)
+        self.assertIn('poses', data)
+        self.assertTrue(len(data['poses']) >= 1)
+        standing_pose = next((p for p in data['poses'] if p.get('id') == 'standing'), None)
+        self.assertIsNotNone(standing_pose)
+
+    def test_generate_ai_from_prompt_exact_specifics(self):
+        """Verify prompt character forge adheres strictly to user's exact prompt specifics and feminine real-life posing."""
+        url = reverse('characters:generate_ai')
+        resp = self.client.post(url, {
+            'brief': '24-year-old Scandinavian female interior designer named Astrid Lindholm with platinum blonde hair in loose low ponytail, hazel eyes, wearing an oversized cream knit cardigan over olive linen trousers and white canvas sneakers, standing with relaxed confident posture',
+            'style_preset': 'cinematic'
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data.get('name'), 'Astrid Lindholm')
+        self.assertEqual(data.get('gender'), 'female')
+        self.assertIn('feminine silhouette', data.get('body_type', '').lower())
+        self.assertIn('cardigan', data.get('clothing_description', '').lower())
+        self.assertIn('contrapposto', data.get('full_body_prompt', '').lower())
+        self.assertIn('poses', data)
+        self.assertEqual(len(data['poses']), 3)
+        standing_pose = next((p for p in data['poses'] if p.get('id') == 'standing'), None)
+        self.assertIsNotNone(standing_pose)
+        self.assertIn('contrapposto', standing_pose.get('label', '').lower() + standing_pose.get('prompt_cue', '').lower())
+

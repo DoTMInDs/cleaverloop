@@ -4,9 +4,9 @@
 {% block title %}AI Character Roster — CleaverLoop AI (Flashloop Edition){% endblock %}
 
 {% block content %}
-<div class="space-y-8 max-w-6xl mx-auto">
+<div class="space-y-8 w-full">
     <!-- Header Stage -->
-    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.08]">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.08] w-full">
         <div>
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-mono mb-2">
                 <span>⚡</span>
@@ -15,43 +15,62 @@
             <h1 class="text-2xl md:text-3xl font-heading font-black text-white">Reusable AI Characters</h1>
             <p class="text-xs sm:text-sm text-slate-400 mt-1">Lock facial identity, wardrobe traits, and demeanor across all scenes and multi-model pipelines.</p>
         </div>
-        <a href="{% url 'characters:create' %}" class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-5 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 shrink-0">
+        <a href="{% url 'characters:create' %}" class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-5 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 shrink-0 shadow-lg">
             <span>+</span>
             <span>Forge Character</span>
         </a>
     </div>
 
-    <!-- Character Roster Grid -->
+    <!-- Character Roster Grid (Matching Sleek Rounded Cards Pattern) -->
     {% if characters %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3.5 sm:gap-4.5 w-full">
             {% for char in characters %}
-                <a href="{% url 'characters:detail' char.pk %}" class="fl-composer-card rounded-2xl p-5 hover:border-orange-500/40 transition duration-200 flex flex-col justify-between group shadow-lg">
-                    <div>
-                        <div class="flex items-start gap-4">
-                            <div class="w-14 h-14 rounded-2xl bg-[#141618] border border-white/10 overflow-hidden flex items-center justify-center text-xl shrink-0 group-hover:border-orange-500/50 transition">
-                                {% if char.avatar %}
-                                    <img src="{{ char.avatar.url }}" alt="{{ char.name }}" class="w-full h-full object-cover">
-                                {% else %}
-                                    <span class="text-orange-400">👤</span>
-                                {% endif %}
-                            </div>
-                            <div class="min-w-0 flex-1">
-                                <h3 class="text-base font-bold text-white group-hover:text-orange-300 transition truncate">{{ char.name }}</h3>
-                                <p class="text-xs text-slate-300 mt-0.5 line-clamp-2 leading-relaxed">{{ char.appearance_description }}</p>
-                            </div>
+                <a href="{% url 'characters:detail' char.pk %}" class="group flex flex-col space-y-2 relative transition-all duration-200">
+                    
+                    <!-- Rounded Visual Canvas Area (Vertical 3:4 Poster with Rounded Corners) -->
+                    <div class="relative w-full aspect-[3/4] rounded-2xl overflow-hidden bg-[#101317] border border-white/10 group-hover:border-orange-500/60 shadow-lg group-hover:shadow-[0_8px_30px_rgba(249,115,22,0.22)] transition-all duration-300 flex items-end justify-center">
+                        <div class="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(249,115,22,0.1),transparent_70%)] pointer-events-none"></div>
+                        <div class="absolute bottom-0 inset-x-0 h-24 bg-gradient-to-t from-[#0d0f11] via-[#0d0f11]/60 to-transparent pointer-events-none z-10"></div>
+                        
+                        {% if char.primary_image_url %}
+                            <img src="{{ char.primary_image_url }}" alt="{{ char.name }}" class="w-full h-full object-cover object-top transition duration-500 group-hover:scale-105">
+                        {% else %}
+                            <div class="h-full w-full flex items-center justify-center text-4xl text-orange-400/50">👤</div>
+                        {% endif %}
+
+                        <!-- Floating Badges: Lead Cast & Face Lock -->
+                        <div class="absolute top-2 inset-x-2 flex items-center justify-between z-20">
+                            <span class="px-2 py-0.5 rounded-md text-[9px] font-bold font-mono bg-black/75 backdrop-blur-md text-orange-400 border border-orange-500/30 uppercase">
+                                Lead Cast
+                            </span>
+                            {% if char.face_anchor_url %}
+                                <div class="p-0.5 rounded-lg bg-black/85 backdrop-blur-md border border-orange-500/70 shadow-lg flex items-center gap-1" title="Face Anchor Locked">
+                                    <div class="w-6 h-6 rounded-md overflow-hidden border border-white/10">
+                                        <img src="{{ char.face_anchor_url }}" class="w-full h-full object-cover">
+                                    </div>
+                                    <span class="text-[8px] font-mono font-bold text-orange-400 pr-1 hidden sm:inline">🔒</span>
+                                </div>
+                            {% endif %}
                         </div>
 
-                        {% if char.clothing_description %}
-                            <div class="mt-4 text-[11px] text-slate-400 border-t border-white/[0.05] pt-3 flex items-center gap-1.5 truncate">
-                                <span class="text-orange-400/80 font-mono">Wardrobe:</span>
-                                <span class="truncate">{{ char.clothing_description }}</span>
-                            </div>
-                        {% endif %}
+                        <!-- Hover Bottom Action Bar -->
+                        <div class="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/90 via-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-between text-[10px] z-20">
+                            <span class="px-2 py-0.5 rounded bg-orange-500/80 text-white font-bold transition">
+                                View Dossier →
+                            </span>
+                            <span class="text-[9px] text-emerald-400 font-mono">Zero Drift ✓</span>
+                        </div>
                     </div>
 
-                    <div class="mt-4 pt-3 border-t border-white/[0.04] flex items-center justify-between text-[10px] font-mono text-slate-500">
-                        <span>Cast in Scenes</span>
-                        <span class="text-orange-400 group-hover:translate-x-1 transition-transform">View Dossier →</span>
+                    <!-- Clean Label Underneath (Matching Image 2 Reference) -->
+                    <div class="space-y-0.5 text-left px-0.5">
+                        <div class="text-xs sm:text-sm font-semibold text-slate-200 group-hover:text-white truncate transition-colors">
+                            {{ char.name }}
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                            <span class="truncate text-slate-400 max-w-[70%]">{% if char.clothing_description %}{{ char.clothing_description }}{% else %}{{ char.appearance_description }}{% endif %}</span>
+                            <span class="text-orange-400 font-bold">DNA</span>
+                        </div>
                     </div>
                 </a>
             {% endfor %}
