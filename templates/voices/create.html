@@ -4,7 +4,7 @@
 {% block title %}Clone Your Voice — CleaverLoop AI{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-8 pb-16" x-data="voiceCloneStudio()">
+<div class="w-full space-y-8 pb-16" x-data="voiceCloneStudio()">
     <!-- Top Header -->
     <div class="flex items-center justify-between border-b border-white/[0.08] pb-6">
         <div>
@@ -21,9 +21,9 @@
         <div class="hidden sm:flex flex-col items-end text-right">
             <span class="text-[11px] font-mono text-slate-400">Setup Fee</span>
             <div class="flex items-center gap-1.5 text-orange-400 font-bold font-mono text-sm">
-                <span>⚡ {{ clone_cost }} Credits</span>
+                <span>{% if not can_clone_voices %}Paid Plan Required{% elif clone_cost == 0 %}Included Free{% else %}⚡ {{ clone_cost }} Credits{% endif %}</span>
             </div>
-            <span class="text-[10px] text-slate-500 font-mono">Balance: {{ wallet.formatted_balance }}</span>
+            <span class="text-[10px] text-slate-500 font-mono">Balance: {{ wallet.formatted_balance }} • Slots: {{ voice_count }}{% if max_voice_profiles > 0 %}/{{ max_voice_profiles }}{% else %} (Unlimited){% endif %}</span>
         </div>
     </div>
 
@@ -223,17 +223,31 @@
                 Cancel
             </a>
 
-            <button type="submit" :disabled="isSubmitting"
-                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-8 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105 flex items-center gap-2.5 shadow-xl shadow-orange-500/25 disabled:opacity-50 cursor-pointer">
-                <span x-show="!isSubmitting">✨ Clone Neural Voice (50 Credits)</span>
-                <span x-show="isSubmitting" class="flex items-center gap-2">
-                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>Extracting Neural Weights...</span>
-                </span>
-            </button>
+            {% if not can_clone_voices %}
+                <a href="{% url 'billing:plans' %}"
+                   class="fl-gradient-orange-btn text-white rounded-xl px-8 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105 flex items-center gap-2.5 shadow-xl shadow-orange-500/25">
+                    <span>🔒 Upgrade to Unlock Voice Cloning</span>
+                    <span>→</span>
+                </a>
+            {% elif max_voice_profiles > 0 and voice_count >= max_voice_profiles %}
+                <a href="{% url 'billing:plans' %}"
+                   class="fl-gradient-orange-btn text-white rounded-xl px-8 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105 flex items-center gap-2.5 shadow-xl shadow-orange-500/25">
+                    <span>Upgrade for More Voice Slots</span>
+                    <span>→</span>
+                </a>
+            {% else %}
+                <button type="submit" :disabled="isSubmitting"
+                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-8 py-3.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 hover:scale-105 flex items-center gap-2.5 shadow-xl shadow-orange-500/25 disabled:opacity-50 cursor-pointer">
+                    <span x-show="!isSubmitting">✨ Clone Neural Voice ({% if clone_cost == 0 %}Included Free{% else %}{{ clone_cost }} Credits{% endif %})</span>
+                    <span x-show="isSubmitting" class="flex items-center gap-2">
+                        <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Extracting Neural Weights...</span>
+                    </span>
+                </button>
+            {% endif %}
         </div>
     </form>
 </div>

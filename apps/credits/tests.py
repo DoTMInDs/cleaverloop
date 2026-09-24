@@ -255,3 +255,100 @@ class CreditLedgerTests(TestCase):
         wallet.refresh_from_db()
         self.assertEqual(wallet.balance, 50000)
 
+    def test_tier_veo_model_wiring_and_access(self):
+        """Verify tier-based Veo model wiring (Starter -> Lite, Creator -> Fast, Ultra -> Standard)."""
+        from apps.providers.router import ModelRouter
+
+        # Create Veo Lite and Standard models for routing test
+        veo_lite, _ = AIModel.objects.get_or_create(
+            provider=self.provider,
+            model_id="veo-3.1-lite",
+            defaults={
+                'display_name': "Veo 3.1 Lite",
+                'modality': "video",
+                'credit_cost_fixed': 0,
+                'credit_cost_per_second': 2000,
+                'max_duration': 10,
+                'is_premium': False,
+                'priority': 85
+            }
+        )
+        veo_std, _ = AIModel.objects.get_or_create(
+            provider=self.provider,
+            model_id="veo-3.1-standard",
+            defaults={
+                'display_name': "Veo 3.1 Standard",
+                'modality': "video",
+                'credit_cost_fixed': 0,
+                'credit_cost_per_second': 8500,
+                'max_duration': 10,
+                'is_premium': True,
+                'priority': 95
+            }
+        )
+
+        wallet = CreditWallet.objects.get(user=self.user)
+
+        # Starter tier checks
+        wallet.subscription_tier = 'starter'
+        wallet.balance = 90000
+        wallet.save()
+
+        self.assertEqual(wallet.default_video_model, 'veo-3.1-lite')
+        self.assertTrue(wallet.can_access_model('veo-3.1-lite'))
+        self.assertFalse(wallet.can_access_model('veo-3.1-fast'))
+        self.assertFalse(wallet.can_access_model('veo-3.1-standard'))
+        self.assertFalse(wallet.can_access_premium_models)
+
+        # Automatic routing for Starter user selects Veo Lite
+        selected = ModelRouter.select_model(
+            modality='video',
+            user_preference='automatic',
+            duration=5,
+            user=self.user,
+            subscription_tier='starter'
+        )
+        self.assertEqual(selected.model_id, 'veo-3.1-lite')
+        cost_5s = selected.calculate_credit_cost(duration=5)
+        self.assertEqual(cost_5s, 10000)
+        self.assertEqual(90000 // cost_5s, 9)  # 9 full clips yield!
+
+        # Creator tier checks
+        wallet.subscription_tier = 'creator'
+        wallet.balance = 400000
+        wallet.save()
+
+        self.assertEqual(wallet.default_video_model, 'veo-3.1-fast')
+        self.assertTrue(wallet.can_access_model('veo-3.1-lite'))
+        self.assertTrue(wallet.can_access_model('veo-3.1-fast'))
+        self.assertTrue(wallet.can_access_model('veo-3.1-standard'))
+        self.assertTrue(wallet.can_access_premium_models)
+
+        selected_creator = ModelRouter.select_model(
+            modality='video',
+            user_preference='automatic',
+            duration=5,
+            user=self.user,
+            subscription_tier='creator'
+        )
+        self.assertEqual(selected_creator.model_id, 'veo-3.1-fast')
+        creator_cost_5s = selected_creator.calculate_credit_cost(duration=5)
+        self.assertEqual(creator_cost_5s, 22000)
+
+        # Ultra tier checks
+        wallet.subscription_tier = 'ultra'
+        wallet.balance = 1000000
+        wallet.save()
+
+        self.assertEqual(wallet.default_video_model, 'veo-3.1-standard')
+        self.assertTrue(wallet.can_access_model('veo-3.1-standard'))
+        selected_ultra = ModelRouter.select_model(
+            modality='video',
+            user_preference='best_quality',
+            duration=5,
+            user=self.user,
+            subscription_tier='ultra'
+        )
+        self.assertEqual(selected_ultra.model_id, 'veo-3.1-standard')
+
+

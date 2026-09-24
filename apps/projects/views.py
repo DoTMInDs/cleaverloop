@@ -100,13 +100,14 @@ def generate_scene_view(request, scene_id):
             status=429
         )
 
-    # Use ModelRouter to select video model
+    # Use ModelRouter to select video model with user tier context
     try:
         model = ModelRouter.select_model(
             modality='video',
             user_preference='automatic',
             duration=scene.duration,
-            aspect_ratio=project.aspect_ratio
+            aspect_ratio=project.aspect_ratio,
+            user=request.user,
         )
     except Exception as exc:
         return HttpResponse(f"<div class='text-rose-400 p-2 text-xs'>Model routing error: {exc}</div>", status=400)

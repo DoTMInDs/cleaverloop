@@ -13,15 +13,12 @@ function createStudioApp() {
         '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "openai" %}🤖{% elif m.provider.slug == "flux" or m.provider.slug == "fal" %}🔮{% else %}🎨{% endif %}', desc: '{{ m.provider.name|escapejs }} • {{ m.credit_cost_fixed }} credits', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'image' },
         {% endfor %}
         {% for m in video_models %}
-        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "kling" %}⚡{% elif m.provider.slug == "minimax" %}🪐{% elif m.provider.slug == "seedance" %}🎬{% elif m.provider.slug == "mock" %}🧪{% else %}🎥{% endif %}', desc: '{{ m.provider.name|escapejs }} • {% if m.supports_audio %}Audio FX • {% endif %}{{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'video' },
+        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "kling" %}⚡{% elif m.provider.slug == "minimax" %}🪐{% elif m.provider.slug == "seedance" %}🎬{% elif m.provider.slug == "mock" %}🧪{% else %}🎥{% endif %}', desc: '{{ m.provider.name|escapejs }} • {% if m.supports_audio %}Audio FX • {% endif %}{{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'video', maxDuration: {{ m.max_duration|default:10 }}, supportedDurations: {% if "wan" in m.model_id or m.max_duration <= 5 %}[5]{% elif "minimax" in m.model_id %}[5, 10]{% elif "veo" in m.model_id %}[4, 8]{% else %}[5, 10, 15]{% endif %} },
         {% endfor %}
-        {% for m in audio_models %}
-        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "elevenlabs" %}🔊{% elif m.provider.slug == "fal" %}🎙️{% else %}🎧{% endif %}', desc: '{{ m.provider.name|escapejs }} • {{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'audio' },
-        {% endfor %}
-        'best_quality': { name: 'Best Cinematic Quality', badge: 'Ultra HQ', icon: '⭐', desc: 'Maximum fidelity' },
-        'fastest': { name: 'Fastest Generation', badge: 'Ultra Fast', icon: '⚡', desc: 'Low latency turnaround' },
-        'budget': { name: 'Budget Economical', badge: 'Lowest Cost', icon: '🏷️', desc: 'Conserves user credits' },
-        'automatic': { name: 'Automatic Smart Routing', badge: 'Smart Auto', icon: '✨', desc: 'Auto-selects optimal engine' }
+        'best_quality': { name: 'Best Cinematic Quality', badge: 'Ultra HQ', icon: '⭐', desc: 'Maximum fidelity', supportedDurations: [5, 10, 15] },
+        'fastest': { name: 'Fastest Generation', badge: 'Ultra Fast', icon: '⚡', desc: 'Low latency turnaround', supportedDurations: [5, 10, 15] },
+        'budget': { name: 'Budget Economical', badge: 'Lowest Cost', icon: '🏷️', desc: 'Conserves user credits', supportedDurations: [5, 10, 15] },
+        'automatic': { name: 'Automatic Smart Routing', badge: 'Smart Auto', icon: '✨', desc: 'Auto-selects optimal engine', supportedDurations: [5, 10, 15] }
     };
 
     return {
@@ -36,13 +33,12 @@ function createStudioApp() {
         voiceDropdownOpen: false,
         videoVoiceDropdownOpen: false,
         videoVoiceSearch: '',
-        audioVoiceSearch: '',
         modelDropdownOpen: false,
         selectedModel: '{% if request.GET.model %}{{ request.GET.model|escapejs }}{% elif request.GET.model_id %}{{ request.GET.model_id|escapejs }}{% else %}automatic{% endif %}',
         selectedModelName: 'Automatic Smart Routing',
         selectedModelBadge: 'Smart Auto',
         selectedModelIcon: '✨',
-        selectedModelDesc: 'Auto-selects optimal engine with failover protection',
+        selectedModelDesc: '{% if wallet.subscription_tier == "starter" %}Auto-wires to Veo 3.1 Lite (10,000 cr / 5s) for Starter plan{% elif wallet.subscription_tier == "creator" %}Auto-wires to Veo 3.1 Fast (22,000 cr / 5s) for Creator plan{% elif wallet.subscription_tier == "ultra" %}Auto-wires to Full Catalog & Cinema Master for Ultra plan{% else %}Auto-selects optimal engine with failover protection{% endif %}',
         promptText: '{% if request.GET.prompt %}{{ request.GET.prompt|escapejs }}{% else %}{% endif %}',
         negativePrompt: '{% if request.GET.negative_prompt %}{{ request.GET.negative_prompt|escapejs }}{% else %}{% endif %}',
         showNegative: {% if request.GET.negative_prompt %}true{% else %}false{% endif %},
@@ -213,7 +209,7 @@ function createStudioApp() {
             const dur = parseInt(this.duration) || 5;
 
             if (currentModel) {
-                if (currentModel.type === 'video' || currentModel.type === 'audio') {
+                if (currentModel.type === 'video') {
                     this.estimatedCredits = currentModel.fixed + (currentModel.perSec * dur);
                 } else {
                     this.estimatedCredits = currentModel.fixed;
@@ -223,13 +219,17 @@ function createStudioApp() {
                     if (this.selectedModel === 'best_quality') this.estimatedCredits = 1500;
                     else if (this.selectedModel === 'fastest' || this.selectedModel === 'budget') this.estimatedCredits = 250;
                     else this.estimatedCredits = 750;
-                } else if (this.generationType === 'audio') {
-                    if (this.selectedModel === 'fastest' || this.selectedModel === 'budget') this.estimatedCredits = 25;
-                    else this.estimatedCredits = 15 + (2 * dur);
                 } else {
-                    if (this.selectedModel === 'best_quality') this.estimatedCredits = 8500 * dur;
-                    else if (this.selectedModel === 'fastest' || this.selectedModel === 'budget') this.estimatedCredits = 2000 * dur;
-                    else this.estimatedCredits = 4400 * dur;
+                    const userTier = '{{ wallet.subscription_tier|default:"free" }}';
+                    if (this.selectedModel === 'best_quality') {
+                        this.estimatedCredits = 8500 * dur;
+                    } else if (this.selectedModel === 'fastest' || this.selectedModel === 'budget' || (this.selectedModel === 'automatic' && userTier === 'starter')) {
+                        // Starter tier wires directly to Veo 3.1 Lite (2,000 cr/sec)
+                        this.estimatedCredits = 2000 * dur;
+                    } else {
+                        // Creator & Ultra auto-wire to Veo 3.1 Fast (4,400 cr/sec)
+                        this.estimatedCredits = 4400 * dur;
+                    }
                 }
             }
 
@@ -242,6 +242,52 @@ function createStudioApp() {
             }
         },
 
+        get currentModelDurations() {
+            const m = dynamicModels[this.selectedModel];
+            if (m && m.supportedDurations && m.supportedDurations.length > 0) {
+                return m.supportedDurations;
+            }
+            if (this.selectedModel && this.selectedModel.includes('wan')) {
+                return [5];
+            }
+            return [5, 10, 15];
+        },
+
+        get isModelFixedDuration() {
+            return this.generationType === 'video' && this.currentModelDurations.length === 1;
+        },
+
+        get modelDurationLabel() {
+            if (this.isModelFixedDuration) {
+                return this.duration + ' Seconds (' + this.selectedModelName.split(' ')[0] + ' Native)';
+            }
+            return this.duration + ' Seconds';
+        },
+
+        setDuration(d) {
+            this.duration = d;
+            this.calculateCredits();
+        },
+
+        stepDuration(delta) {
+            const list = this.currentModelDurations;
+            const currentIndex = list.indexOf(this.duration);
+            if (currentIndex === -1) {
+                this.duration = list[0];
+            } else {
+                const newIndex = Math.max(0, Math.min(list.length - 1, currentIndex + delta));
+                this.duration = list[newIndex];
+            }
+            this.calculateCredits();
+        },
+
+        adjustDurationForModel(modelId) {
+            const list = this.currentModelDurations;
+            if (!list.includes(this.duration)) {
+                this.duration = list[0];
+            }
+        },
+
         selectModel(id, name, badge, icon, desc) {
             this.selectedModel = id;
             this.selectedModelName = name;
@@ -249,6 +295,7 @@ function createStudioApp() {
             this.selectedModelIcon = icon;
             this.selectedModelDesc = desc || '';
             this.modelDropdownOpen = false;
+            this.adjustDurationForModel(id);
             this.calculateCredits();
         },
 
@@ -339,21 +386,41 @@ function createStudioApp() {
             }, 300);
         },
 
-        formatAsSpokenThoughts() {
-            this.isEnhancing = true;
-            setTimeout(() => {
-                let text = this.promptText.trim();
-                if (!text) {
-                    text = "Alright... today's the day. Just gotta keep my head up and walk in there like I own the place.";
-                } else {
-                    if (!text.includes('...')) {
-                        text = text.replace(/([,;])\s*/g, '... ');
-                        if (!text.endsWith('.')) text += '...';
-                    }
+        applyStylePreset(styleKey) {
+            const styles = {
+                '3d_animation': {
+                    cue: ', stylized 3D cinematic animation character, Pixar and Disney 3D CGI aesthetic, Octane 3D render, expressive facial morphology, soft subsurface skin scattering, warm sunset rim lighting, shallow depth of field, 8k master',
+                    defaultPrompt: 'A stylish animated couple walking down a scenic city promenade at golden hour sunset, laughing together, stylized 3D cinematic animation character, Pixar and Disney 3D CGI aesthetic, Octane 3D render, expressive facial morphology, soft subsurface skin scattering, warm sunset rim lighting, shallow depth of field, 8k master'
+                },
+                'photoreal': {
+                    cue: ', cinematic 8k, photorealistic 35mm film still, dramatic Arri Alexa lighting, natural skin texture, authentic depth of field, award-winning cinematography',
+                    defaultPrompt: 'Cinematic wide tracking shot of an elegant couple strolling through city center at golden sunset, authentic film grain, 35mm film still, Arri Alexa lighting, 8k photorealistic'
+                },
+                'anime': {
+                    cue: ', modern anime digital illustration, Makoto Shinkai aesthetic, vibrant luminous color palette, expressive eyes, atmospheric lighting, trending on ArtStation',
+                    defaultPrompt: 'Vibrant modern anime illustration of two characters meeting on a sunlit city street, wind blowing through hair, Makoto Shinkai aesthetic, vibrant luminous lighting'
+                },
+                'cyberpunk': {
+                    cue: ', Neo-Tokyo cyberpunk, volumetric neon reflections, glowing holographic lights, dark urban aesthetic, cinematic anamorphic lens flares, 8k master',
+                    defaultPrompt: 'Cyberpunk urban street at night, neon holograms reflecting on rain-soaked pavement, stylish futuristic figures, volumetric fog, anamorphic lens flare'
                 }
-                this.promptText = text;
-                this.isEnhancing = false;
-            }, 250);
+            };
+
+            const preset = styles[styleKey];
+            if (!preset) return;
+
+            if (!this.promptText || !this.promptText.trim()) {
+                this.promptText = preset.defaultPrompt;
+            } else {
+                if (!this.promptText.includes('Pixar') && !this.promptText.includes('Octane 3D') && !this.promptText.includes('photorealistic 35mm')) {
+                    this.promptText = this.promptText.trim().replace(/\.+$/, '') + preset.cue;
+                }
+            }
+
+            this.$nextTick(() => {
+                const el = document.getElementById('fl-prompt-textarea');
+                if (el) el.focus();
+            });
         },
 
         handleFileChange(e) {
@@ -380,10 +447,10 @@ function createStudioApp() {
 <div class="w-full space-y-6 sm:space-y-8 relative" x-data="createStudioApp()">
 
     <!-- ===================================================
-         FLASHLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE (FULL WIDTH)
+         CLEAVERLOOP HERO STAGE: PERSPECTIVE ARCH & TITLE (FULL WIDTH)
          =================================================== -->
     <div class="relative pt-2 pb-6 overflow-hidden text-center select-none w-full">
-        <!-- Ambient Flashloop Arch Lighting Background -->
+        <!-- Ambient CLEAVERloop Arch Lighting Background -->
         <div class="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center opacity-70">
             <svg class="w-full h-48 sm:h-64" viewBox="0 0 1400 320" fill="none" preserveAspectRatio="none">
                 <defs>
@@ -536,6 +603,7 @@ function createStudioApp() {
                     <!-- Top Bar: Modality Tabs & Status Badges -->
                     <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
                         <!-- Segmented Mode Switcher -->
+                        <!-- Segmented Mode Switcher -->
                         <div class="inline-flex p-1 rounded-2xl bg-[#090b0e] border border-white/[0.08] flex-wrap sm:flex-nowrap gap-1 shadow-inner">
                             <button type="button"
                                     @click="setGenerationType('video')"
@@ -553,21 +621,13 @@ function createStudioApp() {
                                 <span>AI Image Engine</span>
                                 <span class="text-[9px] px-1.5 py-0.2 rounded bg-black/40 text-orange-200 font-mono">4K HD</span>
                             </button>
-                            <button type="button"
-                                    @click="setGenerationType('audio')"
-                                    :class="generationType === 'audio' ? 'fl-gradient-orange-btn text-white font-bold shadow-lg fl-glow-orange' : 'text-slate-400 hover:text-white'"
-                                    class="px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center gap-2 cursor-pointer">
-                                <span>🔊</span>
-                                <span>AI Voice & Foley</span>
-                                <span class="text-[9px] px-1.5 py-0.2 rounded bg-black/40 text-orange-200 font-mono">ElevenLabs</span>
-                            </button>
                         </div>
 
                         <!-- Quick Modality Health Indicator -->
                         <div class="flex items-center gap-3 text-xs text-slate-400 font-mono">
                             <span class="inline-flex items-center gap-1.5 text-emerald-400">
                                 <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                <span x-text="generationType === 'audio' ? 'Neural Audio TTS Ready' : 'Multi-Model Failover Active'"></span>
+                                <span>Multi-Model Failover Active</span>
                             </span>
                             <span class="text-slate-600 hidden sm:inline">•</span>
                             <span class="text-slate-400 hidden sm:inline">Zero Drift Consistency</span>
@@ -601,7 +661,7 @@ function createStudioApp() {
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <label class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2 font-heading">
                                 <span class="w-2 h-2 rounded-full bg-orange-400"></span>
-                                <span x-text="generationType === 'audio' ? '🎙️ Speech Script or Foley Prompt' : 'Director\'s Scene Specification'"></span>
+                                <span>Director's Scene Specification</span>
                             </label>
 
                             <!-- Directorial Prompt Intelligence Action Buttons -->
@@ -615,17 +675,6 @@ function createStudioApp() {
                                         class="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/40 text-orange-300 text-xs font-bold transition flex items-center gap-1.5 shadow-sm hover:scale-[1.02] cursor-pointer">
                                     <span>🗣️</span>
                                     <span>Make Character Talk & React</span>
-                                </button>
-
-                                <!-- Format Spoken Thoughts (Audio Mode) -->
-                                <button type="button"
-                                        x-show="generationType === 'audio'"
-                                        @click="formatAsSpokenThoughts()"
-                                        :disabled="isEnhancing"
-                                        title="Format speech into natural first-person spoken thoughts with breath pauses"
-                                        class="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/40 text-orange-300 text-xs font-bold transition flex items-center gap-1.5 shadow-sm hover:scale-[1.02] cursor-pointer">
-                                    <span>💭</span>
-                                    <span>Format Spoken Thoughts</span>
                                 </button>
 
                                 <!-- Super Agent Standard Enhance -->
@@ -654,15 +703,53 @@ function createStudioApp() {
                             </div>
                         </div>
 
+                        <!-- Visual Aesthetic Style Presets Bar -->
+                        <div class="flex flex-wrap items-center gap-1.5 pt-1 pb-2 border-b border-white/[0.04]">
+                            <span class="text-[10px] font-mono uppercase text-slate-400 font-bold mr-1 flex items-center gap-1">
+                                <span>🎨</span> Style Presets:
+                            </span>
+                            <!-- 3D Cinematic Animation (Pixar/Disney/DreamWorks 3D CGI) -->
+                            <button type="button"
+                                    @click="applyStylePreset('3d_animation')"
+                                    title="Pixar/Disney stylized 3D CGI animation, Octane render, charming expressive morphology"
+                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1.5 hover:scale-[1.02] cursor-pointer">
+                                <span>🧸</span>
+                                <span>3D Cinematic Animation</span>
+                                <span class="text-[9px] px-1 py-0.2 rounded bg-emerald-500/20 font-mono">Pixar/Disney CGI</span>
+                            </button>
+                            <!-- Photorealistic Cinema -->
+                            <button type="button"
+                                    @click="applyStylePreset('photoreal')"
+                                    title="Photorealistic 35mm cinema film look"
+                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 transition flex items-center gap-1.5 cursor-pointer">
+                                <span>🎬</span>
+                                <span>Photoreal Cinema</span>
+                            </button>
+                            <!-- Modern Anime / Illustration -->
+                            <button type="button"
+                                    @click="applyStylePreset('anime')"
+                                    title="Vibrant modern anime digital illustration"
+                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 transition flex items-center gap-1.5 cursor-pointer">
+                                <span>🔮</span>
+                                <span>Anime / Art</span>
+                            </button>
+                            <!-- Cyberpunk Neo-Tokyo -->
+                            <button type="button"
+                                    @click="applyStylePreset('cyberpunk')"
+                                    title="Volumetric neon fog and high tech cyberpunk"
+                                    class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/10 transition flex items-center gap-1.5 cursor-pointer">
+                                <span>⚡</span>
+                                <span>Cyberpunk</span>
+                            </button>
+                        </div>
+
                         <!-- Main Prompt Textarea -->
                         <textarea id="fl-prompt-textarea"
                                   name="prompt"
                                   rows="4"
                                   required
                                   x-model="promptText"
-                                  :placeholder="generationType === 'audio' 
-                                    ? 'Enter dialogue text for ElevenLabs voiceover (e.g. \'Welcome to CleaverLoop, where AI meets cinematic imagination.\') or describe sound effects (e.g. \'Heavy rain on a metal roof with distant rolling thunder\')...' 
-                                    : 'Describe your vision in rich visual detail... e.g. Cinematic wide tracking shot of a glowing neon cyber vehicle gliding through rainy Tokyo at midnight, wet reflections, authentic film grain, 4k ultra-realistic'"
+                                  placeholder="Describe your vision in rich visual detail... e.g. Cinematic wide tracking shot of a glowing neon cyber vehicle gliding through rainy Tokyo at midnight, wet reflections, authentic film grain, 4k ultra-realistic"
                                   class="w-full bg-transparent border-none text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none focus:ring-0 p-0 resize-none leading-relaxed font-sans"></textarea>
 
                         <!-- Textarea Footer: Char count & Negative Prompt Trigger -->
@@ -697,8 +784,8 @@ function createStudioApp() {
                     </div>
 
                     <!-- Casting & Reference Asset Bay -->
-                    <!-- Row: Character Casting + Image Reference (Video/Image) OR Voice Persona + Mode Deck (Audio) -->
-                    <div x-show="generationType !== 'audio'" class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                    <!-- Row: Character Casting + Image Reference -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                         <!-- Consistent Character Selector (Custom Flashloop Popover) -->
                         <div class="rounded-2xl bg-[#090b0e] border border-white/[0.08] p-4 space-y-2.5 relative"
                              @click.outside="characterDropdownOpen = false">
@@ -1096,213 +1183,6 @@ function createStudioApp() {
                             </div>
                         </div>
                     </div>
-
-                    <!-- Audio Modality: Voice Persona & Sound Mode Deck -->
-                    <div x-show="generationType === 'audio'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-                        <!-- ElevenLabs Voice Persona Picker (Glassmorphic Popover) -->
-                        <div class="rounded-2xl bg-[#090b0e] border border-white/[0.08] p-4 space-y-2.5 relative"
-                             @click.outside="voiceDropdownOpen = false">
-                            <input type="hidden" name="voice" :value="voice">
-                            
-                            <div class="flex items-center justify-between">
-                                <label class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                                    <span class="text-orange-400">🎙️</span>
-                                    <span>Voice Persona</span>
-                                </label>
-                                <a href="{% url 'voices:create' %}" target="_blank" class="text-[10px] text-orange-400 hover:text-orange-300 font-bold transition flex items-center gap-1 hover:underline">
-                                    <span>+ Clone Voice</span>
-                                    <span class="font-mono">↗</span>
-                                </a>
-                            </div>
-
-                            <!-- Voice Trigger Button -->
-                            <button type="button"
-                                    @click="voiceDropdownOpen = !voiceDropdownOpen"
-                                    :class="voiceDropdownOpen ? 'border-orange-500 ring-1 ring-orange-500/40 bg-[#14171c]' : 'border-white/[0.08] bg-black/60 hover:border-white/20 hover:bg-[#101216]'"
-                                    class="w-full rounded-2xl border text-xs text-white p-2.5 sm:p-3 outline-none transition-all duration-200 flex items-center justify-between gap-2.5 cursor-pointer shadow-lg group">
-                                <div class="flex items-center gap-2.5 min-w-0">
-                                    <!-- Icon Badge -->
-                                    <div class="w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 transition-all duration-200 shadow-sm"
-                                         :class="selectedVoiceIsCloned ? 'bg-gradient-to-br from-amber-500/30 to-orange-500/20 border border-amber-500/50 text-amber-300' : 'bg-orange-500/15 border border-orange-500/30 text-orange-400'">
-                                        <span x-text="selectedVoiceIsCloned ? '⭐' : '🗣️'"></span>
-                                    </div>
-
-                                    <!-- Voice Info -->
-                                    <div class="text-left min-w-0">
-                                        <div class="font-bold text-white text-xs truncate flex items-center gap-1.5">
-                                            <span x-text="selectedVoiceName"></span>
-                                            <template x-if="selectedVoiceIsCloned">
-                                                <span class="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">CLONED</span>
-                                            </template>
-                                            <template x-if="!selectedVoiceIsCloned">
-                                                <span class="text-[8px] font-mono uppercase px-1.5 py-0.2 rounded-full bg-white/[0.06] text-slate-400 border border-white/[0.08]" x-text="selectedVoiceBadge"></span>
-                                            </template>
-                                        </div>
-                                        <div class="text-[10px] text-slate-400 truncate mt-0.5" x-text="selectedVoiceDesc"></div>
-                                    </div>
-                                </div>
-
-                                <!-- Chevron Indicator -->
-                                <div class="w-6 h-6 rounded-lg bg-white/[0.04] border border-white/[0.06] flex items-center justify-center shrink-0 text-slate-400 group-hover:text-white transition">
-                                    <svg class="w-3.5 h-3.5 transition-transform duration-200"
-                                         :class="voiceDropdownOpen ? 'rotate-180 text-orange-400' : ''"
-                                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                </div>
-                            </button>
-
-                            <!-- Voice Popover Menu -->
-                            <div x-show="voiceDropdownOpen"
-                                 x-transition:enter="transition ease-out duration-150"
-                                 x-transition:enter-start="opacity-0 scale-95 -translate-y-2"
-                                 x-transition:enter-end="opacity-100 scale-100 translate-y-0"
-                                 x-transition:leave="transition ease-in duration-100"
-                                 x-transition:leave-start="opacity-100 scale-100"
-                                 x-transition:leave-end="opacity-0 scale-95"
-                                 class="absolute left-0 right-0 top-full mt-2 rounded-2xl bg-[#0c0e12]/98 backdrop-blur-2xl border border-white/[0.12] shadow-2xl p-2.5 z-50 max-h-80 overflow-y-auto space-y-2.5">
-                                
-                                <!-- Search / Filter Bar -->
-                                <div class="relative">
-                                    <input type="text"
-                                           x-model="audioVoiceSearch"
-                                           placeholder="Search cloned or preset voices..."
-                                           class="w-full rounded-xl bg-black/60 border border-white/10 text-[11px] text-white placeholder-slate-500 pl-8 pr-3 py-1.5 outline-none focus:border-orange-500/70 transition">
-                                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-slate-500">🔍</span>
-                                    <button type="button"
-                                            x-show="audioVoiceSearch"
-                                            @click="audioVoiceSearch = ''"
-                                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 hover:text-white">✕</button>
-                                </div>
-
-                                <!-- Group 1: My Cloned Voices -->
-                                {% if cloned_voices %}
-                                <div class="space-y-1">
-                                    <div class="flex items-center justify-between px-2 py-1">
-                                        <span class="text-[10px] font-mono uppercase font-bold text-amber-300 flex items-center gap-1.5">
-                                            <span>⭐</span>
-                                            <span>My Cloned Voices</span>
-                                        </span>
-                                        <span class="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">
-                                            {{ cloned_voices|length }} Ready
-                                        </span>
-                                    </div>
-
-                                    {% for cv in cloned_voices %}
-                                    <div x-show="!audioVoiceSearch || '{{ cv.name|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase()) || '{{ cv.accent|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase())"
-                                         class="flex items-center gap-1.5">
-                                        <button type="button"
-                                                @click="selectVoice('{{ cv.id }}', '{{ cv.name|escapejs }}', '{{ cv.gender|title }} • {{ cv.accent|default:"Natural" }} Accent', 'CLONED', true)"
-                                                :class="voice === '{{ cv.id }}' ? 'bg-amber-500/20 border-amber-500/50 text-white shadow-sm' : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white'"
-                                                class="flex-1 p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
-                                            <div class="flex items-center gap-2.5 min-w-0">
-                                                <div class="w-7 h-7 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-xs shrink-0 text-amber-300 font-bold">
-                                                    🎙️
-                                                </div>
-                                                <div class="min-w-0">
-                                                    <div class="text-xs font-bold text-white group-hover/item:text-amber-300 transition truncate flex items-center gap-1.5">
-                                                        <span>{{ cv.name }}</span>
-                                                        <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">CUSTOM</span>
-                                                    </div>
-                                                    <div class="text-[10px] text-slate-400 truncate">{{ cv.gender|title }} • {{ cv.accent|default:"Natural" }}</div>
-                                                </div>
-                                            </div>
-                                            <span x-show="voice === '{{ cv.id }}'" class="text-amber-400 text-xs font-bold shrink-0">✓</span>
-                                        </button>
-                                        {% if cv.preview_url %}
-                                        <button type="button"
-                                                @click.stop="const a = new Audio('{{ cv.preview_url }}'); a.play();"
-                                                title="Audition Sample Clip"
-                                                class="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-amber-500/20 hover:text-amber-300 border border-white/[0.06] text-slate-400 flex items-center justify-center text-[10px] shrink-0 transition cursor-pointer">
-                                            ▶
-                                        </button>
-                                        {% endif %}
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                <div class="border-t border-white/[0.06] my-1"></div>
-                                {% endif %}
-
-                                <!-- Group 2: Preset Voices -->
-                                <div class="space-y-1">
-                                    <div class="flex items-center justify-between px-2 py-1">
-                                        <span class="text-[10px] font-mono uppercase font-bold text-slate-400 flex items-center gap-1.5">
-                                            <span>🎭</span>
-                                            <span>Preset Voice Personas</span>
-                                        </span>
-                                        <span class="text-[9px] font-mono text-slate-500">ElevenLabs Neural</span>
-                                    </div>
-
-                                    {% for v in available_voices %}
-                                    <button type="button"
-                                            x-show="!audioVoiceSearch || '{{ v.name|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase()) || '{{ v.desc|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase()) || '{{ v.badge|lower|escapejs }}'.includes(audioVoiceSearch.toLowerCase())"
-                                            @click="selectVoice('{{ v.id }}', '{{ v.name|escapejs }}', '{{ v.desc|escapejs }}', '{{ v.badge|escapejs }}', false)"
-                                            :class="voice === '{{ v.id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'border-transparent text-slate-300 hover:bg-white/[0.05] hover:text-white'"
-                                            class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between gap-2.5 cursor-pointer group/item">
-                                        <div class="flex items-center gap-2.5 min-w-0">
-                                            <div class="w-7 h-7 rounded-lg bg-orange-500/15 border border-orange-500/25 flex items-center justify-center text-xs shrink-0 text-orange-400 font-bold">
-                                                🗣️
-                                            </div>
-                                            <div class="min-w-0">
-                                                <div class="text-xs font-bold text-white group-hover/item:text-orange-300 transition truncate flex items-center gap-1.5">
-                                                    <span>{{ v.name }}</span>
-                                                    <span class="text-[8px] font-mono px-1 py-0.2 rounded bg-white/[0.06] text-slate-400 border border-white/[0.08]">{{ v.badge }}</span>
-                                                </div>
-                                                <div class="text-[10px] text-slate-400 truncate">{{ v.desc }}</div>
-                                            </div>
-                                        </div>
-                                        <span x-show="voice === '{{ v.id }}'" class="text-orange-400 text-xs font-bold shrink-0">✓</span>
-                                    </button>
-                                    {% empty %}
-                                    <button type="button"
-                                            @click="selectVoice('adam', 'Adam', 'Deep, authoritative narrator', 'Cinematic', false)"
-                                            class="w-full p-2 rounded-xl border text-left transition flex items-center justify-between bg-orange-500/20 border-orange-500/50 text-white">
-                                        <div class="text-xs font-bold text-white">Adam (Cinematic)</div>
-                                        <span class="text-orange-400 text-xs font-bold">✓</span>
-                                    </button>
-                                    {% endfor %}
-                                </div>
-
-                                <!-- Popover Footer Action -->
-                                <div class="pt-2 border-t border-white/[0.06]">
-                                    <a href="{% url 'voices:create' %}" target="_blank"
-                                       class="w-full py-2 px-3 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 border border-dashed border-orange-500/30 text-orange-300 hover:text-orange-200 text-xs font-bold flex items-center justify-center gap-1.5 transition">
-                                        <span>🎙️</span>
-                                        <span>+ Clone New Voice Persona</span>
-                                        <span class="font-mono text-[10px]">↗</span>
-                                    </a>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Audio Design Mode Helpers -->
-                        <div class="rounded-2xl bg-[#090b0e] border border-white/[0.08] p-4 space-y-2.5">
-                            <div class="flex items-center justify-between">
-                                <label class="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
-                                    <span class="text-orange-400">🎧</span>
-                                    <span>Audio Synthesis Mode</span>
-                                </label>
-                                <span class="text-[10px] text-orange-400 font-mono">ElevenLabs + Fal</span>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-2">
-                                <button type="button" 
-                                        @click="selectModel('eleven-multilingual-v2', 'ElevenLabs Multilingual V2', 'ELEVENLABS', '🔊', 'Cinematic Voice & Dialogue')"
-                                        :class="selectedModel === 'eleven-multilingual-v2' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'bg-black/60 border-white/[0.08] text-slate-300 hover:text-white'"
-                                        class="p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer">
-                                    <span class="text-xs font-bold">🎙️ Voiceover / TTS</span>
-                                    <span class="text-[10px] text-slate-400 mt-1">Multi-lingual character speech</span>
-                                </button>
-                                <button type="button" 
-                                        @click="selectModel('eleven-sound-effects', 'ElevenLabs Sound Effects & Foley FX', 'ELEVENLABS', '🎧', 'Sound Effects & Ambient Foley')"
-                                        :class="selectedModel === 'eleven-sound-effects' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'bg-black/60 border-white/[0.08] text-slate-300 hover:text-white'"
-                                        class="p-3 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer">
-                                    <span class="text-xs font-bold">🔊 Foley & SFX FX</span>
-                                    <span class="text-[10px] text-slate-400 mt-1">Cinematic audio soundscapes</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -1327,7 +1207,7 @@ function createStudioApp() {
                     <div class="space-y-1.5 relative" @click.outside="modelDropdownOpen = false">
                         <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
                             <span>AI Model Engine</span>
-                            <span class="text-[10px] text-orange-400/90 font-mono" x-text="generationType === 'video' ? 'Video Hub' : (generationType === 'audio' ? 'Audio Hub' : 'Image Hub')"></span>
+                            <span class="text-[10px] text-orange-400/90 font-mono" x-text="generationType === 'video' ? 'Video Hub' : 'Image Hub'"></span>
                         </label>
 
                         <!-- Hidden Inputs -->
@@ -1379,17 +1259,27 @@ function createStudioApp() {
                                 </div>
 
                                 <button type="button"
-                                        @click="selectModel('automatic', 'Automatic Smart Routing', 'Smart Auto', '✨', 'Auto-selects optimal engine with failover protection')"
+                                        @click="selectModel('automatic', 'Automatic Smart Routing', 'Smart Auto', '✨', '{% if wallet.subscription_tier == "starter" %}Auto-wires to Veo 3.1 Lite (10,000 cr / 5s) for Starter plan{% elif wallet.subscription_tier == "creator" %}Auto-wires to Veo 3.1 Fast (22,000 cr / 5s) for Creator plan{% elif wallet.subscription_tier == "ultra" %}Auto-wires to Full Catalog & Cinema Master for Ultra plan{% else %}Auto-selects optimal engine with failover protection{% endif %}')"
                                         :class="selectedModel === 'automatic' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
                                         class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group cursor-pointer">
                                     <div class="flex items-center gap-2.5 min-w-0">
                                         <span class="w-6 h-6 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center text-xs shrink-0">✨</span>
                                         <div class="min-w-0">
                                             <div class="text-xs font-semibold truncate group-hover:text-orange-300">Automatic Smart Routing</div>
-                                            <div class="text-[10px] text-slate-400">Intelligent failover & load balance</div>
+                                            <div class="text-[10px] text-slate-400">
+                                                {% if wallet.subscription_tier == 'starter' %}
+                                                    Auto-wired to Veo 3.1 Lite (10k cr/5s)
+                                                {% elif wallet.subscription_tier == 'creator' %}
+                                                    Auto-wired to Veo 3.1 Fast (22k cr/5s)
+                                                {% else %}
+                                                    Intelligent failover &amp; load balance
+                                                {% endif %}
+                                            </div>
                                         </div>
                                     </div>
-                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono shrink-0">Optimal</span>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono shrink-0">
+                                        {% if wallet.subscription_tier == 'starter' %}Veo Lite{% elif wallet.subscription_tier == 'creator' %}Veo Fast{% else %}Optimal{% endif %}
+                                    </span>
                                 </button>
 
                                 <button type="button"
@@ -1452,8 +1342,11 @@ function createStudioApp() {
                                             </span>
                                             <div class="min-w-0">
                                                 <div class="text-xs font-semibold truncate group-hover:text-orange-300">{{ m.display_name }}</div>
-                                                <div class="text-[10px] text-slate-400 flex items-center gap-1.5">
+                                                <div class="text-[10px] text-slate-400 flex items-center gap-1.5 flex-wrap">
                                                     <span>{{ m.provider.name }}</span>
+                                                    {% if m.model_id == 'veo-3.1-lite' %}<span class="text-[9px] px-1 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-bold">Starter Wire (10k cr)</span>{% endif %}
+                                                    {% if m.model_id == 'veo-3.1-fast' %}<span class="text-[9px] px-1 py-0.2 rounded bg-orange-500/20 text-orange-300 font-bold">Creator Wire (22k cr)</span>{% endif %}
+                                                    {% if m.model_id == 'veo-3.1-standard' %}<span class="text-[9px] px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">Ultra Cinema (42.5k cr)</span>{% endif %}
                                                     {% if m.is_premium %}<span class="text-[9px] text-amber-400">★ Premium</span>{% endif %}
                                                     {% if m.supports_audio %}<span class="text-[9px] text-cyan-400">♪ Audio</span>{% endif %}
                                                 </div>
@@ -1492,101 +1385,53 @@ function createStudioApp() {
                                     </button>
                                 {% endfor %}
                             </div>
-
-                            <!-- Section 2: Specific AI Engines (Audio) -->
-                            <div x-show="generationType === 'audio'" x-cloak class="space-y-1 pt-2 border-t border-white/[0.06]">
-                                <div class="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
-                                    <span>🔊 Dedicated Audio & Speech Engines</span>
-                                </div>
-
-                                {% for m in audio_models %}
-                                    <button type="button"
-                                            @click="selectModel('{{ m.model_id }}', '{{ m.display_name }}', '{{ m.provider.slug|upper }}', '{% if m.provider.slug == "elevenlabs" %}🔊{% elif m.provider.slug == "fal" %}🎙️{% else %}🎧{% endif %}', '{{ m.provider.name }} • {{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s')"
-                                            :class="selectedModel === '{{ m.model_id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
-                                            class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group cursor-pointer">
-                                        <div class="flex items-center gap-2.5 min-w-0">
-                                            <span class="w-6 h-6 rounded-md bg-white/[0.06] border border-white/10 text-white flex items-center justify-center text-xs shrink-0">
-                                                {% if m.provider.slug == 'elevenlabs' %}🔊{% elif m.provider.slug == 'fal' %}🎙️{% else %}🎧{% endif %}
-                                            </span>
-                                            <div class="min-w-0">
-                                                <div class="text-xs font-semibold truncate group-hover:text-orange-300">{{ m.display_name }}</div>
-                                                <div class="text-[10px] text-slate-400">{{ m.provider.name }}</div>
-                                            </div>
-                                        </div>
-                                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-300 font-mono shrink-0">
-                                            {{ m.credit_cost_fixed }}+{{ m.credit_cost_per_second }}/s
-                                        </span>
-                                    </button>
-                                {% endfor %}
-                            </div>
                         </div>
                     </div>
 
-                    <!-- 2. Graphic Aspect Ratio (Video/Image) OR Audio Format (Audio) -->
+                    <!-- 2. Graphic Aspect Ratio (Video/Image) -->
                     <div class="space-y-1.5">
-                        <div x-show="generationType !== 'audio'">
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Aspect Ratio Frame</label>
-                            <input type="hidden" name="aspect_ratio" :value="aspectRatio">
-                            <div class="grid grid-cols-4 gap-2">
-                                <!-- 16:9 -->
-                                <button type="button"
-                                        @click="aspectRatio = '16:9'"
-                                        :class="aspectRatio === '16:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
-                                        class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
-                                    <span class="w-6 h-3.5 border border-current rounded-xs inline-block"></span>
-                                    <span class="text-[11px]">16:9</span>
-                                    <span class="text-[9px] opacity-60">Cinema</span>
-                                </button>
+                        <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Aspect Ratio Frame</label>
+                        <input type="hidden" name="aspect_ratio" :value="aspectRatio">
+                        <div class="grid grid-cols-4 gap-2">
+                            <!-- 16:9 -->
+                            <button type="button"
+                                    @click="aspectRatio = '16:9'"
+                                    :class="aspectRatio === '16:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
+                                <span class="w-6 h-3.5 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">16:9</span>
+                                <span class="text-[9px] opacity-60">Cinema</span>
+                            </button>
 
-                                <!-- 9:16 -->
-                                <button type="button"
-                                        @click="aspectRatio = '9:16'"
-                                        :class="aspectRatio === '9:16' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
-                                        class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
-                                    <span class="w-3.5 h-6 border border-current rounded-xs inline-block"></span>
-                                    <span class="text-[11px]">9:16</span>
-                                    <span class="text-[9px] opacity-60">Reels</span>
-                                </button>
+                            <!-- 9:16 -->
+                            <button type="button"
+                                    @click="aspectRatio = '9:16'"
+                                    :class="aspectRatio === '9:16' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
+                                <span class="w-3.5 h-6 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">9:16</span>
+                                <span class="text-[9px] opacity-60">Reels</span>
+                            </button>
 
-                                <!-- 1:1 -->
-                                <button type="button"
-                                        @click="aspectRatio = '1:1'"
-                                        :class="aspectRatio === '1:1' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
-                                        class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
-                                    <span class="w-4 h-4 border border-current rounded-xs inline-block"></span>
-                                    <span class="text-[11px]">1:1</span>
-                                    <span class="text-[9px] opacity-60">Square</span>
-                                </button>
+                            <!-- 1:1 -->
+                            <button type="button"
+                                    @click="aspectRatio = '1:1'"
+                                    :class="aspectRatio === '1:1' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
+                                <span class="w-4 h-4 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">1:1</span>
+                                <span class="text-[9px] opacity-60">Square</span>
+                            </button>
 
-                                <!-- 21:9 -->
-                                <button type="button"
-                                        @click="aspectRatio = '21:9'"
-                                        :class="aspectRatio === '21:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
-                                        class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
-                                    <span class="w-7 h-3 border border-current rounded-xs inline-block"></span>
-                                    <span class="text-[11px]">21:9</span>
-                                    <span class="text-[9px] opacity-60">Ultra</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Audio Master Format Selector -->
-                        <div x-show="generationType === 'audio'" x-cloak>
-                            <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Audio Master Output</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <div class="p-2.5 rounded-xl bg-orange-500/15 border border-orange-500/40 text-center">
-                                    <span class="text-xs font-bold text-white block">MP3 Studio</span>
-                                    <span class="text-[9px] text-orange-300 opacity-90 block">320kbps High Q</span>
-                                </div>
-                                <div class="p-2.5 rounded-xl bg-[#090b0e] border border-white/[0.08] text-center">
-                                    <span class="text-xs font-bold text-slate-300 block">WAV 48kHz</span>
-                                    <span class="text-[9px] text-slate-400 block">Lossless Master</span>
-                                </div>
-                                <div class="p-2.5 rounded-xl bg-[#090b0e] border border-white/[0.08] text-center">
-                                    <span class="text-xs font-bold text-slate-300 block">Foley FX</span>
-                                    <span class="text-[9px] text-slate-400 block">Dynamic Range</span>
-                                </div>
-                            </div>
+                            <!-- 21:9 -->
+                            <button type="button"
+                                    @click="aspectRatio = '21:9'"
+                                    :class="aspectRatio === '21:9' ? 'bg-orange-500/20 border-orange-500 text-white font-bold shadow-sm' : 'bg-[#090b0e] border-white/[0.08] text-slate-400 hover:text-white'"
+                                    class="p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 cursor-pointer">
+                                <span class="w-7 h-3 border border-current rounded-xs inline-block"></span>
+                                <span class="text-[11px]">21:9</span>
+                                <span class="text-[9px] opacity-60">Ultra</span>
+                            </button>
                         </div>
                     </div>
 
@@ -1596,98 +1441,47 @@ function createStudioApp() {
                         <div x-show="generationType === 'video'">
                             <div class="flex items-center justify-between mb-1.5">
                                 <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Duration Range</label>
-                                <span class="text-xs font-bold text-orange-400 font-mono" x-text="duration + ' Seconds' + (duration !== 5 && duration !== 10 && duration !== 15 ? ' (Custom)' : '')"></span>
+                                <span class="text-xs font-bold text-orange-400 font-mono" x-text="modelDurationLabel"></span>
                             </div>
                             <input type="hidden" name="duration" :value="duration">
                             
                             <div class="space-y-2.5 p-3 rounded-2xl bg-[#090b0e] border border-white/[0.08]">
                                 <div class="flex items-center gap-2.5">
                                     <button type="button" 
-                                            @click="duration = Math.max(3, duration - 1); calculateCredits()"
-                                            class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0 cursor-pointer">
+                                            @click="stepDuration(-1)"
+                                            :disabled="isModelFixedDuration || duration <= currentModelDurations[0]"
+                                            class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
                                         -
                                     </button>
                                     <input type="range" 
-                                           min="3" 
-                                           max="15" 
-                                           step="1" 
+                                           :min="currentModelDurations[0]" 
+                                           :max="currentModelDurations[currentModelDurations.length - 1]" 
+                                           step="5" 
                                            x-model.number="duration" 
+                                           :disabled="isModelFixedDuration"
                                            @input="calculateCredits()"
-                                           class="flex-1 accent-orange-500 cursor-pointer h-2 bg-white/10 rounded-lg">
+                                           class="flex-1 accent-orange-500 cursor-pointer h-2 bg-white/10 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed">
                                     <button type="button" 
-                                            @click="duration = Math.min(15, duration + 1); calculateCredits()"
-                                            class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0 cursor-pointer">
+                                            @click="stepDuration(1)"
+                                            :disabled="isModelFixedDuration || duration >= currentModelDurations[currentModelDurations.length - 1]"
+                                            class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed">
                                         +
                                     </button>
                                 </div>
 
-                                <!-- Quick Preset Duration Pills -->
-                                <div class="flex items-center justify-between gap-1 pt-1.5 border-t border-white/[0.04]">
-                                    <button type="button" @click="duration = 5; calculateCredits()"
-                                            :class="duration === 5 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
-                                            class="px-2.5 py-1 rounded-lg text-[10px] border transition cursor-pointer">
-                                        5s
-                                    </button>
-                                    <button type="button" @click="duration = 7; calculateCredits()"
-                                            :class="duration === 7 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
-                                            class="px-2.5 py-1 rounded-lg text-[10px] border transition cursor-pointer">
-                                        7s
-                                    </button>
-                                    <button type="button" @click="duration = 10; calculateCredits()"
-                                            :class="duration === 10 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
-                                            class="px-2.5 py-1 rounded-lg text-[10px] border transition cursor-pointer">
-                                        10s
-                                    </button>
-                                    <button type="button" @click="duration = 13; calculateCredits()"
-                                            :class="duration === 13 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
-                                            class="px-2.5 py-1 rounded-lg text-[10px] border transition cursor-pointer">
-                                        13s
-                                    </button>
-                                    <button type="button" @click="duration = 15; calculateCredits()"
-                                            :class="duration === 15 ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50' : 'text-slate-400 hover:text-white border-transparent'"
-                                            class="px-2.5 py-1 rounded-lg text-[10px] border transition cursor-pointer">
-                                        15s
-                                    </button>
+                                <!-- Dynamic Model-Aware Duration Pills (7s & 13s completely removed) -->
+                                <div class="flex items-center justify-between gap-1.5 pt-1.5 border-t border-white/[0.04]">
+                                    <template x-for="d in currentModelDurations" :key="d">
+                                        <button type="button" @click="setDuration(d)"
+                                                :class="duration === d ? 'bg-orange-500/30 text-orange-300 font-bold border-orange-500/50 shadow-sm' : 'text-slate-400 hover:text-white border-transparent bg-white/[0.02] hover:bg-white/[0.05]'"
+                                                class="flex-1 py-1 rounded-lg text-[10px] border transition cursor-pointer text-center">
+                                            <span x-text="d + 's'"></span>
+                                        </button>
+                                    </template>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Audio Duration Slider (1s - 30s) -->
-                        <div x-show="generationType === 'audio'" x-cloak>
-                            <div class="flex items-center justify-between mb-1.5">
-                                <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Audio Length</label>
-                                <span class="text-xs font-bold text-orange-400 font-mono" x-text="duration + 's Duration'"></span>
-                            </div>
-                            <input type="hidden" name="duration" :value="duration">
-                            <div class="space-y-2.5 p-3 rounded-2xl bg-[#090b0e] border border-white/[0.08]">
-                                <div class="flex items-center gap-2.5">
-                                    <button type="button" 
-                                            @click="duration = Math.max(1, duration - 1); calculateCredits()"
-                                            class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0 cursor-pointer">
-                                        -
-                                    </button>
-                                    <input type="range" 
-                                           min="1" 
-                                           max="30" 
-                                           step="1" 
-                                           x-model.number="duration" 
-                                           @input="calculateCredits()"
-                                           class="flex-1 accent-orange-500 cursor-pointer h-2 bg-white/10 rounded-lg">
-                                    <button type="button" 
-                                            @click="duration = Math.min(30, duration + 1); calculateCredits()"
-                                            class="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-orange-500/30 text-white font-bold text-xs flex items-center justify-center transition border border-white/10 shrink-0 cursor-pointer">
-                                        +
-                                    </button>
-                                </div>
-                                <div class="flex items-center justify-between gap-1 pt-1.5 border-t border-white/[0.04]">
-                                    <button type="button" @click="duration = 5; calculateCredits()" :class="duration === 5 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px] cursor-pointer">5s</button>
-                                    <button type="button" @click="duration = 10; calculateCredits()" :class="duration === 10 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px] cursor-pointer">10s</button>
-                                    <button type="button" @click="duration = 15; calculateCredits()" :class="duration === 15 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px] cursor-pointer">15s</button>
-                                    <button type="button" @click="duration = 20; calculateCredits()" :class="duration === 20 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px] cursor-pointer">20s</button>
-                                    <button type="button" @click="duration = 30; calculateCredits()" :class="duration === 30 ? 'bg-orange-500/30 text-orange-300 font-bold' : 'text-slate-400'" class="px-2 py-0.5 rounded text-[10px] cursor-pointer">30s</button>
-                                </div>
-                            </div>
-                        </div>
 
                         <!-- Image Quality -->
                         <div x-show="generationType === 'image'" x-cloak>
@@ -1742,12 +1536,12 @@ function createStudioApp() {
                                         <span>🚀 Upgrade Plan to Generate Video (From $19/mo)</span>
                                     </a>
                                 </div>
-                                <div x-show="generationType === 'image' || generationType === 'audio'">
+                                <div x-show="generationType === 'image'">
                                     <button type="submit"
                                             class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-4 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full shadow-2xl cursor-pointer">
                                         <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
                                         <span>✨</span>
-                                        <span x-text="generationType === 'audio' ? 'Synthesize Audio & Voice' : 'Generate Image'"></span>
+                                        <span>Generate Image</span>
                                         <span class="opacity-70 text-xs font-mono">•</span>
                                         <span class="text-xs font-mono opacity-90" x-text="estimatedCredits.toLocaleString() + ' cr'"></span>
                                     </button>
@@ -1757,7 +1551,7 @@ function createStudioApp() {
                                         class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-2xl px-6 py-4 font-heading font-black text-sm uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2.5 w-full shadow-2xl cursor-pointer">
                                     <span id="fl-gen-spinner" class="htmx-indicator loading loading-spinner loading-xs"></span>
                                     <span>✨</span>
-                                    <span x-text="generationType === 'video' ? 'Generate Video' : (generationType === 'audio' ? 'Synthesize Audio & Voice' : 'Generate Image')"></span>
+                                    <span x-text="generationType === 'video' ? 'Generate Video' : 'Generate Image'"></span>
                                     <span class="opacity-70 text-xs font-mono">•</span>
                                     <span class="text-xs font-mono opacity-90" x-text="estimatedCredits.toLocaleString() + ' cr'"></span>
                                 </button>

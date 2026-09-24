@@ -304,9 +304,8 @@
             this.bodyType = data.body_type || '';
             this.subjectIsolation = data.subject_isolation || '';
             this.fullBodyUrl = data.full_body_url || data.face_anchor_url || data.avatar_url || '';
-            this.fullBodyPrompt = data.full_body_prompt || '';
             this.faceAnchorUrl = data.face_anchor_url || data.avatar_url || '';
-            this.avatarPreview = this.faceAnchorUrl || this.photoPreview;
+            this.avatarPreview = this.fullBodyUrl || this.faceAnchorUrl || this.photoPreview;
             this.generatedAvatarUrl = this.avatarPreview;
             this.photoPreview = this.avatarPreview;
 

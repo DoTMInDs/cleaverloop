@@ -109,14 +109,19 @@ class CreditService:
         if grant_monthly_credits and plan.credits_per_month > 0:
             external_ref = f"paystack:{reference}" if reference else ""
             if not external_ref or not CreditTransaction.objects.filter(external_reference=external_ref).exists():
-                cls.grant_credits(
-                    user=user,
-                    amount=plan.credits_per_month,
-                    transaction_type='subscription_credit',
-                    description=f"Monthly subscription credits ({plan.name})",
-                    external_reference=external_ref
-                )
-                logger.info(f"Activated {plan.name} subscription and granted {plan.credits_per_month:,} credits to {user.email}")
+                try:
+                    from django.db import IntegrityError
+                    with transaction.atomic():
+                        cls.grant_credits(
+                            user=user,
+                            amount=plan.credits_per_month,
+                            transaction_type='subscription_credit',
+                            description=f"Monthly subscription credits ({plan.name})",
+                            external_reference=external_ref
+                        )
+                        logger.info(f"Activated {plan.name} subscription and granted {plan.credits_per_month:,} credits to {user.email}")
+                except IntegrityError:
+                    logger.info(f"Subscription credits already granted concurrently for ref {reference}.")
             else:
                 logger.info(f"Subscription {plan.name} tier updated for {user.email}; credits already granted for ref {reference}.")
 
@@ -156,6 +161,51 @@ class CreditService:
         )
         logger.info(f"Deducted {deducted} credits from {user.email}. New balance: {bal_after}")
         return tx
+
+    @classmethod
+    @transaction.atomic
+    def deduct_voice_generation(cls, user, text: str = "", voice_id: str = "") -> tuple[bool, int, str]:
+        """
+        Atomically check and deduct credits for spoken dialogue / voice synthesis based on user's membership tier.
+        Creator & Ultra users enjoy unlimited 0-credit relaxed synthesis when balance is 0.
+        Returns: (success: bool, cost: int, message: str)
+        """
+        wallet = CreditWallet.objects.select_for_update().get_or_create(user=user)[0]
+        cost = wallet.voice_generation_cost
+
+        # Relaxed unlimited speech for Creator & Ultra members
+        if wallet.is_unlimited_eligible and wallet.balance <= 0:
+            CreditTransaction.objects.create(
+                wallet=wallet,
+                amount=0,
+                transaction_type='generation_consume',
+                balance_before=wallet.balance,
+                balance_after=wallet.balance,
+                description=f"Spoken Dialogue (Unlimited Relaxed): '{text[:30]}...'" if text else "Spoken Dialogue (Unlimited Relaxed)",
+            )
+            return (True, 0, "Unlimited Relaxed Queue (0 Credits)")
+
+        if wallet.balance < cost and not wallet.is_unlimited_eligible:
+            return (
+                False,
+                cost,
+                f"Insufficient credits. Spoken dialogue requires {cost} credits (Available: {wallet.balance:,}). Please top up or upgrade."
+            )
+
+        bal_before = wallet.balance
+        wallet.balance -= cost
+        wallet.lifetime_spent += cost
+        wallet.save(update_fields=['balance', 'lifetime_spent', 'updated_at'])
+
+        CreditTransaction.objects.create(
+            wallet=wallet,
+            amount=-cost,
+            transaction_type='generation_consume',
+            balance_before=bal_before,
+            balance_after=wallet.balance,
+            description=f"Spoken Dialogue ({cost} cr): '{text[:30]}...'" if text else f"Spoken Dialogue ({cost} cr)",
+        )
+        return (True, cost, "Success")
 
     @classmethod
     def can_generate(cls, user, estimated_credits: int, modality: str = 'image') -> tuple[bool, int, str]:

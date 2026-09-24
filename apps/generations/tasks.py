@@ -214,7 +214,7 @@ def dispatch_generation_task(generation_id: str):
                                     if len(audio_bytes) > 512:
                                         ext = 'mp3' if audio_res.output_media_url.lower().endswith('.mp3') else 'wav'
                                         from django.core.files.base import ContentFile
-                                        audio_media.file.save(f"{audio_media.id[:8]}.{ext}", ContentFile(audio_bytes), save=True)
+                                        audio_media.file.save(f"{str(audio_media.id)[:8]}.{ext}", ContentFile(audio_bytes), save=True)
                                 except Exception as dl_err:
                                     logger.warning(f"Could not pre-download audio for mux: {dl_err}")
                         generation.audio_track = audio_media
@@ -492,6 +492,20 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
                 logger.warning(f"Blocked downloading from unsafe or non-public URL: {result.output_media_url}")
 
         media.save()
+
+        # Automatic Audio Muxing: If this completed video has an audio_track attached, immediately mux it into the MP4 container!
+        if generation.generation_type == 'video' and generation.audio_track and media.file:
+            try:
+                import os
+                from apps.editor.ffmpeg_service import FFmpegService
+                if os.path.exists(media.file.path) and generation.audio_track.file and os.path.exists(generation.audio_track.file.path):
+                    muxed_path = FFmpegService.merge_video_and_audio(media.file.path, generation.audio_track.file.path)
+                    if muxed_path and os.path.exists(muxed_path) and muxed_path != media.file.path:
+                        with open(muxed_path, 'rb') as f:
+                            media.file.save(f"{str(media.id)[:8]}_voiced.mp4", ContentFile(f.read()), save=True)
+                        logger.info(f"Automatically muxed character voice audio track into base video {generation.id}")
+            except Exception as mux_err:
+                logger.warning(f"Auto audio mux on base video completion failed: {mux_err}")
 
         generation.output_media = media
         generation.status = 'completed'

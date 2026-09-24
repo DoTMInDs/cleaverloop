@@ -290,9 +290,13 @@
                                     <span>≈ 360 Nano Banana 2 Lite drafts</span>
                                     <span class="text-slate-500 font-mono">250 cr</span>
                                 </div>
-                                <div class="flex items-center justify-between text-orange-300 font-semibold">
-                                    <span>≈ 4 Veo 3.1 Fast clips (5s with audio)</span>
-                                    <span class="font-mono">22k cr</span>
+                                <div class="flex items-center justify-between text-cyan-300 font-semibold">
+                                    <span>≈ 9 Veo 3.1 Lite clips (5s motion)</span>
+                                    <span class="font-mono">10k cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-indigo-300">
+                                    <span>≈ 6,000 Spoken Dialogue clips</span>
+                                    <span class="text-slate-500 font-mono">15 cr</span>
                                 </div>
                             {% elif plan.slug == 'creator' %}
                                 <div class="flex items-center justify-between">
@@ -306,6 +310,10 @@
                                 <div class="flex items-center justify-between text-orange-300 font-semibold">
                                     <span>≈ 18 Veo 3.1 Fast clips (5s with audio)</span>
                                     <span class="font-mono">22k cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-indigo-300">
+                                    <span>≈ 40,000 Spoken Dialogue clips</span>
+                                    <span class="text-slate-500 font-mono">10 cr</span>
                                 </div>
                                 <div class="flex items-center justify-between text-amber-300 font-bold pt-1 border-t border-white/5">
                                     <span>✨ Unlimited Relaxed Queue</span>
@@ -323,6 +331,10 @@
                                 <div class="flex items-center justify-between text-brand-300 font-semibold">
                                     <span>≈ 45 Veo 3.1 Fast clips (5s with audio)</span>
                                     <span class="font-mono">22k cr</span>
+                                </div>
+                                <div class="flex items-center justify-between text-indigo-300">
+                                    <span>≈ 200,000 Spoken Dialogue clips</span>
+                                    <span class="text-slate-500 font-mono">5 cr</span>
                                 </div>
                                 <div class="flex items-center justify-between text-amber-300 font-bold pt-1 border-t border-white/5">
                                     <span>✨ Unlimited Relaxed + VIP Instant GPU</span>
@@ -454,6 +466,24 @@
                                 <span>Character DNA Profiles</span>
                                 <span class="font-mono text-[10px] text-white">{% if plan.max_characters == 0 %}Unlimited{% else %}Up to {{ plan.max_characters }}{% endif %}</span>
                             </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>Neural Voice Clones</span>
+                                <span class="font-mono text-[10px] text-white">
+                                    {% if plan.slug == 'free' or not plan.can_clone_voices %}
+                                        Presets Only
+                                    {% elif plan.max_voice_profiles == 0 %}
+                                        Unlimited (0 cr)
+                                    {% else %}
+                                        Up to {{ plan.max_voice_profiles }} Clones
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="flex items-center justify-between text-slate-300">
+                                <span>Spoken Dialogue Rate</span>
+                                <span class="font-mono text-[10px] font-bold {% if plan.slug == 'ultra' %}text-emerald-400{% elif plan.slug == 'creator' %}text-orange-400{% else %}text-indigo-300{% endif %}">
+                                    {{ plan.voice_generation_credit_cost }} cr / clip
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -542,36 +572,66 @@
                 </div>
 
                 <!-- Veo 3.1 Lite (5s) -->
-                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5">
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5 border-cyan-500/20">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-white">Veo 3.1 Lite (5s)</span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold text-white">Veo 3.1 Lite (5s)</span>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-cyan-500/20 text-cyan-300">STARTER</span>
+                        </div>
                         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/15 text-cyan-400">10,000 cr / clip</span>
                     </div>
                     <div class="text-2xl font-heading font-black text-cyan-300 font-mono"
                          x-text="calcPlan === 'free' ? 'Paid Only' : Math.floor(calcCredits / 10000) + ' Videos'"></div>
-                    <div class="text-[11px] text-slate-400">5-second draft motion test with fast render</div>
+                    <div class="text-[11px] text-slate-400">Wired to Starter tier: Fast 5-second draft motion test</div>
                 </div>
 
                 <!-- Veo 3.1 Fast (5s + Native Audio) -->
                 <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5 border-orange-500/20">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-white">Veo 3.1 Fast (5s Native Audio)</span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold text-white">Veo 3.1 Fast (5s Audio)</span>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-orange-500/20 text-orange-300">CREATOR</span>
+                        </div>
                         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-orange-500/15 text-orange-400">22,000 cr / clip</span>
                     </div>
                     <div class="text-2xl font-heading font-black text-orange-400 font-mono"
-                         x-text="calcPlan === 'free' ? 'Paid Only' : Math.floor(calcCredits / 22000) + ' Videos'"></div>
-                    <div class="text-[11px] text-slate-400">Cinematic 1080p video with synchronized native soundtrack & SFX</div>
+                         x-text="calcPlan === 'free' ? 'Paid Only' : (calcPlan === 'starter' ? 'Creator+ Tier' : Math.floor(calcCredits / 22000) + ' Videos')"></div>
+                    <div class="text-[11px] text-slate-400">Wired to Creator tier: 1080p video with synchronized native soundtrack</div>
                 </div>
 
                 <!-- Veo 3.1 Standard (5s Master) -->
-                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5">
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5 border-amber-500/20">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-bold text-white">Veo 3.1 Cinema Master (5s)</span>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-bold text-white">Veo 3.1 Cinema (5s)</span>
+                            <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/20 text-amber-300">ULTRA</span>
+                        </div>
                         <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/15 text-amber-400">42,500 cr / clip</span>
                     </div>
                     <div class="text-2xl font-heading font-black text-amber-300 font-mono"
-                         x-text="calcPlan === 'free' ? 'Paid Only' : Math.floor(calcCredits / 42500) + ' Videos'"></div>
-                    <div class="text-[11px] text-slate-400">Highest fidelity cinema master with atmospheric soundscapes</div>
+                         x-text="calcPlan === 'free' ? 'Paid Only' : (calcPlan === 'starter' ? 'Creator+ Tier' : Math.floor(calcCredits / 42500) + ' Videos')"></div>
+                    <div class="text-[11px] text-slate-400">Wired to Ultra & Creator: Highest fidelity cinema master rendering</div>
+                </div>
+
+                <!-- Spoken Dialogue & Voice Synthesis -->
+                <div class="rounded-2xl p-4 bg-black/40 border border-white/5 space-y-1.5 border-indigo-500/25 sm:col-span-2 lg:col-span-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🎙️</span>
+                            <span class="text-xs font-bold text-white">Spoken Dialogue & Voice Synthesis (TTS / Cloned)</span>
+                        </div>
+                        <span class="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30"
+                              x-text="calcPlan === 'free' ? '25 cr / clip' : (calcPlan === 'starter' ? '15 cr / clip' : (calcPlan === 'creator' ? '10 cr / clip • Unlimited' : '5 cr / clip • VIP Unlimited'))"></span>
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pt-1">
+                        <div class="text-2xl font-heading font-black text-indigo-300 font-mono"
+                             x-text="calcPlan === 'free' ? Math.floor(calcCredits / 25) + ' Spoken Clips' : (calcPlan === 'starter' ? Math.floor(calcCredits / 15).toLocaleString() + ' Spoken Clips' : (calcPlan === 'creator' ? Math.floor(calcCredits / 10).toLocaleString() + ' Clips + UNLIMITED' : Math.floor(calcCredits / 5).toLocaleString() + ' Clips + VIP UNLIMITED'))"></div>
+                        <div class="text-xs text-slate-300 font-medium flex items-center gap-2">
+                            <span class="px-2 py-0.5 rounded bg-white/10 text-[10px] font-mono"
+                                  x-text="calcPlan === 'free' ? '0 Clones (Presets only)' : (calcPlan === 'starter' ? '3 Neural Voice Clones' : (calcPlan === 'creator' ? '10 Neural Voice Clones' : 'Unlimited Voice Clones'))"></span>
+                            <span class="text-[11px] text-slate-400">Lip-synced & multi-speaker dialogue ready</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -753,9 +813,9 @@
                     </tr>
                     <tr class="hover:bg-white/[0.02]">
                         <td class="font-medium py-4 text-white">Google Veo 3.1 Video Engine</td>
-                        <td class="text-center text-xs text-slate-300">Standard & Fast</td>
-                        <td class="text-center text-xs font-bold text-white bg-orange-500/10">Full Catalog + Relaxed</td>
-                        <td class="text-center text-xs font-bold text-white">Full Catalog + Relaxed</td>
+                        <td class="text-center text-xs text-cyan-300 font-medium">Veo 3.1 Lite (10k cr/clip)</td>
+                        <td class="text-center text-xs font-bold text-orange-300 bg-orange-500/10">Veo 3.1 Fast &amp; Lite + Relaxed</td>
+                        <td class="text-center text-xs font-bold text-emerald-300">Full Catalog (Cinema, Fast, Lite) + 4K</td>
                     </tr>
                     <tr class="hover:bg-white/[0.02]">
                         <td class="font-medium py-4 text-white">Native Audio Generation with Video</td>

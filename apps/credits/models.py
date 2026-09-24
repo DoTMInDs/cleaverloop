@@ -50,9 +50,114 @@ class CreditWallet(models.Model):
         return limits.get(self.subscription_tier, 1)
 
     @property
+    def current_plan(self):
+        """Safely fetch active SubscriptionPlan if available."""
+        sub = getattr(self.user, 'subscription', None)
+        if sub and sub.status == 'active' and sub.plan:
+            return sub.plan
+        return None
+
+    @property
+    def max_voice_profiles(self) -> int:
+        """Returns maximum custom neural voice profiles allowed for this subscription tier (0 = unlimited)."""
+        plan = self.current_plan
+        if plan:
+            return plan.max_voice_profiles
+        tier_limits = {
+            'free': 0,
+            'starter': 3,
+            'creator': 10,
+            'ultra': 0,
+        }
+        return tier_limits.get(self.subscription_tier, 0)
+
+    @property
+    def can_clone_voices(self) -> bool:
+        """Returns True if the user can create custom neural voice clones."""
+        plan = self.current_plan
+        if plan:
+            return plan.can_clone_voices
+        return self.subscription_tier in ('starter', 'creator', 'ultra')
+
+    @property
+    def voice_generation_cost(self) -> int:
+        """Credit cost for generating speech audio / TTS."""
+        plan = self.current_plan
+        if plan:
+            return plan.voice_generation_credit_cost
+        costs = {
+            'free': 25,
+            'starter': 15,
+            'creator': 10,
+            'ultra': 5,
+        }
+        return costs.get(self.subscription_tier, 25)
+
+    @property
+    def voice_clone_cost(self) -> int:
+        """Credit fee for cloning a new neural voice profile."""
+        plan = self.current_plan
+        if plan:
+            return plan.voice_clone_credit_cost
+        costs = {
+            'free': 50,
+            'starter': 50,
+            'creator': 25,
+            'ultra': 0,
+        }
+        return costs.get(self.subscription_tier, 50)
+
+    @property
     def is_unlimited_eligible(self) -> bool:
         """Returns True if the user's subscription tier provides unlimited relaxed generations."""
         return self.subscription_tier in ('creator', 'ultra')
+
+    @property
+    def can_access_premium_models(self) -> bool:
+        """Returns True if user plan permits accessing premium AI models (e.g. Veo 3.1 Cinema Master, Nano Banana Pro)."""
+        plan = self.current_plan
+        if plan:
+            return getattr(plan, 'can_access_premium_models', False)
+        return self.subscription_tier in ('creator', 'ultra')
+
+    @property
+    def default_video_model(self) -> str:
+        """Returns the default/wired Veo video model for this subscription tier (Starter -> Lite, Creator -> Fast, Ultra -> Standard)."""
+        if self.subscription_tier == 'starter':
+            return 'veo-3.1-lite'
+        elif self.subscription_tier == 'creator':
+            return 'veo-3.1-fast'
+        elif self.subscription_tier == 'ultra':
+            return 'veo-3.1-standard'
+        return 'veo-3.1-lite'
+
+    @property
+    def allowed_video_models(self) -> list:
+        """Returns list of allowed video model_ids for user's subscription tier."""
+        if self.subscription_tier == 'free':
+            return []
+        elif self.subscription_tier == 'starter':
+            return ['veo-3.1-lite']
+        elif self.subscription_tier == 'creator':
+            return ['veo-3.1-lite', 'veo-3.1-fast', 'veo-3.1-standard']
+        else: # ultra
+            return ['veo-3.1-lite', 'veo-3.1-fast', 'veo-3.1-standard']
+
+    def can_access_model(self, model_id: str) -> bool:
+        """Enforces tier-based model wiring and access control."""
+        if not model_id:
+            return True
+        m_id = model_id.lower()
+        # Free users cannot generate video
+        if self.subscription_tier == 'free' and ('veo' in m_id or 'video' in m_id):
+            return False
+        # Starter users are wired strictly to Veo Lite (lowest credit consumption)
+        if self.subscription_tier == 'starter' and m_id in ('veo-3.1-fast', 'veo-3.1-standard'):
+            return False
+        # Premium model access check
+        if m_id in ('veo-3.1-standard', 'nano-banana-pro') and not self.can_access_premium_models:
+            return False
+        return True
 
     @property
     def in_relaxed_mode(self) -> bool:
@@ -115,6 +220,13 @@ class CreditTransaction(models.Model):
         indexes = [
             models.Index(fields=['wallet', 'created_at']),
             models.Index(fields=['transaction_type']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['external_reference'],
+                condition=models.Q(external_reference__gt=''),
+                name='unique_non_empty_external_reference'
+            )
         ]
 
     def __str__(self):

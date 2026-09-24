@@ -21,6 +21,7 @@ class VoiceCloningTests(TestCase):
             password="password123"
         )
         self.wallet, _ = CreditWallet.objects.get_or_create(user=self.user)
+        self.wallet.subscription_tier = 'starter'
         self.wallet.balance = 500
         self.wallet.save()
 
@@ -192,3 +193,53 @@ class VoiceCloningTests(TestCase):
         )
         self.assertIn("spoken line:", conditioned.lower())
         self.assertIn("briefcase", conditioned)
+
+    def test_voice_clone_free_tier_blocked(self):
+        """Verify free tier users cannot clone voices and receive an upgrade message."""
+        self.wallet.subscription_tier = 'free'
+        self.wallet.save()
+        with self.assertRaises(ValueError) as ctx:
+            VoiceCloneService.clone_voice(
+                user=self.user,
+                name="Free User Voice",
+                sample_files=[self.sample_audio]
+            )
+        self.assertIn("paid subscription", str(ctx.exception).lower())
+
+    def test_voice_clone_quota_enforced(self):
+        """Verify exceeding max_voice_profiles quota raises ValueError."""
+        # Starter plan allows 3 voice profiles
+        for i in range(3):
+            VoiceProfile.objects.create(
+                user=self.user,
+                name=f"Existing Voice {i}",
+                status="ready"
+            )
+        with self.assertRaises(ValueError) as ctx:
+            VoiceCloneService.clone_voice(
+                user=self.user,
+                name="Overflow Voice",
+                sample_files=[self.sample_audio]
+            )
+        self.assertIn("quota reached", str(ctx.exception).lower())
+
+    def test_api_preview_speech_billing(self):
+        """Verify api_preview_speech deducts credits according to user's plan."""
+        initial_bal = self.wallet.balance
+        with patch("apps.providers.adapters.elevenlabs.ElevenLabsProvider.generate_audio") as mock_gen:
+            from apps.providers.base import ProviderJobResult
+            mock_gen.return_value = ProviderJobResult(
+                external_job_id="test_speech_1",
+                status="completed",
+                output_media_url="https://example.com/speech.mp3"
+            )
+            resp = self.client.post(reverse("voices:api_preview"), {
+                "text": "Hello world from CleaverLoop AI!",
+                "voice_id": "adam"
+            })
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["status"], "success")
+            self.assertEqual(data["credits_deducted"], 15)  # 15 cr on starter
+            self.wallet.refresh_from_db()
+            self.assertEqual(self.wallet.balance, initial_bal - 15)

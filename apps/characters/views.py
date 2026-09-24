@@ -71,8 +71,14 @@ class CharacterCreateView(LoginRequiredMixin, CreateView):
                 form.instance.metadata = {}
             form.instance.metadata['style_preset'] = style_preset
 
-        # The primary character visual MUST be the regenerated full-body character figure
-        target_visual = full_body_url or self.request.POST.get('generated_avatar_url', '').strip()
+        gen_avatar = self.request.POST.get('generated_avatar_url', '').strip()
+        # Prefer the authentic AI-generated avatar/face anchor over any legacy static showcase images
+        if full_body_url and any(k in full_body_url.lower() for k in ('marcus_vance', 'amina_diallo', 'amina_standing')):
+            full_body_url = gen_avatar or face_anchor_url or ''
+            if form.instance.metadata:
+                form.instance.metadata['full_body_url'] = full_body_url
+
+        target_visual = gen_avatar or face_anchor_url or full_body_url
         if target_visual and not self.request.FILES.get('avatar'):
             media_url = getattr(settings, 'MEDIA_URL', '/media/')
             if target_visual.startswith(media_url):
@@ -140,7 +146,13 @@ class CharacterUpdateView(LoginRequiredMixin, UpdateView):
                 form.instance.metadata = {}
             form.instance.metadata['style_preset'] = style_preset
 
-        target_visual = full_body_url or self.request.POST.get('generated_avatar_url', '').strip()
+        gen_avatar = self.request.POST.get('generated_avatar_url', '').strip()
+        if full_body_url and any(k in full_body_url.lower() for k in ('marcus_vance', 'amina_diallo', 'amina_standing')):
+            full_body_url = gen_avatar or face_anchor_url or ''
+            if form.instance.metadata:
+                form.instance.metadata['full_body_url'] = full_body_url
+
+        target_visual = gen_avatar or face_anchor_url or full_body_url
         if target_visual and not self.request.FILES.get('avatar'):
             media_url = getattr(settings, 'MEDIA_URL', '/media/')
             if target_visual.startswith(media_url):

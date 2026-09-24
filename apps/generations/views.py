@@ -237,23 +237,55 @@ def create_generation_view(request):
             file_size=uploaded_file.size
         )
 
-    # Select model via ModelRouter
+    # Video generation requires a paid membership tier (Starter, Creator, or Ultra)
+    if gen_type == 'video' and wallet.subscription_tier == 'free':
+        return HttpResponse(
+            _render_error_card(
+                "AI Video Generation requires an active Starter, Creator, or Ultra subscription. Please upgrade to start generating AI videos.",
+                is_staff_or_debug=is_staff_or_debug
+            ),
+            status=403
+        )
+
+    # Select model via ModelRouter with user tier context
     try:
         selected_model = ModelRouter.select_model(
             modality=gen_type,
             user_preference=model_choice,
             duration=duration,
             aspect_ratio=aspect_ratio,
-            requires_image_ref=bool(ref_media)
+            requires_image_ref=bool(ref_media),
+            user=request.user,
+            subscription_tier=wallet.subscription_tier,
         )
     except Exception as exc:
         return HttpResponse(_render_error_card(f"Model Routing Error: {exc}", is_staff_or_debug=is_staff_or_debug), status=400)
 
-    # Clamp duration to model max_duration
+    # Verify user plan allows this specific model
+    if not wallet.can_access_model(selected_model.model_id):
+        if wallet.subscription_tier == 'starter' and 'veo' in selected_model.model_id.lower():
+            err_msg = (
+                f"The '{selected_model.display_name}' engine is reserved for Creator and Ultra members. "
+                f"Your Starter membership is wired to Veo 3.1 Lite (10,000 cr/clip) for maximum credit efficiency. "
+                f"Upgrade to Creator or Ultra to unlock Veo 3.1 Fast and Cinema Master."
+            )
+        else:
+            err_msg = f"The '{selected_model.display_name}' model is not accessible on your current {wallet.get_subscription_tier_display()} plan."
+        return HttpResponse(_render_error_card(err_msg, is_staff_or_debug=is_staff_or_debug), status=403)
+
+    # Clamp duration to model native capabilities
     if gen_type == 'video':
-        max_dur = getattr(selected_model, 'max_duration', 10)
-        if duration > max_dur:
+        max_dur = getattr(selected_model, 'max_duration', 10) or 10
+        if 'wan' in selected_model.model_id.lower() or max_dur <= 5:
+            duration = 5
+        elif 'veo' in selected_model.model_id.lower() or selected_model.provider.slug == 'google':
+            # Google Veo native clip durations are strictly 4s and 8s
+            duration = 4 if duration <= 5 else 8
+        elif duration > max_dur:
             duration = max_dur
+        elif duration in (7, 13) or duration not in (4, 5, 6, 8, 10, 15):
+            # Normalize obsolete non-standard durations (7s, 13s) to clean model steps
+            duration = 5 if duration < 8 else (10 if duration < 13 else 15)
 
     # Calculate credit cost
     credit_cost = selected_model.calculate_credit_cost(duration=duration)
@@ -261,7 +293,7 @@ def create_generation_view(request):
 
     # If lip-sync is requested and not using Google Veo native speech, add speech + lip-sync fee
     if is_lip_sync and not (is_google_veo and not selected_voice_profile):
-        credit_cost += 45  # 15 credits speech + 30 credits full-face neural sync
+        credit_cost += (wallet.voice_generation_cost + 30)  # plan speech fee + 30 credits full-face neural sync
 
     # Create Generation record
     generation = Generation.objects.create(
@@ -543,17 +575,51 @@ def mux_audio_video_view(request, generation_id):
     try:
         from apps.editor.ffmpeg_service import FFmpegService
         import os
+        import tempfile
         from django.core.files.base import ContentFile
+
         vid_file = gen.output_media.file
         aud_file = gen.latest_audio.file
-        if vid_file and aud_file and os.path.exists(vid_file.path) and os.path.exists(aud_file.path):
-            muxed_path = FFmpegService.merge_video_and_audio(vid_file.path, aud_file.path)
-            if muxed_path and os.path.exists(muxed_path) and muxed_path != vid_file.path:
-                with open(muxed_path, 'rb') as f:
-                    gen.output_media.file.save(f"muxed_{gen.output_media.id}.mp4", ContentFile(f.read()), save=True)
-                messages.success(request, "Audio track successfully embedded into video container with 48kHz sound!")
-        else:
-            messages.info(request, "Audio track linked. Synchronized playback active.")
+
+        def _resolve_to_local_path(django_file, ext):
+            """Safely resolve Django FileField to a local path for FFmpeg, even on S3."""
+            try:
+                if hasattr(django_file, 'path') and os.path.exists(django_file.path):
+                    return django_file.path, False
+            except (NotImplementedError, AttributeError):
+                pass
+
+            temp = tempfile.NamedTemporaryFile(delete=False, suffix=ext)
+            django_file.open('rb')
+            temp.write(django_file.read())
+            temp.flush()
+            temp.close()
+            return temp.name, True
+
+        vid_path, vid_is_temp = _resolve_to_local_path(vid_file, '.mp4')
+        aud_ext = '.wav' if 'wav' in str(aud_file.name).lower() else '.mp3'
+        aud_path, aud_is_temp = _resolve_to_local_path(aud_file, aud_ext)
+
+        try:
+            if vid_path and aud_path and os.path.exists(vid_path) and os.path.exists(aud_path):
+                muxed_path = FFmpegService.merge_video_and_audio(vid_path, aud_path)
+                if muxed_path and os.path.exists(muxed_path) and muxed_path != vid_path:
+                    with open(muxed_path, 'rb') as f:
+                        gen.output_media.file.save(f"muxed_{gen.output_media.id}.mp4", ContentFile(f.read()), save=True)
+                    messages.success(request, "Audio track successfully embedded into video container with 48kHz sound!")
+                else:
+                    messages.info(request, "Audio track linked. Synchronized playback active.")
+        finally:
+            if vid_is_temp and os.path.exists(vid_path):
+                try:
+                    os.remove(vid_path)
+                except Exception:
+                    pass
+            if aud_is_temp and os.path.exists(aud_path):
+                try:
+                    os.remove(aud_path)
+                except Exception:
+                    pass
     except Exception as e:
         logger.error(f"Manual mux failed: {e}")
         messages.error(request, f"Could not mux audio: {e}")

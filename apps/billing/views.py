@@ -135,27 +135,60 @@ class PaymentCallbackView(LoginRequiredMixin, View):
         v_data = verification.get('data', {})
         metadata = v_data.get('metadata', {}) if isinstance(v_data.get('metadata'), dict) else {}
 
+        # Enforce IDOR protection: if user_id was stored in transaction metadata, verify it matches request.user
+        tx_user_id = str(metadata.get('user_id', '')).strip()
+        customer_email = v_data.get('customer', {}).get('email', '').strip().lower()
+
+        if tx_user_id and tx_user_id != str(request.user.id):
+            logger.error(
+                f"IDOR attempt blocked: User {request.user.id} ({request.user.email}) "
+                f"attempted to claim reference '{reference}' belonging to User {tx_user_id}."
+            )
+            messages.error(request, "Access denied: This payment transaction belongs to another account.")
+            return redirect('billing:plans')
+
+        # In live production mode, verify customer email matches the authenticated user
+        if not PaystackService.is_mock_mode() and customer_email and customer_email != request.user.email.lower():
+            logger.error(
+                f"Email mismatch: User {request.user.email} attempted to claim payment for {customer_email} (ref: {reference})"
+            )
+            messages.error(request, "Access denied: Payment email does not match your active account.")
+            return redirect('billing:plans')
+
         # Check for top-up credit pack purchase
-        if metadata.get('payment_type') == 'topup' or request.GET.get('topup_credits'):
-            credits_to_grant = int(metadata.get('credits_amount') or request.GET.get('topup_credits') or 50000)
+        pack_id = metadata.get('pack_id')
+        if metadata.get('payment_type') == 'topup' or pack_id in InitializeTopupCheckoutView.TOPUP_PACKS:
+            pack = InitializeTopupCheckoutView.TOPUP_PACKS.get(pack_id)
+            if pack:
+                credits_to_grant = pack['credits']
+            else:
+                try:
+                    credits_to_grant = int(metadata.get('credits_amount') or 50000)
+                except (ValueError, TypeError):
+                    credits_to_grant = 50000
+
             external_ref = f"paystack:topup:{reference}"
 
             if not CreditTransaction.objects.filter(external_reference=external_ref).exists():
-                CreditService.grant_credits(
-                    user=request.user,
-                    amount=credits_to_grant,
-                    transaction_type='purchase',
-                    description=f"Top-up credit pack purchase ({credits_to_grant:,} credits)",
-                    external_reference=external_ref
-                )
-                messages.success(request, f"🎉 Added {credits_to_grant:,} top-up credits to your wallet via Mobile Money / Card!")
+                try:
+                    from django.db import IntegrityError
+                    CreditService.grant_credits(
+                        user=request.user,
+                        amount=credits_to_grant,
+                        transaction_type='purchase',
+                        description=f"Top-up credit pack purchase ({credits_to_grant:,} credits)",
+                        external_reference=external_ref
+                    )
+                    messages.success(request, f"🎉 Added {credits_to_grant:,} top-up credits to your wallet via Mobile Money / Card!")
+                except IntegrityError:
+                    messages.info(request, "Top-up credits already applied to your account.")
             else:
                 messages.info(request, "Top-up credits already applied to your account.")
             return redirect('credits:wallet')
 
-        # Resolve plan
+        # Resolve plan (prioritize verified metadata over untrusted GET parameter)
         plan = SubscriptionPlan.resolve_plan(
-            plan_id=plan_id,
+            plan_id=metadata.get('plan_id') or plan_id,
             slug=metadata.get('plan_slug'),
             paystack_code=v_data.get('plan')
         )

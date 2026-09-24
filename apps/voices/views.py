@@ -29,8 +29,13 @@ class VoiceListView(LoginRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['preset_voices'] = VOICE_METADATA
-        ctx['wallet'] = CreditService.get_or_create_wallet(self.request.user)
-        ctx['clone_cost'] = VoiceCloneService.CLONE_CREDIT_COST
+        wallet = CreditService.get_or_create_wallet(self.request.user)
+        ctx['wallet'] = wallet
+        ctx['clone_cost'] = wallet.voice_clone_cost
+        ctx['max_voice_profiles'] = wallet.max_voice_profiles
+        ctx['can_clone_voices'] = wallet.can_clone_voices
+        ctx['voice_generation_cost'] = wallet.voice_generation_cost
+        ctx['voice_count'] = VoiceProfile.objects.filter(user=self.request.user).count()
         return ctx
 
 class VoiceCreateView(LoginRequiredMixin, TemplateView):
@@ -43,8 +48,13 @@ class VoiceCreateView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['wallet'] = CreditService.get_or_create_wallet(self.request.user)
-        ctx['clone_cost'] = VoiceCloneService.CLONE_CREDIT_COST
+        wallet = CreditService.get_or_create_wallet(self.request.user)
+        ctx['wallet'] = wallet
+        ctx['clone_cost'] = wallet.voice_clone_cost
+        ctx['max_voice_profiles'] = wallet.max_voice_profiles
+        ctx['can_clone_voices'] = wallet.can_clone_voices
+        ctx['voice_generation_cost'] = wallet.voice_generation_cost
+        ctx['voice_count'] = VoiceProfile.objects.filter(user=self.request.user).count()
         return ctx
 
     def post(self, request, *args, **kwargs):
@@ -118,7 +128,7 @@ class VoiceDeleteView(LoginRequiredMixin, View):
 @login_required
 @require_POST
 def api_preview_speech(request):
-    """Fast AJAX endpoint to synthesize spoken dialogue in a cloned voice."""
+    """Fast AJAX endpoint to synthesize spoken dialogue in a cloned voice with membership-based billing."""
     try:
         text = request.POST.get('text', '').strip()
         voice_id = request.POST.get('voice_id', '').strip()
@@ -127,12 +137,47 @@ def api_preview_speech(request):
         if not text:
             return JsonResponse({"error": "Please provide dialogue text to audition."}, status=400)
 
-        # Resolve voice ID
+        # Deduct speech generation credits based on user's membership tier
+        ok, cost, msg = CreditService.deduct_voice_generation(request.user, text=text, voice_id=voice_id)
+        if not ok:
+            return JsonResponse({"error": msg, "insufficient_credits": True}, status=402)
+
+        # Resolve voice ID and profile
         target_voice_id = voice_id
+        profile = None
         if voice_profile_id:
             profile = VoiceProfile.objects.filter(id=voice_profile_id, user=request.user).first()
             if profile and profile.provider_voice_id:
                 target_voice_id = profile.provider_voice_id
+
+        # If this is a Fal voice or has recorded audio samples, synthesize directly with Fal F5-TTS
+        if profile and (profile.provider == 'fal' or profile.samples.exists()):
+            first_sample = profile.samples.first()
+            if first_sample and first_sample.audio_file:
+                from apps.providers.adapters.fal_ai import FalAIProvider
+                sample_path = first_sample.audio_file.path if hasattr(first_sample.audio_file, 'path') else first_sample.audio_file.url
+                result = FalAIProvider().clone_voice_speech(
+                    text=text,
+                    ref_audio_path_or_url=sample_path
+                )
+                if result.status == 'completed' and result.output_media_url:
+                    wallet = CreditService.get_or_create_wallet(request.user)
+                    return JsonResponse({
+                        "status": "success",
+                        "audio_url": result.output_media_url,
+                        "credits_deducted": cost,
+                        "remaining_balance": wallet.balance,
+                        "formatted_balance": wallet.formatted_balance
+                    })
+                # Refund on failure
+                if cost > 0:
+                    CreditService.grant_credits(
+                        request.user,
+                        amount=cost,
+                        transaction_type='generation_refund',
+                        description=f"Refund: Voice synthesis failed ({str(result.error_message)[:40]})"
+                    )
+                return JsonResponse({"error": result.error_message or "Fal.ai voice synthesis failed"}, status=400)
 
         if not target_voice_id:
             target_voice_id = 'adam'
@@ -146,10 +191,23 @@ def api_preview_speech(request):
         result = eleven_adapter.generate_audio("eleven_multilingual_v2", req)
 
         if result.status == 'completed' and result.output_media_url:
+            wallet = CreditService.get_or_create_wallet(request.user)
             return JsonResponse({
                 "status": "success",
-                "audio_url": result.output_media_url
+                "audio_url": result.output_media_url,
+                "credits_deducted": cost,
+                "remaining_balance": wallet.balance,
+                "formatted_balance": wallet.formatted_balance
             })
+
+        # Refund on failure
+        if cost > 0:
+            CreditService.grant_credits(
+                request.user,
+                amount=cost,
+                transaction_type='generation_refund',
+                description=f"Refund: Voice synthesis failed ({str(result.error_message)[:40]})"
+            )
         return JsonResponse({"error": result.error_message or "Synthesis failed"}, status=400)
 
     except Exception as exc:

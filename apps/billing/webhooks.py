@@ -60,6 +60,30 @@ def paystack_webhook_view(request):
         if not user and customer_email:
             user = User.objects.filter(email__iexact=customer_email).first()
 
+        # Top-up credit pack payment
+        if metadata.get('payment_type') == 'topup':
+            pack_id = metadata.get('pack_id')
+            credits_to_grant = int(metadata.get('credits_amount') or 50000)
+            from apps.billing.views import InitializeTopupCheckoutView
+            pack = InitializeTopupCheckoutView.TOPUP_PACKS.get(pack_id)
+            if pack:
+                credits_to_grant = pack['credits']
+            external_topup_ref = f"paystack:topup:{reference}"
+            if not CreditTransaction.objects.filter(external_reference=external_topup_ref).exists() and user:
+                try:
+                    from django.db import IntegrityError
+                    CreditService.grant_credits(
+                        user=user,
+                        amount=credits_to_grant,
+                        transaction_type='purchase',
+                        description=f"Top-up credit pack purchase ({credits_to_grant:,} credits)",
+                        external_reference=external_topup_ref
+                    )
+                    logger.info(f"Granted {credits_to_grant} top-up credits to {user.email} via webhook charge {reference}.")
+                except IntegrityError:
+                    pass
+            return HttpResponse("Webhook processed successfully", status=200)
+
         plan = SubscriptionPlan.resolve_plan(
             plan_id=plan_id,
             slug=metadata.get('plan_slug'),
@@ -67,15 +91,18 @@ def paystack_webhook_view(request):
         )
 
         if user and plan:
-            CreditService.activate_subscription(
-                user=user,
-                plan=plan,
-                reference=reference,
-                customer_code=data.get('customer', {}).get('customer_code', ''),
-                external_subscription_id=data.get('plan', '') or data.get('subscription_code', ''),
-                grant_monthly_credits=True
-            )
-            logger.info(f"Activated {plan.name} subscription and synced wallet for {user.email} via Paystack webhook charge {reference}.")
+            try:
+                CreditService.activate_subscription(
+                    user=user,
+                    plan=plan,
+                    reference=reference,
+                    customer_code=data.get('customer', {}).get('customer_code', ''),
+                    external_subscription_id=data.get('plan', '') or data.get('subscription_code', ''),
+                    grant_monthly_credits=True
+                )
+                logger.info(f"Activated {plan.name} subscription and synced wallet for {user.email} via Paystack webhook charge {reference}.")
+            except Exception as e:
+                logger.error(f"Error activating subscription from webhook: {e}")
 
     elif event == 'subscription.create':
         sub_code = data.get('subscription_code')
@@ -97,5 +124,21 @@ def paystack_webhook_view(request):
         if sub_code:
             updated = Subscription.objects.filter(external_subscription_id=sub_code).update(status='canceled')
             logger.info(f"Marked subscription {sub_code} as canceled ({updated} records updated).")
+
+    elif event == 'invoice.payment_failed':
+        sub_code = data.get('subscription_code')
+        customer_email = data.get('customer', {}).get('email')
+        if sub_code:
+            updated = Subscription.objects.filter(external_subscription_id=sub_code).update(status='past_due')
+            logger.warning(f"Marked subscription {sub_code} as past_due following failed renewal invoice ({updated} records).")
+        elif customer_email:
+            user = User.objects.filter(email__iexact=customer_email).first()
+            if user:
+                Subscription.objects.filter(user=user).update(status='past_due')
+                logger.warning(f"Marked subscription for {user.email} as past_due following failed renewal invoice.")
+
+    elif event in ('charge.dispute.create', 'charge.dispute.remind'):
+        ref = data.get('transaction', {}).get('reference') or data.get('reference')
+        logger.critical(f"Paystack payment dispute/chargeback flagged for reference {ref}. Review account status immediately.")
 
     return HttpResponse("Webhook processed successfully", status=200)

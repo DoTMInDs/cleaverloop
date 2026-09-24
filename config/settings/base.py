@@ -283,6 +283,8 @@ PAYSTACK_CURRENCY = env('PAYSTACK_CURRENCY', default='GHS')
 USD_TO_GHS_RATE = env('USD_TO_GHS_RATE', default='auto')
 
 # Platform Economics Configuration (Flashloop Benchmark)
+# NOTE: Active plan definitions are managed dynamically via apps.billing.models.SubscriptionPlan
+# The dictionary below is retained strictly as an offline fallback.
 DEFAULT_STARTER_CREDITS = env.int('DEFAULT_STARTER_CREDITS', default=500)
 CREDIT_COST_VOICE_CLONE = env.int('CREDIT_COST_VOICE_CLONE', default=50)
 SUBSCRIPTION_PLANS = {
@@ -299,7 +301,7 @@ SUBSCRIPTION_PLANS = {
         'price_annual_monthly_equiv': 15,
         'credits': 90000,
         'has_unlimited': False,
-        'max_concurrency': 1,
+        'max_concurrency': 2,
     },
     'creator': {
         'name': 'Creator',
@@ -307,7 +309,7 @@ SUBSCRIPTION_PLANS = {
         'price_annual_monthly_equiv': 49,
         'credits': 400000,
         'has_unlimited': True,
-        'max_concurrency': 2,
+        'max_concurrency': 4,
     },
     'ultra': {
         'name': 'Ultra / Pro',
@@ -315,11 +317,11 @@ SUBSCRIPTION_PLANS = {
         'price_annual_monthly_equiv': 99,
         'credits': 1000000,
         'has_unlimited': True,
-        'max_concurrency': 4,
+        'max_concurrency': 8,
     },
 }
-CREDIT_COST_IMAGE_STANDARD = env.int('CREDIT_COST_IMAGE_STANDARD', default=50)
-CREDIT_COST_VIDEO_PER_SEC = env.int('CREDIT_COST_VIDEO_PER_SEC', default=50)
+CREDIT_COST_IMAGE_STANDARD = env.int('CREDIT_COST_IMAGE_STANDARD', default=750)
+CREDIT_COST_VIDEO_PER_SEC = env.int('CREDIT_COST_VIDEO_PER_SEC', default=4400)
 MAX_AGENT_CREDITS_PER_REQUEST = env.int('MAX_AGENT_CREDITS_PER_REQUEST', default=500000)
 MAX_SCENES_PER_REQUEST = env.int('MAX_SCENES_PER_REQUEST', default=6)
 

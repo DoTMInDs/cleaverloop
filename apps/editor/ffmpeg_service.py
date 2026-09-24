@@ -72,30 +72,13 @@ class FFmpegService:
             if os.path.isfile(match):
                 return match
 
-        # 5. Try auto-download portable static ffmpeg binary to workspace bin/
-        try:
-            bin_dir = os.path.join(base_dir, "bin")
-            target_exe = os.path.join(bin_dir, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
-            if os.path.isfile(target_exe):
-                return target_exe
+        # 5. Check if local workspace bin has manually provisioned binary
+        bin_dir = os.path.join(base_dir, "bin")
+        target_exe = os.path.join(bin_dir, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+        if os.path.isfile(target_exe):
+            return target_exe
 
-            import urllib.request
-            os.makedirs(bin_dir, exist_ok=True)
-            logger.info("Attempting auto-provision of standalone FFmpeg binary into workspace bin...")
-            dl_url = "https://github.com/eugeneware/ffmpeg-static/releases/download/b5.0.1/win32-x64" if os.name == "nt" else "https://github.com/eugeneware/ffmpeg-static/releases/download/b5.0.1/linux-x64"
-            req = urllib.request.Request(dl_url, headers={'User-Agent': 'CleaverLoop-AI/1.0'})
-            with urllib.request.urlopen(req, timeout=15) as resp, open(target_exe, 'wb') as f_out:
-                f_out.write(resp.read())
-            if os.path.isfile(target_exe):
-                try:
-                    os.chmod(target_exe, 0o755)
-                except Exception:
-                    pass
-                logger.info(f"Successfully auto-provisioned FFmpeg at {target_exe}")
-                return target_exe
-        except Exception as dl_err:
-            logger.debug(f"Could not auto-provision FFmpeg: {dl_err}")
-
+        logger.debug("FFmpeg executable not detected across standard system PATH or workspace bin.")
         return ""
 
     @classmethod

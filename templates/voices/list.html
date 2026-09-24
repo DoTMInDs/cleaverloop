@@ -4,7 +4,7 @@
 {% block title %}Voice Studio & Neural Cloning — CleaverLoop AI{% endblock %}
 
 {% block content %}
-<div class="space-y-8 w-full max-w-7xl mx-auto pb-12" x-data="voiceListStudioApp()">
+<div class="space-y-8 w-full pb-12" x-data="voiceListStudioApp()">
     <!-- Header Stage -->
     <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.08] w-full">
         <div>
@@ -35,8 +35,8 @@
             <div class="flex items-center gap-2.5">
                 <span class="text-lg">⭐</span>
                 <h2 class="text-lg font-heading font-bold text-white">My Cloned Voices</h2>
-                <span class="px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-mono font-bold border border-orange-500/30">
-                    {{ cloned_voices|length }} Available
+                <span class="px-2.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 text-[10px] font-mono font-bold border border-orange-500/30">
+                    {{ cloned_voices|length }}{% if max_voice_profiles > 0 %}/{{ max_voice_profiles }}{% else %} / Unlimited{% endif %} Profiles Used
                 </span>
             </div>
         </div>
@@ -227,7 +227,7 @@
                             <h2 class="text-lg sm:text-xl font-heading font-black text-white flex items-center gap-2">
                                 <span>Clone Your Voice</span>
                                 <span class="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 font-mono text-[10px] font-bold border border-amber-500/30">
-                                    ⚡ {{ clone_cost|default:50 }} Credits
+                                    {% if not can_clone_voices %}Paid Plan Required{% elif clone_cost == 0 %}Included Free{% else %}⚡ {{ clone_cost }} Credits{% endif %}
                                 </span>
                             </h2>
                             <p class="text-xs text-slate-400">Record a short clip from your microphone or upload audio files to forge your AI voice clone.</p>
@@ -250,6 +250,34 @@
                       @submit="handleSubmit($event)"
                       class="flex flex-col flex-1 min-h-0 overflow-hidden">
                     {% csrf_token %}
+
+                    {% if not can_clone_voices %}
+                        <div class="mx-5 sm:mx-7 mt-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">🔒</span>
+                                <div>
+                                    <h4 class="text-xs font-bold text-amber-300 uppercase tracking-wider">Paid Subscription Required</h4>
+                                    <p class="text-[11px] text-slate-300 mt-0.5">Custom neural voice cloning requires an active Starter, Creator, or Ultra membership.</p>
+                                </div>
+                            </div>
+                            <a href="{% url 'billing:plans' %}" class="px-3.5 py-1.5 rounded-xl fl-gradient-orange-btn text-white text-xs font-bold shrink-0">
+                                Upgrade Plan →
+                            </a>
+                        </div>
+                    {% elif max_voice_profiles > 0 and voice_count >= max_voice_profiles %}
+                        <div class="mx-5 sm:mx-7 mt-5 p-4 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <span class="text-2xl">⚠️</span>
+                                <div>
+                                    <h4 class="text-xs font-bold text-orange-300 uppercase tracking-wider">Voice Profile Limit Reached</h4>
+                                    <p class="text-[11px] text-slate-300 mt-0.5">You have used all {{ max_voice_profiles }} slots on your {{ wallet.get_subscription_tier_display }}. Upgrade for more slots or delete an older voice.</p>
+                                </div>
+                            </div>
+                            <a href="{% url 'billing:plans' %}" class="px-3.5 py-1.5 rounded-xl fl-gradient-orange-btn text-white text-xs font-bold shrink-0">
+                                Upgrade for More Slots →
+                            </a>
+                        </div>
+                    {% endif %}
 
                     <!-- Scrollable Modal Body -->
                     <div class="flex-1 min-h-0 overflow-y-auto p-5 sm:p-7 space-y-6 custom-scrollbar">
@@ -440,17 +468,31 @@
                             Cancel
                         </button>
 
-                        <button type="submit" :disabled="isSubmitting"
-                                class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-6 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 flex items-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer">
-                            <span x-show="!isSubmitting">⚡ Clone Voice Persona ({{ clone_cost|default:50 }} Credits)</span>
-                            <span x-show="isSubmitting" class="flex items-center gap-2">
-                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                <span>Forging Voice Persona...</span>
-                            </span>
-                        </button>
+                        {% if not can_clone_voices %}
+                            <a href="{% url 'billing:plans' %}"
+                               class="fl-gradient-orange-btn text-white rounded-xl px-6 py-2.5 font-heading font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-2">
+                                <span>🔒 Upgrade to Unlock Voice Cloning</span>
+                                <span>→</span>
+                            </a>
+                        {% elif max_voice_profiles > 0 and voice_count >= max_voice_profiles %}
+                            <a href="{% url 'billing:plans' %}"
+                               class="fl-gradient-orange-btn text-white rounded-xl px-6 py-2.5 font-heading font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-2">
+                                <span>Upgrade for More Slots</span>
+                                <span>→</span>
+                            </a>
+                        {% else %}
+                            <button type="submit" :disabled="isSubmitting"
+                                    class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-6 py-2.5 font-heading font-black text-xs uppercase tracking-wider transition-all duration-300 flex items-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer">
+                                <span x-show="!isSubmitting">⚡ Clone Voice Persona ({% if clone_cost == 0 %}Included Free{% else %}{{ clone_cost }} Credits{% endif %})</span>
+                                <span x-show="isSubmitting" class="flex items-center gap-2">
+                                    <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Forging Voice Persona...</span>
+                                </span>
+                            </button>
+                        {% endif %}
                     </div>
                 </form>
             </div>

@@ -123,7 +123,8 @@ class GenerationWorkflowTests(TestCase):
         self.assertIsNotNone(gen.output_media)
         self.assertTrue("failover" in gen.admin_error_detail.lower() or "fallback" in gen.admin_error_detail.lower())
 
-    def test_character_idor_prevented(self):
+    @patch('apps.generations.tasks.dispatch_generation_task.delay')
+    def test_character_idor_prevented(self, mock_dispatch):
         """Verify passing another user's character_id sets character to None."""
         other_user = User.objects.create_user(email="other@cleaverloop.ai", username="otheruser", password="password123")
         other_char = Character.objects.create(

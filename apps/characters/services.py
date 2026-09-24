@@ -22,7 +22,7 @@ class CharacterGeneratorService:
         'anime': 'Modern anime digital illustration, Makoto Shinkai aesthetic, vibrant colors, detailed eyes, expressive lighting',
         'cyberpunk': 'Neo-Tokyo cyberpunk, volumetric neon fog, glowing holographic interface reflections, carbon fiber textures',
         'fantasy': 'Dark high fantasy, painterly digital concept art, intricate armor detailing, ethereal magical glow',
-        'pixar_3d': 'Stylized 3D cinematic animation character, Octane render, charming expressive facial features, soft studio lighting',
+        'pixar_3d': 'Stylized 3D cinematic animation character, Pixar and Disney 3D CGI aesthetic, Octane 3D render, charming expressive facial morphology, soft subsurface skin scattering, warm cinematic golden rim lighting, shallow depth of field, 8k master',
         'vintage_cartoon': '1930s classic rubber-hose monochrome animation, pie-cut eyes, bouncy whimsical aesthetic'
     }
 
@@ -43,24 +43,17 @@ class CharacterGeneratorService:
 
         is_female = (dna.gender or '').lower() == 'female'
 
-        # Generate unique character avatar portrait
+        # Generate full-body standing figure as primary visual and portrait bust
+        full_body_url = cls.generate_full_body_figure(dna, style_preset)
         avatar_url = cls.generate_avatar_portrait(dna, style_preset)
-        dna.avatar_url = avatar_url
-        dna.face_anchor_url = avatar_url
-
-        # Link showcase visual asset ONLY if prompt/name is explicitly for that character
-        name_lower = (dna.name or '').lower()
-        if 'diallo' in name_lower or 'amina' in name_lower:
-            dna.full_body_url = '/media/characters/poses/amina_diallo_standing.jpg'
-        elif 'marcus' in name_lower or 'vance' in name_lower:
-            dna.full_body_url = '/media/characters/avatars/marcus_vance_walking.jpg'
-        else:
-            dna.full_body_url = avatar_url
+        primary_image = full_body_url or avatar_url
+        dna.full_body_url = primary_image
+        dna.avatar_url = primary_image
+        dna.face_anchor_url = avatar_url or primary_image
 
         # Build realistic gender-specific pose suite using the character's primary visual
-        primary_image = dna.full_body_url or avatar_url
         if is_female:
-            walking_img = '/media/characters/poses/amina_diallo_walking.jpg' if 'diallo' in (dna.name or '').lower() else primary_image
+            walking_img = primary_image
             dna.poses = [
                 {
                     "id": "standing",
@@ -74,6 +67,13 @@ class CharacterGeneratorService:
                     )
                 },
                 {
+                    "id": "portrait",
+                    "label": "Signature Portrait",
+                    "icon": "👤",
+                    "image_url": avatar_url or primary_image,
+                    "prompt_cue": f"Character portrait of {dna.name}, {dna.appearance_description}."
+                },
+                {
                     "id": "walking",
                     "label": "Candid Street Stride",
                     "icon": "🚶‍♀️",
@@ -82,17 +82,10 @@ class CharacterGeneratorService:
                         f"Candid full-length photograph of {dna.name} in an authentic real-life female walking pose: "
                         f"captured mid-stride in fluid natural motion, relaxed arm swing, three-quarter angle, graceful feminine posture."
                     )
-                },
-                {
-                    "id": "sitting",
-                    "label": "Seated Workspace",
-                    "icon": "🪑",
-                    "image_url": primary_image,
-                    "prompt_cue": f"Seated gracefully with poise, legs angled naturally, relaxed feminine posture."
                 }
             ]
         else:
-            walking_img = '/media/characters/avatars/marcus_vance_walking.jpg' if 'marcus' in (dna.name or '').lower() else primary_image
+            walking_img = primary_image
             dna.poses = [
                 {
                     "id": "standing",
@@ -102,17 +95,18 @@ class CharacterGeneratorService:
                     "prompt_cue": f"Full-length standing view of man {dna.name} on two legs with footwear visible, athletic masculine posture."
                 },
                 {
+                    "id": "portrait",
+                    "label": "Signature Portrait",
+                    "icon": "👤",
+                    "image_url": avatar_url or primary_image,
+                    "prompt_cue": f"Character portrait of {dna.name}, {dna.appearance_description}."
+                },
+                {
                     "id": "walking",
                     "label": "Dynamic Striding",
                     "icon": "🚶‍♂️",
                     "image_url": walking_img,
                     "prompt_cue": f"In natural walking motion, balanced fluid stride."
-                },
-                {
-                    "id": "sitting",
-                    "label": "Seated Workspace",
-                    "icon": "🪑",
-                    "image_url": primary_image,
                 }
             ]
 
@@ -243,6 +237,7 @@ class CharacterGeneratorService:
 
         # 4. Configure gender-specific full-body standing regeneration prompt and pose metadata
         is_female = (dna.gender or '').lower() == 'female'
+        style_desc = cls.STYLE_PRESETS.get(style_preset, "8k resolution, cinematic studio lighting")
         if not dna.full_body_prompt:
             if is_female:
                 gender_marker = (
@@ -255,30 +250,41 @@ class CharacterGeneratorService:
             dna.full_body_prompt = (
                 f"Full-length standing fashion portrait of {dna.name} ({dna.tagline}), {gender_marker}, head-to-toe view standing upright on two legs with shoes. "
                 f"Exact facial geometry and likeness: {dna.appearance_description}. Wearing: {dna.clothing_description}. "
-                f"Confident natural standing posture, sharp focus, 8k resolution, photorealistic, cinematic studio lighting."
+                f"Confident natural standing posture, sharp focus, {style_desc}."
             )
 
-        # 5. For photo uploads: The character's primary visual IS their cropped face anchor!
-        # Do NOT assign unrelated stock photos of other people (like Amina Diallo or Marcus Vance).
-        dna.full_body_url = face_anchor_url
+        # 5. Full-Body Figure & Stylized Avatar Synthesis:
+        # Synthesize a true full-length standing posture (head-to-toe on two legs with shoes)
+        full_body_url = cls.generate_full_body_figure(dna, style_preset)
+        portrait_url = cls.generate_avatar_portrait(dna, style_preset) if style_preset != 'cinematic' else ""
+
+        primary_visual = full_body_url or portrait_url or face_anchor_url
+        dna.full_body_url = primary_visual
         dna.avatar_url = face_anchor_url
         dna.face_anchor_url = face_anchor_url
 
-        # Build pose variants using the uploaded character's real face anchor
+        # Build pose variants using distinct assets: Full-Body Standing, Signature Portrait, and Biometric Face Lock
         dna.poses = [
+            {
+                "id": "standing",
+                "label": "Standing Figure",
+                "icon": "🧍‍♀️" if is_female else "🧍‍♂️",
+                "image_url": primary_visual,
+                "prompt_cue": dna.full_body_prompt or f"Full-length standing pose of {dna.name}."
+            },
+            {
+                "id": "portrait",
+                "label": "Signature Portrait",
+                "icon": "👤",
+                "image_url": portrait_url or primary_visual,
+                "prompt_cue": f"Character portrait of {dna.name}, {dna.appearance_description}."
+            },
             {
                 "id": "face_lock",
                 "label": "Biometric Face Lock",
                 "icon": "🔒",
                 "image_url": face_anchor_url,
                 "prompt_cue": f"100% locked facial geometry and authentic likeness of {dna.name}."
-            },
-            {
-                "id": "portrait",
-                "label": "Signature Portrait",
-                "icon": "👤",
-                "image_url": face_anchor_url,
-                "prompt_cue": f"Character portrait of {dna.name}, {dna.appearance_description}."
             }
         ]
 
@@ -445,7 +451,7 @@ class CharacterGeneratorService:
                 "Discarded secondary elements: person in yellow sleeve on right and background library bystander."
             )
             face_bounding_box = {"ymin": 0.10, "xmin": 0.25, "ymax": 0.50, "xmax": 0.92}
-            full_body_url = "/media/characters/poses/amina_standing.jpg"
+            full_body_url = ""
             portrait_prompt = f"Portrait of a female character, woman {name}, {appearance}, wearing {clothing}, {style_desc}."
             full_body_prompt = (
                 f"Full-length fashion portrait of a female character, woman standing upright head-to-toe on two legs with stylish boots. "
@@ -459,7 +465,7 @@ class CharacterGeneratorService:
             if extra_brief:
                 words = [w for w in extra_brief.split() if len(w) > 2]
                 if words:
-                    name = f"{words[0].title()} Vance"
+                    name = f"{words[0].title()} Mercer"
             tagline = "Autonomous Visual Persona"
             desc = "A photorealistic character synthesized directly from reference face geometry, with secondary elements filtered out."
             appearance = (
@@ -471,7 +477,7 @@ class CharacterGeneratorService:
             personality = "Intense captivating gaze, confident composure, observant demeanor, natural screen magnetism."
             subject_isolation = "🎯 Primary Subject Isolated: Extracted dominant foreground subject; filtered out background noise."
             face_bounding_box = {"ymin": 0.12, "xmin": 0.20, "ymax": 0.55, "xmax": 0.80}
-            full_body_url = "/static/images/showcase/marcus_vance_walking.jpg"
+            full_body_url = ""
             portrait_prompt = f"Portrait of a male character, man {name}, {appearance}, wearing {clothing}, {style_desc}."
             full_body_prompt = (
                 f"Full-length fashion portrait of a male character, man standing upright head-to-toe on two legs with polished leather shoes. "
@@ -708,10 +714,10 @@ class CharacterGeneratorService:
             appearance = "24-year-old Black woman with high braided bun topknot, warm rich brown skin tone, expressive dark eyes with natural lashes, gently arched eyebrows, and a warm gentle smile."
             clothing = clothing_str or "Ivory ribbed knit sweater tucked into high-waisted dark tailored trousers with a leather belt and black leather ankle boots."
             personality = "Thoughtful, articulate, serene, magnetic composure with quiet intellectual authority."
-            full_body_url = "/media/characters/poses/amina_diallo_standing.jpg"
+            full_body_url = ""
         else:
             # Custom synthesis from prompt specifics
-            name = extracted_name or (brief.strip().title() if len(brief.strip().split()) <= 2 else ("Camille Laurent" if is_female else "Marcus Vance"))
+            name = extracted_name or (brief.strip().title() if len(brief.strip().split()) <= 2 else ("Camille Laurent" if is_female else "Kaelen Mercer"))
             tagline = f"Lead {found_role}" if found_role else "Autonomous Protagonist"
             desc = f"A distinctive AI character tailored to your creative prompt specifics: '{brief}'."
 
@@ -737,15 +743,7 @@ class CharacterGeneratorService:
                 "Tailored minimalist ensemble with clean silhouettes, premium textural layering, and contemporary footwear"
             )
             personality = "Confident, charismatic, observant, composed demeanor with captivating screen magnetism."
-            
-            # Select showcase asset ONLY if explicitly matching that persona
-            name_lower = name.lower()
-            if 'diallo' in name_lower or 'amina' in name_lower:
-                full_body_url = "/media/characters/poses/amina_diallo_standing.jpg"
-            elif 'marcus' in name_lower or 'vance' in name_lower:
-                full_body_url = "/static/images/showcase/marcus_vance_walking.jpg"
-            else:
-                full_body_url = ""
+            full_body_url = ""
 
         # Style preset adaptations for fallback engine
         if style_preset == 'anime':
@@ -803,19 +801,98 @@ class CharacterGeneratorService:
         )
 
     @classmethod
-    def generate_avatar_portrait(cls, dna: CharacterDNASchema, style_preset: str = "cinematic") -> str:
-        """Generates a high-definition synthetic character avatar and saves to media storage."""
-        # 1. Try Pollinations AI to generate a unique, high-fidelity AI portrait tailored to prompt & style
+    def generate_full_body_figure(cls, dna: CharacterDNASchema, style_preset: str = "cinematic") -> str:
+        """
+        Synthesizes a full-length, head-to-toe standing character figure on two legs with visible footwear.
+        Uses Fal.ai FLUX (via FAL_KEY) for sub-second 8K generation, with Pollinations AI fallback.
+        """
+        gender_term = "woman" if (dna.gender or '').lower() == 'female' else "man"
+        style_desc = cls.STYLE_PRESETS.get(style_preset, "photorealistic 8k, cinematic lighting")
+
+        prompt = (
+            f"Full-length standing fashion portrait of {dna.name}, {gender_term}, "
+            f"head-to-toe full body view standing upright on two legs with visible footwear, "
+            f"{dna.appearance_description}. Wearing: {dna.clothing_description}. "
+            f"Confident natural standing pose, {style_desc}, sharp focus, studio lighting"
+        )
+
+        # 1. Try Fal.ai FLUX (Fast, photorealistic / 3D Octane quality, 9:16 vertical portrait)
+        fal_key = getattr(settings, 'FAL_KEY', '')
+        if fal_key:
+            try:
+                import fal_client
+                os.environ['FAL_KEY'] = fal_key
+                res = fal_client.subscribe('fal-ai/flux/schnell', arguments={
+                    'prompt': prompt,
+                    'image_size': 'portrait_16_9',
+                    'num_images': 1
+                })
+                img_url = res.get('images', [{}])[0].get('url')
+                if img_url:
+                    with httpx.Client(timeout=15.0) as client:
+                        r = client.get(img_url)
+                        if r.status_code == 200 and len(r.content) > 5000:
+                            filename = f"characters/avatars/ai_fullbody_{uuid.uuid4().hex[:10]}.jpg"
+                            saved_path = default_storage.save(filename, ContentFile(r.content))
+                            return default_storage.url(saved_path)
+            except Exception as e:
+                logger.warning(f"Fal FLUX full-body generation failed ({e}), falling back to Pollinations...")
+
+        # 2. Fallback to Pollinations AI
         try:
             import urllib.parse
-            style_desc = cls.STYLE_PRESETS.get(style_preset, "photorealistic 8k portrait")
-            gender_term = "woman" if (dna.gender or '').lower() == 'female' else "man"
-            prompt = f"masterpiece close-up character portrait of {dna.name}, {gender_term}, {dna.appearance_description}, {style_desc}, sharp focus, studio lighting"
-            clean_prompt = prompt.replace("\n", " ").strip()[:280]
+            clean_prompt = prompt.replace("\n", " ").strip()
             encoded_prompt = urllib.parse.quote(clean_prompt)
             seed = uuid.uuid4().int % 1000000
             pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=768&nologo=true&seed={seed}"
-            with httpx.Client(timeout=8.0) as client:
+            with httpx.Client(timeout=18.0) as client:
+                resp = client.get(pollinations_url)
+                if resp.status_code == 200 and len(resp.content) > 3000:
+                    filename = f"characters/avatars/ai_fullbody_{uuid.uuid4().hex[:10]}.jpg"
+                    saved_path = default_storage.save(filename, ContentFile(resp.content))
+                    return default_storage.url(saved_path)
+        except Exception as e:
+            logger.warning(f"Live AI full-body generation failed ({e}).")
+
+        return ""
+
+    @classmethod
+    def generate_avatar_portrait(cls, dna: CharacterDNASchema, style_preset: str = "cinematic") -> str:
+        """Generates a high-definition synthetic character avatar and saves to media storage."""
+        gender_term = "woman" if (dna.gender or '').lower() == 'female' else "man"
+        style_desc = cls.STYLE_PRESETS.get(style_preset, "photorealistic 8k portrait")
+        prompt = f"masterpiece close-up character portrait of {dna.name}, {gender_term}, {dna.appearance_description}, wearing {dna.clothing_description}, {style_desc}, sharp focus, studio lighting"
+
+        # 1. Try Fal.ai FLUX (Fast, photorealistic / 3D Octane quality)
+        fal_key = getattr(settings, 'FAL_KEY', '')
+        if fal_key:
+            try:
+                import fal_client
+                os.environ['FAL_KEY'] = fal_key
+                res = fal_client.subscribe('fal-ai/flux/schnell', arguments={
+                    'prompt': prompt,
+                    'image_size': 'square_hd',
+                    'num_images': 1
+                })
+                img_url = res.get('images', [{}])[0].get('url')
+                if img_url:
+                    with httpx.Client(timeout=15.0) as client:
+                        r = client.get(img_url)
+                        if r.status_code == 200 and len(r.content) > 5000:
+                            filename = f"characters/avatars/ai_{uuid.uuid4().hex[:10]}.jpg"
+                            saved_path = default_storage.save(filename, ContentFile(r.content))
+                            return default_storage.url(saved_path)
+            except Exception as e:
+                logger.warning(f"Fal FLUX portrait generation failed ({e}), falling back to Pollinations...")
+
+        # 2. Try Pollinations AI to generate a unique, high-fidelity AI portrait tailored to prompt & style
+        try:
+            import urllib.parse
+            clean_prompt = prompt.replace("\n", " ").strip()
+            encoded_prompt = urllib.parse.quote(clean_prompt)
+            seed = uuid.uuid4().int % 1000000
+            pollinations_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=512&height=768&nologo=true&seed={seed}"
+            with httpx.Client(timeout=18.0) as client:
                 resp = client.get(pollinations_url)
                 if resp.status_code == 200 and len(resp.content) > 3000:
                     filename = f"characters/avatars/ai_{uuid.uuid4().hex[:10]}.jpg"

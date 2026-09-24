@@ -167,12 +167,39 @@ class PaystackService:
 
         return ""
 
+    _MOCK_TRANSACTIONS = {}
+
     @classmethod
     def initialize_transaction(cls, user, plan: SubscriptionPlan, callback_url: str) -> dict:
         """Initialize payment transaction with Paystack and return checkout authorization URL."""
         if cls.is_mock_mode():
             mock_ref = f"mock_ref_{uuid.uuid4().hex[:14]}"
             mock_checkout_url = f"{callback_url}?reference={mock_ref}&plan_id={plan.id}"
+            cls._MOCK_TRANSACTIONS[mock_ref] = {
+                "status": "success",
+                "reference": mock_ref,
+                "amount": int(plan.price_monthly * 100),
+                "gateway_response": "Successful (Mock Mode)",
+                "customer": {
+                    "customer_code": f"CUS_{user.id}",
+                    "email": user.email,
+                },
+                "metadata": {
+                    "user_id": str(user.id),
+                    "user_email": user.email,
+                    "plan_id": str(plan.id),
+                    "plan_slug": plan.slug,
+                    "payment_type": "subscription",
+                },
+                "authorization": {
+                    "authorization_code": "AUTH_mock_123",
+                    "card_type": "visa",
+                    "last4": "4081",
+                    "exp_month": "12",
+                    "exp_year": "2030",
+                },
+                "plan_object": {},
+            }
             return {
                 "status": True,
                 "data": {
@@ -262,7 +289,33 @@ class PaystackService:
         """Initialize payment for one-off non-expiring credit packs with Mobile Money and Card channels."""
         if cls.is_mock_mode():
             mock_ref = f"mock_topup_{uuid.uuid4().hex[:14]}"
-            mock_checkout_url = f"{callback_url}?reference={mock_ref}&topup_credits={credits_amount}&pack_id={pack_id}"
+            mock_checkout_url = f"{callback_url}?reference={mock_ref}&pack_id={pack_id}"
+            cls._MOCK_TRANSACTIONS[mock_ref] = {
+                "status": "success",
+                "reference": mock_ref,
+                "amount": int(price_usd * 100),
+                "gateway_response": "Successful (Mock Mode)",
+                "customer": {
+                    "customer_code": f"CUS_{user.id}",
+                    "email": user.email,
+                },
+                "metadata": {
+                    "user_id": str(user.id),
+                    "user_email": user.email,
+                    "pack_id": pack_id,
+                    "credits_amount": credits_amount,
+                    "price_usd": price_usd,
+                    "payment_type": "topup",
+                },
+                "authorization": {
+                    "authorization_code": "AUTH_mock_123",
+                    "card_type": "visa",
+                    "last4": "4081",
+                    "exp_month": "12",
+                    "exp_year": "2030",
+                },
+                "plan_object": {},
+            }
             return {
                 "status": True,
                 "data": {
@@ -328,6 +381,11 @@ class PaystackService:
     def verify_transaction(cls, reference: str) -> dict:
         """Verify transaction authenticity and payment status with Paystack."""
         if cls.is_mock_mode():
+            if reference in cls._MOCK_TRANSACTIONS:
+                return {
+                    "status": True,
+                    "data": cls._MOCK_TRANSACTIONS[reference]
+                }
             return {
                 "status": True,
                 "data": {
@@ -339,6 +397,7 @@ class PaystackService:
                         "customer_code": "CUS_mock_test",
                         "email": "subscriber@cleaverloop.ai",
                     },
+                    "metadata": {},
                     "authorization": {
                         "authorization_code": "AUTH_mock_123",
                         "card_type": "visa",

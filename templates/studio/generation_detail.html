@@ -160,35 +160,26 @@
                         <source src="{{ generation.latest_audio.url }}" type="audio/ogg">
                     </audio>
 
-                    <!-- 1-Click Neural Lip-Sync & FFmpeg Mux Action Banner -->
+                    <!-- Automatic Audio Integration & Optional Lip-Sync Retouch -->
                     <div class="pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
                         <div class="space-y-0.5">
-                            <h5 class="text-xs font-bold text-white flex items-center gap-1.5">
-                                <span>👄</span>
-                                <span>Neural Lip-Sync & Audio Muxing</span>
-                                <span class="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 text-[9px] font-mono font-bold">Studio Suite</span>
+                            <h5 class="text-xs font-bold text-white flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                <span>Voice Track Embedded Natively in MP4</span>
+                                <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-[10px] font-mono font-bold">48kHz AAC Active</span>
                             </h5>
-                            <p class="text-[11px] text-slate-400">Animate facial articulation with neural sync, or mux this 48kHz audio track directly into the MP4 video container.</p>
+                            <p class="text-[11px] text-slate-400">Your character's recorded voice has been automatically integrated into this video container. Audio plays natively when viewed or downloaded.</p>
                         </div>
 
                         <div class="flex items-center gap-2 flex-wrap">
-                            <form action="{% url 'generations:mux_audio_video' generation.id %}" method="POST" class="inline">
-                                {% csrf_token %}
-                                <button type="submit"
-                                        title="Directly embed 48kHz AAC audio into this MP4 video with FFmpeg"
-                                        class="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/10 text-slate-200 hover:text-white border border-white/10 font-heading font-bold text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
-                                    <span>🎬</span>
-                                    <span>Mux Audio (FFmpeg)</span>
-                                </button>
-                            </form>
-
                             <form action="{% url 'generations:lipsync_video' generation.id %}" method="POST" class="inline">
                                 {% csrf_token %}
                                 <button type="submit"
-                                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white rounded-xl px-4 py-2 font-heading font-black text-xs uppercase tracking-wider transition hover:scale-105 flex items-center gap-1.5 shadow-lg shadow-orange-500/25 cursor-pointer">
+                                        title="Optional extra AI pass to align mouth shape to audio"
+                                        class="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/10 hover:border-orange-500/30 font-heading font-bold text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
                                     <span>👄</span>
-                                    <span>Sync Lips & Video</span>
-                                    <span class="opacity-80 text-[10px] font-mono">• 30 cr</span>
+                                    <span>Extra Lip-Sync Retouch</span>
+                                    <span class="opacity-60 text-[10px] font-mono">• 30 cr</span>
                                 </button>
                             </form>
                         </div>

@@ -63,7 +63,16 @@ class Character(models.Model):
     def primary_image_url(self) -> str:
         """Returns the full-length standing character figure URL or avatar URL."""
         if self.metadata and self.metadata.get('full_body_url'):
-            return self.metadata['full_body_url']
+            url = self.metadata['full_body_url']
+            # Safeguard: Do not display stock showcase assets if character has a unique face anchor
+            if any(k in url.lower() for k in ('marcus_vance', 'amina_diallo', 'amina_standing')):
+                if self.face_anchor_url:
+                    return self.face_anchor_url
+                if self.avatar and not any(k in str(self.avatar).lower() for k in ('marcus_vance', 'amina_diallo')):
+                    return self.avatar.url
+            return url
+        if self.face_anchor_url:
+            return self.face_anchor_url
         if self.avatar:
             return self.avatar.url
         return ""

@@ -361,10 +361,10 @@ class FalAIProvider(BaseAIProvider):
         if neg_prompt and "wan" in model_id:
             payload["negative_prompt"] = neg_prompt
 
-        # Wan 2.1: Request higher quality inference steps
+        # Wan 2.1: Optimal inference steps (max allowed by Fal.ai is 40)
         if "wan" in model_id:
-            payload["num_inference_steps"] = 50
-            payload["guidance_scale"] = 7.0
+            payload["num_inference_steps"] = 30
+            payload["guidance_scale"] = 5.0
             # Seed for reproducibility when re-generating same character
             if request.seed:
                 payload["seed"] = request.seed

@@ -25,10 +25,20 @@ class ModelRouter:
         requires_image_ref: bool = False,
         requires_character_ref: bool = False,
         requires_audio: bool = False,
+        user = None,
+        subscription_tier: Optional[str] = None,
     ) -> AIModel:
         """
         Route request to the most appropriate active model that strictly satisfies all constraints.
+        Enforces tier-based wiring (Starter -> Veo Lite, Creator -> Veo Fast, Ultra -> Cinema Master).
         """
+        # Resolve user's subscription tier
+        effective_tier = subscription_tier
+        if not effective_tier and user is not None:
+            wallet = getattr(user, 'wallet', None)
+            if wallet:
+                effective_tier = getattr(wallet, 'subscription_tier', 'free')
+
         # If user explicitly requested a specific model_id:
         if user_preference not in ("automatic", "best_quality", "fastest", "budget"):
             specific = AIModel.objects.filter(model_id=user_preference, is_enabled=True).first()
@@ -77,7 +87,41 @@ class ModelRouter:
         if live_candidates.exists():
             candidates = live_candidates
 
-        # Apply preference heuristic sorting
+        # Starter tier users cannot auto-route to premium models
+        if effective_tier in ('free', 'starter'):
+            non_premium = candidates.filter(is_premium=False)
+            if non_premium.exists():
+                candidates = non_premium
+
+        # Tier-specific wiring for video modality
+        if modality == 'video':
+            if effective_tier == 'starter' and user_preference in ('automatic', 'budget'):
+                # Wire Starter directly to Veo 3.1 Lite (lowest credit consumption model)
+                lite_model = candidates.filter(model_id='veo-3.1-lite').first()
+                if lite_model:
+                    logger.info(f"ModelRouter wired Starter user to lowest-cost Veo model: {lite_model.model_id}")
+                    return lite_model
+                # Or candidate with lowest per-second rate
+                cheapest = candidates.order_by('credit_cost_per_second', 'credit_cost_fixed').first()
+                if cheapest:
+                    return cheapest
+            elif effective_tier == 'creator' and user_preference in ('automatic', 'fastest'):
+                fast_model = candidates.filter(model_id='veo-3.1-fast').first()
+                if fast_model:
+                    logger.info(f"ModelRouter wired Creator user to Veo Fast model: {fast_model.model_id}")
+                    return fast_model
+            elif effective_tier == 'ultra':
+                if user_preference == 'best_quality':
+                    cinema_master = candidates.filter(model_id='veo-3.1-standard').first()
+                    if cinema_master:
+                        logger.info(f"ModelRouter wired Ultra user to Cinema Master: {cinema_master.model_id}")
+                        return cinema_master
+                elif user_preference == 'automatic':
+                    preferred = candidates.filter(model_id__in=['veo-3.1-standard', 'veo-3.1-fast']).order_by('-priority').first()
+                    if preferred:
+                        return preferred
+
+        # Apply general preference heuristic sorting
         if user_preference == "best_quality":
             # Sort by priority desc, premium first
             selected = candidates.order_by('-is_premium', '-priority').first()
@@ -91,7 +135,7 @@ class ModelRouter:
             # Automatic: Balanced priority
             selected = candidates.order_by('-priority', 'credit_cost_fixed').first()
 
-        logger.info(f"ModelRouter selected [{selected.model_id}] for modality={modality}, preference={user_preference}")
+        logger.info(f"ModelRouter selected [{selected.model_id}] for modality={modality}, preference={user_preference}, tier={effective_tier}")
         return selected
 
     @classmethod

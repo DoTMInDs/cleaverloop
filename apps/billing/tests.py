@@ -147,8 +147,8 @@ class PaystackBillingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
         self.assertIn("Creator", content)
-        self.assertIn("Active Plan", content)
-        self.assertIn("Current Balance", content)
+        self.assertIn("Active Subscription", content)
+        self.assertIn("Available Balance", content)
 
     def test_cancel_subscription_flow(self):
         """Verify subscriber can cancel their subscription."""
@@ -217,3 +217,128 @@ class PaystackBillingTests(TestCase):
             HTTP_X_PAYSTACK_SIGNATURE=sig
         )
         self.assertEqual(res_signed.status_code, 200)
+
+    def test_payment_callback_blocks_idor_when_user_mismatch(self):
+        """Red Team Test: Verify an attacker cannot hijack another customer's payment reference."""
+        victim = User.objects.create_user(
+            email="victim@cleaverloop.ai",
+            username="victim",
+            password="victimpassword"
+        )
+        CreditService.get_or_create_wallet(victim)
+
+        # Initialize checkout as victim
+        from apps.billing.paystack import PaystackService
+        init_res = PaystackService.initialize_transaction(victim, self.ultra_plan, "http://testserver/billing/callback/")
+        victim_ref = init_res['data']['reference']
+
+        # Attacker logs in and attempts to claim victim's paid reference
+        self.client.force_login(self.user)
+        initial_attacker_bal = self.wallet.balance
+        attacker_res = self.client.get(f"{reverse('billing:callback')}?reference={victim_ref}")
+
+        # Must be rejected with redirect back to plans
+        self.assertEqual(attacker_res.status_code, 302)
+        self.assertEqual(attacker_res.url, reverse('billing:plans'))
+
+        # Attacker's wallet must NOT receive ultra tier or credits
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, initial_attacker_bal)
+        self.assertNotEqual(self.wallet.subscription_tier, 'ultra')
+
+    def test_topup_credit_grant_cannot_be_tampered_via_query_params(self):
+        """Red Team Test: Verify client-side query parameters cannot inflate top-up credit amounts."""
+        self.client.force_login(self.user)
+        initial_balance = self.wallet.balance
+
+        from apps.billing.paystack import PaystackService
+        init_res = PaystackService.initialize_topup_transaction(
+            user=self.user,
+            pack_id='pack-50k',
+            credits_amount=50000,
+            price_usd=10.00,
+            callback_url="http://testserver/billing/callback/"
+        )
+        ref = init_res['data']['reference']
+
+        # Malicious user tampers with URL trying to request 10 million credits
+        tampered_url = f"{reverse('billing:callback')}?reference={ref}&topup_credits=10000000"
+        res = self.client.get(tampered_url)
+        self.assertEqual(res.status_code, 302)
+
+        # Wallet must strictly receive the authentic pack amount (50,000), not the tampered query value
+        self.wallet.refresh_from_db()
+        self.assertEqual(self.wallet.balance, initial_balance + 50000)
+
+    def test_duplicate_external_reference_db_constraint(self):
+        """Verify DB-level unique constraint prevents duplicate external_references, but allows multiple empty references."""
+        from django.db import IntegrityError, transaction
+        # 1. First transaction with ref succeeds
+        CreditTransaction.objects.create(
+            wallet=self.wallet,
+            amount=100,
+            transaction_type='bonus',
+            balance_before=0,
+            balance_after=100,
+            description='Test Ref 1',
+            external_reference='paystack:unique_test_ref_1'
+        )
+
+        # 2. Second transaction with identical ref must raise IntegrityError inside a savepoint
+        with transaction.atomic():
+            with self.assertRaises(IntegrityError):
+                CreditTransaction.objects.create(
+                    wallet=self.wallet,
+                    amount=100,
+                    transaction_type='bonus',
+                    balance_before=100,
+                    balance_after=200,
+                    description='Test Ref 1 Duplicate',
+                    external_reference='paystack:unique_test_ref_1'
+                )
+
+        # 3. Multiple empty external_reference values are allowed
+        CreditTransaction.objects.create(
+            wallet=self.wallet,
+            amount=50,
+            transaction_type='adjustment',
+            balance_before=100,
+            balance_after=150,
+            description='Empty ref 1',
+            external_reference=''
+        )
+        CreditTransaction.objects.create(
+            wallet=self.wallet,
+            amount=50,
+            transaction_type='adjustment',
+            balance_before=150,
+            balance_after=200,
+            description='Empty ref 2',
+            external_reference=''
+        )
+
+    def test_webhook_handles_invoice_payment_failed(self):
+        """Verify failed renewal invoice marks active subscription as past_due."""
+        sub = Subscription.objects.create(
+            user=self.user,
+            plan=self.creator_plan,
+            status='active',
+            external_subscription_id='SUB_pay_fail_test'
+        )
+        webhook_payload = {
+            "event": "invoice.payment_failed",
+            "data": {
+                "subscription_code": "SUB_pay_fail_test",
+                "customer": {
+                    "email": self.user.email
+                }
+            }
+        }
+        res = self.client.post(
+            reverse('billing:webhook'),
+            data=json.dumps(webhook_payload),
+            content_type='application/json'
+        )
+        self.assertEqual(res.status_code, 200)
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, 'past_due')

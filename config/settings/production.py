@@ -1,6 +1,7 @@
 from .base import *
 
 DEBUG = False
+MOCK_PROVIDERS_ENABLED = env.bool('MOCK_PROVIDERS_ENABLED', default=False)
 
 # Database
 DATABASES = {

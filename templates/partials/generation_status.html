@@ -3,6 +3,8 @@
      hx-get="{% url 'generations:status' generation.id %}"
      hx-trigger="load delay:{% if generation.status == 'processing' or generation.is_synthesizing_audio %}3s{% else %}2s{% endif %}"
      hx-swap="outerHTML"
+     hx-on::response-error="setTimeout(() => htmx.ajax('GET', '{% url 'generations:status' generation.id %}', {target: '#generation-card-{{ generation.id }}', swap: 'outerHTML'}), 4000)"
+     hx-on::send-error="setTimeout(() => htmx.ajax('GET', '{% url 'generations:status' generation.id %}', {target: '#generation-card-{{ generation.id }}', swap: 'outerHTML'}), 4000)"
      {% endif %}
      class="glass-panel rounded-2xl p-5 border border-white/10 relative overflow-hidden transition-all duration-300"
      x-data="generationStatusCard({{ generation.duration|default:5 }}, '{{ generation.prompt|default:""|escapejs }}', '{{ generation.character.name|default:""|escapejs }}')">
