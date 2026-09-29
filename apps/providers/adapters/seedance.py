@@ -7,58 +7,79 @@ from apps.providers.base import (
     ProviderJobResult,
     CostEstimate
 )
+from apps.providers.diagnostics import _resolve_api_key
 
 logger = logging.getLogger(__name__)
 
 class SeedanceProvider(BaseAIProvider):
     """
-    Adapter for ByteDance Seedance 2.0 and Seedance 2.5 video generation.
-    Supports multimodal references, longer duration, and synchronized audio.
+    Adapter for ByteDance / BytePlus ModelArk Seedance 2.5 and Seedance 2.0 video generation.
+    Connects to BytePlus ModelArk (ap-southeast) and supports text-to-video, image-to-video,
+    and synchronized audio.
     """
     provider_slug = "seedance"
-    BASE_URL = "https://api.seedance.ai/v1"
+    BASE_URL = "https://ark.ap-southeast.bytepluses.com/api/v3"
+    DEFAULT_MODEL = "dreamina-seedance-2-5-260628"
 
     def __init__(self):
-        self.api_key = getattr(settings, 'SEEDANCE_API_KEY', '')
+        self.api_key = _resolve_api_key('SEEDANCE_API_KEY')
 
     def generate_image(self, model_id: str, request: GenerationRequest) -> ProviderJobResult:
         return ProviderJobResult(external_job_id="", status="failed", error_message="Seedance focuses on video.")
 
     def generate_video(self, model_id: str, request: GenerationRequest) -> ProviderJobResult:
         if not self.api_key:
+            self.api_key = _resolve_api_key('SEEDANCE_API_KEY')
+
+        if not self.api_key:
             return ProviderJobResult(
                 external_job_id="",
                 status="failed",
-                error_message="Seedance API key is not configured.",
+                error_message="Seedance / BytePlus API key is not configured.",
                 retryable=False
             )
         try:
-            endpoint = f"{self.BASE_URL}/videos/generations"
-            headers = {"Authorization": f"Bearer {self.api_key}"}
-            payload = {
-                "model": model_id or "seedance-2.5",
-                "prompt": request.prompt,
-                "negative_prompt": request.negative_prompt,
-                "duration": request.duration,
-                "aspect_ratio": request.aspect_ratio,
-                "audio_enabled": True,
+            target_model = model_id or self.DEFAULT_MODEL
+            if target_model in ("seedance", "seedance-2.5", "seedance-2"):
+                target_model = self.DEFAULT_MODEL
+
+            endpoint = f"{self.BASE_URL}/contents/generations/tasks"
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
             }
+            content = [
+                {
+                    "type": "text",
+                    "text": request.prompt
+                }
+            ]
             if request.reference_image_urls:
-                payload["image_references"] = request.reference_image_urls
+                for img_url in request.reference_image_urls:
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {"url": img_url}
+                    })
+
+            payload = {
+                "model": target_model,
+                "content": content
+            }
 
             with httpx.Client(timeout=30.0) as client:
                 resp = client.post(endpoint, json=payload, headers=headers)
                 if resp.status_code in (200, 201, 202):
                     data = resp.json()
+                    task_id = data.get("id") or data.get("task_id", "")
                     return ProviderJobResult(
-                        external_job_id=data.get("id", ""),
+                        external_job_id=task_id,
                         status="queued",
                         raw_response=data
                     )
                 return ProviderJobResult(
                     external_job_id="",
                     status="failed",
-                    error_message=f"Seedance API error: {resp.text[:200]}"
+                    error_message=f"BytePlus ModelArk API error ({resp.status_code}): {resp.text[:200]}"
                 )
         except Exception as exc:
             logger.error(f"Seedance generation error: {exc}")
@@ -68,25 +89,37 @@ class SeedanceProvider(BaseAIProvider):
         if not self.api_key or not external_job_id:
             return ProviderJobResult(external_job_id=external_job_id, status="failed", error_message="Invalid request")
         try:
-            url = f"{self.BASE_URL}/videos/generations/{external_job_id}"
+            url = f"{self.BASE_URL}/contents/generations/tasks/{external_job_id}"
             headers = {"Authorization": f"Bearer {self.api_key}"}
             with httpx.Client(timeout=15.0) as client:
                 resp = client.get(url, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
-                    state = data.get("status", "").lower()
-                    if state == "completed":
+                    status_raw = str(data.get("status", "")).lower()
+                    if status_raw in ("succeeded", "completed", "success"):
+                        content = data.get("content") or {}
+                        video_url = ""
+                        if isinstance(content, dict):
+                            video_url = content.get("video_url") or content.get("url") or ""
+                        elif isinstance(content, list) and content:
+                            video_url = content[0].get("video_url") or content[0].get("url") or ""
+                        elif isinstance(data.get("result"), dict):
+                            video_url = data["result"].get("video_url") or ""
+
                         return ProviderJobResult(
                             external_job_id=external_job_id,
                             status="completed",
-                            output_media_url=data.get("video_url"),
+                            output_media_url=video_url,
                             raw_response=data
                         )
-                    elif state == "failed":
+                    elif status_raw in ("failed", "error", "expired"):
+                        err = data.get("error") or {}
+                        err_msg = err.get("message") if isinstance(err, dict) else str(err)
                         return ProviderJobResult(
                             external_job_id=external_job_id,
                             status="failed",
-                            error_message=data.get("error", "Seedance render error")
+                            error_message=err_msg or "Seedance render error",
+                            raw_response=data
                         )
                     return ProviderJobResult(external_job_id=external_job_id, status="processing", raw_response=data)
         except Exception as exc:
@@ -105,3 +138,4 @@ class SeedanceProvider(BaseAIProvider):
 
     def health_check(self) -> bool:
         return bool(self.api_key)
+

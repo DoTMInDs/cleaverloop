@@ -172,16 +172,23 @@
                         </div>
 
                         <div class="flex items-center gap-2 flex-wrap">
-                            <form action="{% url 'generations:lipsync_video' generation.id %}" method="POST" class="inline">
-                                {% csrf_token %}
-                                <button type="submit"
-                                        title="Optional extra AI pass to align mouth shape to audio"
-                                        class="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/10 hover:border-orange-500/30 font-heading font-bold text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
+                            {% if generation.is_lip_sync %}
+                                <span class="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-bold font-mono flex items-center gap-1.5">
                                     <span>👄</span>
-                                    <span>Extra Lip-Sync Retouch</span>
-                                    <span class="opacity-60 text-[10px] font-mono">• 30 cr</span>
-                                </button>
-                            </form>
+                                    <span>Neural Lip-Sync Active</span>
+                                </span>
+                            {% else %}
+                                <form action="{% url 'generations:lipsync_video' generation.id %}" method="POST" class="inline">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            title="AI pass to align mouth shape to audio"
+                                            class="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/10 hover:border-orange-500/30 font-heading font-bold text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
+                                        <span>👄</span>
+                                        <span>Sync Lips to Audio</span>
+                                        <span class="opacity-60 text-[10px] font-mono">• 30 cr</span>
+                                    </button>
+                                </form>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

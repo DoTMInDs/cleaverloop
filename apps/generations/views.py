@@ -495,22 +495,22 @@ def lipsync_video_view(request, generation_id):
         messages.error(request, err_msg)
         return redirect('generations:detail', pk=parent_gen.id)
 
-    # Resolve or create Lip-Sync AI Model entry (prefer high-quality LatentSync)
+    # Resolve or create Lip-Sync AI Model entry (prefer high-quality Sync-3)
     fal_provider_obj = parent_gen.provider
-    lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
+    lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
     if not lipsync_model:
-        lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
+        lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
     if not lipsync_model:
         from apps.providers.models import AIProviderConfig
         fal_cfg = AIProviderConfig.objects.filter(slug='fal').first() or fal_provider_obj
         lipsync_model, _ = AIModel.objects.get_or_create(
-            model_id='fal-latentsync',
+            model_id='fal-sync-lipsync',
             defaults={
                 'provider': fal_cfg,
-                'display_name': 'LatentSync (Full-Face Neural Lip-Sync)',
+                'display_name': 'Sync Labs Lipsync (High-Fidelity Sync-3)',
                 'modality': 'video',
                 'credit_cost_fixed': 20,
-                'credit_cost_per_second': 3,
+                'credit_cost_per_second': 2,
                 'is_enabled': True
             }
         )

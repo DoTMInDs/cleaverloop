@@ -1,9 +1,50 @@
 import logging
-import httpx
+import os
+from pathlib import Path
 from typing import Dict, Any, List
+import httpx
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_api_key(*key_names: str) -> str:
+    """
+    Resolve API key by checking Django settings, os.environ, or directly re-reading
+    the .env file on disk. This prevents 'Missing Key' false-negatives when keys
+    are added to .env while runserver is actively running without a restart.
+    """
+    for name in key_names:
+        val = getattr(settings, name, "") or os.environ.get(name, "")
+        if val and str(val).strip():
+            return str(val).strip()
+
+    # Dynamic fallback: read .env directly from disk
+    try:
+        base_dir = getattr(settings, 'BASE_DIR', None) or Path.cwd()
+        env_file = Path(base_dir) / '.env'
+        if env_file.exists():
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith('#') or '=' not in line:
+                        continue
+                    k, v = line.split('=', 1)
+                    k = k.strip()
+                    v = v.strip().strip("'\"")
+                    for name in key_names:
+                        if k == name and v:
+                            os.environ[name] = v
+                            try:
+                                setattr(settings, name, v)
+                            except Exception:
+                                pass
+                            return v
+    except Exception as exc:
+        logger.debug(f"Diagnostics live .env fallback notice: {exc}")
+
+    return ""
+
 
 class ProviderHealthChecker:
     """
@@ -17,6 +58,7 @@ class ProviderHealthChecker:
         results = [
             cls.check_fal_ai(),
             cls.check_google_veo(),
+            cls.check_seedance(),
             cls.check_kling_ai(),
             cls.check_minimax(),
             cls.check_openai(),
@@ -25,7 +67,7 @@ class ProviderHealthChecker:
 
     @classmethod
     def check_fal_ai(cls) -> Dict[str, Any]:
-        key = getattr(settings, 'FAL_KEY', '').strip()
+        key = _resolve_api_key('FAL_KEY')
         info = {
             "name": "Fal.ai Hub (Alibaba Wan 2.1 & Luma Ray 2)",
             "slug": "fal",
@@ -75,7 +117,7 @@ class ProviderHealthChecker:
 
     @classmethod
     def check_google_veo(cls) -> Dict[str, Any]:
-        key = getattr(settings, 'GOOGLE_AI_API_KEY', '').strip() or getattr(settings, 'GEMINI_API_KEY', '').strip()
+        key = _resolve_api_key('GOOGLE_AI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY')
         info = {
             "name": "Google Gemini & AI Studio (Free Tier)",
             "slug": "google_veo",
@@ -122,8 +164,68 @@ class ProviderHealthChecker:
         return info
 
     @classmethod
+    def check_seedance(cls) -> Dict[str, Any]:
+        key = _resolve_api_key('SEEDANCE_API_KEY')
+        info = {
+            "name": "ByteDance Seedance 2.5 Pro (BytePlus)",
+            "slug": "seedance",
+            "modality": "Video & Audio",
+            "is_configured": bool(key),
+            "status": "unknown",
+            "status_label": "Checking...",
+            "details": "",
+            "top_up_url": "https://console.byteplus.com/ark/region:ap-southeast-1/overview",
+            "recommended": False
+        }
+        if not key:
+            info["status"] = "unconfigured"
+            info["status_label"] = "Missing Key"
+            info["details"] = "SEEDANCE_API_KEY is not set in .env."
+            return info
+
+        masked = f"{key[:8]}...{key[-4:]}" if len(key) > 12 else "***"
+        info["status"] = "ready"
+        info["status_label"] = "Key Active & Ready"
+        info["details"] = f"API key configured ({masked}). Ready for Seedance 2.5 video & audio generation."
+
+        try:
+            with httpx.Client(timeout=6.0) as client:
+                headers = {"Authorization": f"Bearer {key}"}
+                # Probe BytePlus ModelArk (International ap-southeast) first, fallback to Volcano Engine
+                endpoints = [
+                    "https://ark.ap-southeast.bytepluses.com/api/v3/models",
+                    "https://ark.cn-beijing.volces.com/api/v3/models"
+                ]
+                for ep in endpoints:
+                    try:
+                        resp = client.get(ep, headers=headers)
+                        if resp.status_code == 200:
+                            data = resp.json().get("data", [])
+                            count = len(data)
+                            info["status"] = "ready"
+                            info["status_label"] = "Funded & Ready"
+                            info["details"] = f"BytePlus ModelArk verified ({count} models available). Ready for Seedance 2.5 & 2.0."
+                            break
+                        elif resp.status_code == 401:
+                            info["status"] = "unfunded"
+                            info["status_label"] = "Unauthorized (401)"
+                            info["details"] = "BytePlus ModelArk returned 401 Unauthorized. Check your SEEDANCE_API_KEY in .env."
+                            break
+                        elif resp.status_code == 403:
+                            info["status"] = "ready"
+                            info["status_label"] = "Key Active"
+                            info["details"] = f"API key authenticated ({masked}). Verify ModelArk permissions on BytePlus Console."
+                            break
+                    except Exception:
+                        continue
+        except Exception as exc:
+            logger.debug(f"Seedance probe non-fatal network note: {exc}")
+
+        return info
+
+    @classmethod
     def check_kling_ai(cls) -> Dict[str, Any]:
-        key = getattr(settings, 'KLING_API_KEY', '').strip()
+        key = _resolve_api_key('KLING_API_KEY')
         info = {
             "name": "Kling 2.6 Motion Studio",
             "slug": "kling",
@@ -178,7 +280,7 @@ class ProviderHealthChecker:
 
     @classmethod
     def check_minimax(cls) -> Dict[str, Any]:
-        key = getattr(settings, 'MINIMAX_API_KEY', '').strip()
+        key = _resolve_api_key('MINIMAX_API_KEY')
         info = {
             "name": "MiniMax Hailuo Video-01",
             "slug": "minimax",
@@ -223,7 +325,7 @@ class ProviderHealthChecker:
 
     @classmethod
     def check_openai(cls) -> Dict[str, Any]:
-        key = getattr(settings, 'OPENAI_API_KEY', '').strip()
+        key = _resolve_api_key('OPENAI_API_KEY')
         info = {
             "name": "OpenAI Images (DALL-E / GPT-Image)",
             "slug": "openai",

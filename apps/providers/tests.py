@@ -100,6 +100,7 @@ class ProviderRegistryAndRouterTests(TestCase):
         slugs = [r["slug"] for r in results]
         self.assertIn("fal", slugs)
         self.assertIn("google_veo", slugs)
+        self.assertIn("seedance", slugs)
         self.assertIn("kling", slugs)
         self.assertIn("minimax", slugs)
         self.assertIn("openai", slugs)

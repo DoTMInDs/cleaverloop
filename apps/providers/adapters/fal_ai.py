@@ -35,8 +35,10 @@ class FalAIProvider(BaseAIProvider):
         "fal-kokoro": "fal-ai/kokoro",
         "fal-f5-tts": "fal-ai/f5-tts",
         "fal-stable-audio": "fal-ai/stable-audio",
-        "fal-sync-lipsync": "fal-ai/sync-lipsync",
-        "fal-latentsync": "fal-ai/latentsync",
+        "fal-sync-lipsync": "fal-ai/sync-lipsync/v3",
+        "fal-sync-lipsync-v3": "fal-ai/sync-lipsync/v3",
+        "fal-sync-lipsync-pro": "fal-ai/sync-lipsync/v2",
+        "fal-latentsync": "fal-ai/sync-lipsync/v3",
         "fal-live-portrait": "fal-ai/live-portrait",
     }
 
@@ -275,11 +277,7 @@ class FalAIProvider(BaseAIProvider):
 
         # 1. Neural Lip-Sync & Video Dubbing
         if "lipsync" in model_id.lower() or "latentsync" in model_id.lower():
-            # Prefer latentsync (higher quality full-face deformation) over sync-lipsync (faster but lower quality)
-            if "latentsync" in model_id.lower():
-                target_model = self.MODEL_MAP.get("fal-latentsync", "fal-ai/latentsync")
-            else:
-                target_model = self.MODEL_MAP.get(model_id, "fal-ai/latentsync")
+            target_model = self.MODEL_MAP.get(model_id, "fal-ai/sync-lipsync/v3")
             endpoint = f"{self.BASE_QUEUE_URL}/{target_model}"
             video_url = request.extra_params.get("video_url") or ""
             audio_url = request.extra_params.get("audio_url") or ""
@@ -300,11 +298,11 @@ class FalAIProvider(BaseAIProvider):
                         audio_url = ref
 
             if not video_url or not audio_url:
-                logger.warning(f"LatentSync job missing video_url={bool(video_url)} or audio_url={bool(audio_url)} — skipping.")
+                logger.warning(f"Lip-sync job missing video_url={bool(video_url)} or audio_url={bool(audio_url)} — skipping.")
                 return ProviderJobResult(
                     external_job_id="",
                     status="failed",
-                    error_message="LatentSync requires both a video URL and an audio URL. One or both are missing."
+                    error_message="Lip-sync requires both a video URL and an audio URL. One or both are missing."
                 )
 
             # Upload local files to Fal CDN so request payload doesn't exceed size limits
@@ -314,14 +312,10 @@ class FalAIProvider(BaseAIProvider):
             payload: Dict[str, Any] = {
                 "video_url": video_url,
                 "audio_url": audio_url,
-                # High-fidelity face restoration settings
-                "face_restoration": True,
-                "codeformer_fidelity": 0.92,   # Higher = sharper restored face (vs default 0.5)
-                "smooth": True,
-                "guidance_scale": 2.0,          # Controls adherence to audio landmarks
+                "sync_mode": request.extra_params.get("sync_mode", "cut_off"),
             }
-            # sync_mode: 'cut_off' trims video to audio, 'loop' extends, 'bounce' bounces
-            payload["sync_mode"] = request.extra_params.get("sync_mode", "cut_off")
+            if "v2" in target_model:
+                payload["model"] = "lipsync-2-pro"
             return self._submit_queue_job(endpoint, target_model, payload)
 
         # 2. Standard Text-to-Video & Image-to-Video

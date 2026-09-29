@@ -73,15 +73,24 @@ def dispatch_generation_task(generation_id: str):
                 else:
                     effective_prompt = f"{char.name}. {effective_prompt}"
 
-        # Prevent headless/cropped bodies and guarantee photorealistic framing
+        # Smart framing and composition preservation
         if generation.generation_type == 'video':
-            framing_cues = (
-                "cinematic medium close-up portrait shot, character's entire head and face clearly visible and centered, "
-                "eye-level camera angle, eyes, nose, mouth and jawline fully in frame, "
-                "photorealistic 4K hyper-detailed skin texture, natural cinematic lighting with soft rim light"
-            )
-            if not any(k in effective_prompt.lower() for k in ('portrait', 'headshot', 'medium close-up', 'close up', 'face centered', 'close-up')):
-                effective_prompt = f"{effective_prompt}, {framing_cues}"
+            has_explicit_framing = any(k in effective_prompt.lower() for k in (
+                'portrait', 'headshot', 'close-up', 'close up', 'medium close-up', 'wide shot', 
+                'full body', 'full-body', 'tracking shot', 'establishing shot', 'medium shot', 
+                'bustop', 'bus stop', 'street shot', 'standing', 'walking', 'sitting', 'running'
+            ))
+            is_stylized = any(k in effective_prompt.lower() for k in (
+                '3d', 'pixar', 'disney', 'cgi', 'anime', 'animation', 'cartoon', 'illustration', 
+                'stylized', 'render', 'octane'
+            ))
+            
+            if not has_explicit_framing:
+                framing_cue = "well-composed cinematic shot, character clearly visible and centered in frame"
+                effective_prompt = f"{effective_prompt}, {framing_cue}"
+                
+            if not is_stylized and not any(k in effective_prompt.lower() for k in ('skin', 'texture', 'lighting')):
+                effective_prompt = f"{effective_prompt}, natural cinematic lighting with soft rim light"
 
             # Anti-decapitation & anti-cropping negative prompt
             anti_crop = (
@@ -223,11 +232,10 @@ def dispatch_generation_task(generation_id: str):
                     else:
                         logger.warning(f"Speech synthesis failed for generation {generation.id}: {audio_res.error_message}")
 
-                # Enhanced directorial framing prompt for natural jaw/lip motion
+                # Enhanced directorial cue for speech articulation without overriding framing
                 effective_prompt = (
-                    f"{effective_prompt}. Medium close-up portrait, natural conversational head motion, "
-                    f"expressive jaw movement synchronized to speech, authentic eye contact, "
-                    f"warm cinematic key light on face, shallow depth of field."
+                    f"{effective_prompt}. Expressive speech articulation, natural conversational head motion, "
+                    f"authentic mouth and jaw movement synchronized to spoken dialogue."
                 )
 
         # For video lipsync/latentsync tasks, explicitly isolate video and audio reference assets
@@ -372,6 +380,18 @@ def check_and_update_generation_status(generation: Generation) -> Generation:
     Check the upstream provider job status and finalize if complete or failed.
     Safe to call from HTMX polling views or background workers.
     """
+    # If this parent generation has an active child generation (e.g. automated lip-sync pass in flight),
+    # poll the child so progress advances seamlessly.
+    if hasattr(generation, 'child_generations'):
+        active_children = list(generation.child_generations.filter(generation_type='video', status__in=['queued', 'processing']))
+        for child in active_children:
+            try:
+                check_and_update_generation_status(child)
+            except Exception as e:
+                logger.warning(f"Error checking child generation {child.id}: {e}")
+        if active_children:
+            generation.refresh_from_db()
+
     if generation.status in ('completed', 'failed', 'refunded', 'cancelled') or not generation.external_job_id:
         return generation
 
@@ -503,9 +523,27 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
                     if muxed_path and os.path.exists(muxed_path) and muxed_path != media.file.path:
                         with open(muxed_path, 'rb') as f:
                             media.file.save(f"{str(media.id)[:8]}_voiced.mp4", ContentFile(f.read()), save=True)
-                        logger.info(f"Automatically muxed character voice audio track into base video {generation.id}")
+                        logger.info(f"Automatically muxed character voice audio track into video {generation.id}")
             except Exception as mux_err:
-                logger.warning(f"Auto audio mux on base video completion failed: {mux_err}")
+                logger.warning(f"Auto audio mux on video completion failed: {mux_err}")
+
+        # Check if this primary video requires automated neural lip-sync pass before marking parent completed
+        needs_lipsync = (
+            generation.generation_type == 'video'
+            and generation.is_lip_sync
+            and generation.audio_track
+            and not generation.parent_generation
+            and not any(k in generation.model.model_id.lower() for k in ('lipsync', 'latentsync'))
+        )
+
+        if needs_lipsync:
+            # Store base video output media, but KEEP status = 'processing' so frontend poller remains active
+            generation.output_media = media
+            generation.pipeline_stage = "Stage 2/2: Synchronizing character speech & lip articulation..."
+            generation.save(update_fields=['output_media', 'pipeline_stage', 'external_job_id', 'model', 'provider', 'model_id_snapshot'])
+            logger.info(f"Base video ready for {generation.id}. Automatically launching unified neural lip-sync pass...")
+            _trigger_unified_neural_lipsync(generation)
+            return
 
         generation.output_media = media
         generation.status = 'completed'
@@ -539,20 +577,16 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
                 except Exception as e:
                     logger.warning(f"Auto audio-video mux failed: {e}")
 
-                # Automatically trigger neural lip-sync if attached to base video
-                if generation.parent_generation.output_media and not any(k in generation.parent_generation.model.model_id.lower() for k in ('lipsync', 'latentsync')):
-                    _trigger_unified_neural_lipsync(generation.parent_generation)
-
-            # Case B: Child Video (e.g. Neural Lip-Sync pass) completed -> promote to parent video output!
+            # Case B: Child Video (e.g. Neural Lip-Sync pass) completed -> promote to parent video output and complete parent!
             elif generation.generation_type == 'video':
-                generation.parent_generation.output_media = media
-                generation.parent_generation.pipeline_stage = "Neural lip-sync and audio integration complete!"
-                generation.parent_generation.save(update_fields=['output_media', 'pipeline_stage'])
-                logger.info(f"Promoted lip-synced video media {media.id} to parent generation {generation.parent_generation.id}")
-
-        # If this is a 1-step lip-sync generation that just finished base video, trigger neural lip-sync step!
-        if generation.generation_type == 'video' and generation.is_lip_sync and generation.audio_track and not any(k in generation.model.model_id.lower() for k in ('lipsync', 'latentsync')):
-            _trigger_unified_neural_lipsync(generation)
+                parent = generation.parent_generation
+                parent.output_media = media
+                parent.status = 'completed'
+                parent.completed_at = timezone.now()
+                parent.pipeline_stage = "Character video with synchronized speech complete!"
+                parent.save(update_fields=['output_media', 'status', 'completed_at', 'pipeline_stage'])
+                CreditService.commit_credits(parent)
+                logger.info(f"Promoted lip-synced video media {media.id} and finalized parent generation {parent.id}")
 
         # Commit credits
         CreditService.commit_credits(generation)
@@ -566,22 +600,24 @@ def _trigger_unified_neural_lipsync(parent_gen: Generation):
     try:
         from apps.providers.models import AIModel, AIProviderConfig
         fal_cfg = AIProviderConfig.objects.filter(slug='fal').first() or parent_gen.provider
-        lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
+        lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
+        if not lipsync_model:
+            lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
         if not lipsync_model:
             lipsync_model, _ = AIModel.objects.get_or_create(
-                model_id='fal-latentsync',
+                model_id='fal-sync-lipsync',
                 defaults={
                     'provider': fal_cfg,
-                    'display_name': 'LatentSync (Full-Face & Jaw Neural)',
+                    'display_name': 'Sync Labs Lipsync (High-Fidelity Sync-3)',
                     'modality': 'video',
-                    'credit_cost_fixed': 15,
-                    'credit_cost_per_second': 3,
+                    'credit_cost_fixed': 0,
+                    'credit_cost_per_second': 0,
                     'is_enabled': True
                 }
             )
 
         duration = parent_gen.duration or 5
-        parent_gen.pipeline_stage = "Stage 3/3: Running full-face neural lip-sync & jaw articulation..."
+        parent_gen.pipeline_stage = "Stage 2/2: Synchronizing character speech & lip articulation..."
         parent_gen.save(update_fields=['pipeline_stage'])
 
         lipsync_gen = Generation.objects.create(
@@ -604,10 +640,19 @@ def _trigger_unified_neural_lipsync(parent_gen: Generation):
         if parent_gen.audio_track:
             lipsync_gen.reference_media.add(parent_gen.audio_track)
 
-        dispatch_generation_task.delay(str(lipsync_gen.id))
+        try:
+            dispatch_generation_task.delay(str(lipsync_gen.id))
+        except Exception:
+            dispatch_generation_task(str(lipsync_gen.id))
         logger.info(f"Triggered automated unified lip-sync job {lipsync_gen.id} for parent {parent_gen.id}")
     except Exception as exc:
         logger.error(f"Could not trigger automated neural lip-sync for {parent_gen.id}: {exc}")
+        # If automated lipsync could not be launched, finalize parent with muxed audio
+        parent_gen.status = 'completed'
+        parent_gen.completed_at = timezone.now()
+        parent_gen.pipeline_stage = "Video generation complete with synchronized audio."
+        parent_gen.save(update_fields=['status', 'completed_at', 'pipeline_stage'])
+        CreditService.commit_credits(parent_gen)
 
 def _finalize_failed_generation(generation: Generation, raw_error: str):
     """Mark generation as failed, record diagnostics, and automatically refund reserved credits."""
