@@ -34,7 +34,7 @@ class VoiceProfile(models.Model):
     accent = models.CharField(max_length=60, blank=True, default='Neutral')
     language = models.CharField(max_length=40, default='en')
 
-    provider = models.CharField(max_length=40, default='elevenlabs', help_text="Upstream engine (elevenlabs, fal, mock)")
+    provider = models.CharField(max_length=40, default='elevenlabs', help_text="Upstream engine (elevenlabs, mock)")
     provider_voice_id = models.CharField(
         max_length=120,
         blank=True,

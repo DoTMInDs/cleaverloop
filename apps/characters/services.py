@@ -804,7 +804,7 @@ class CharacterGeneratorService:
     def generate_full_body_figure(cls, dna: CharacterDNASchema, style_preset: str = "cinematic") -> str:
         """
         Synthesizes a full-length, head-to-toe standing character figure on two legs with visible footwear.
-        Uses Fal.ai FLUX (via FAL_KEY) for sub-second 8K generation, with Pollinations AI fallback.
+        Uses Google Imagen / Gemini 2.5 with Pollinations AI fallback.
         """
         gender_term = "woman" if (dna.gender or '').lower() == 'female' else "man"
         style_desc = cls.STYLE_PRESETS.get(style_preset, "photorealistic 8k, cinematic lighting")
@@ -816,27 +816,17 @@ class CharacterGeneratorService:
             f"Confident natural standing pose, {style_desc}, sharp focus, studio lighting"
         )
 
-        # 1. Try Fal.ai FLUX (Fast, photorealistic / 3D Octane quality, 9:16 vertical portrait)
-        fal_key = getattr(settings, 'FAL_KEY', '')
-        if fal_key:
+        # 1. Try Google Imagen / Gemini if configured
+        if getattr(settings, 'GOOGLE_AI_API_KEY', ''):
             try:
-                import fal_client
-                os.environ['FAL_KEY'] = fal_key
-                res = fal_client.subscribe('fal-ai/flux/schnell', arguments={
-                    'prompt': prompt,
-                    'image_size': 'portrait_16_9',
-                    'num_images': 1
-                })
-                img_url = res.get('images', [{}])[0].get('url')
-                if img_url:
-                    with httpx.Client(timeout=15.0) as client:
-                        r = client.get(img_url)
-                        if r.status_code == 200 and len(r.content) > 5000:
-                            filename = f"characters/avatars/ai_fullbody_{uuid.uuid4().hex[:10]}.jpg"
-                            saved_path = default_storage.save(filename, ContentFile(r.content))
-                            return default_storage.url(saved_path)
+                from apps.providers.adapters.google_veo import GoogleVeoProvider
+                from apps.providers.base import GenerationRequest
+                req = GenerationRequest(prompt=prompt, aspect_ratio="9:16", duration=0)
+                res = GoogleVeoProvider().generate_image("imagen-3.0-generate-002", req)
+                if res.status == 'completed' and res.output_media_url:
+                    return res.output_media_url
             except Exception as e:
-                logger.warning(f"Fal FLUX full-body generation failed ({e}), falling back to Pollinations...")
+                logger.warning(f"Google Imagen full-body generation failed ({e}), falling back to Pollinations...")
 
         # 2. Fallback to Pollinations AI
         try:
@@ -863,27 +853,17 @@ class CharacterGeneratorService:
         style_desc = cls.STYLE_PRESETS.get(style_preset, "photorealistic 8k portrait")
         prompt = f"masterpiece close-up character portrait of {dna.name}, {gender_term}, {dna.appearance_description}, wearing {dna.clothing_description}, {style_desc}, sharp focus, studio lighting"
 
-        # 1. Try Fal.ai FLUX (Fast, photorealistic / 3D Octane quality)
-        fal_key = getattr(settings, 'FAL_KEY', '')
-        if fal_key:
+        # 1. Try Google Imagen / Gemini if configured
+        if getattr(settings, 'GOOGLE_AI_API_KEY', ''):
             try:
-                import fal_client
-                os.environ['FAL_KEY'] = fal_key
-                res = fal_client.subscribe('fal-ai/flux/schnell', arguments={
-                    'prompt': prompt,
-                    'image_size': 'square_hd',
-                    'num_images': 1
-                })
-                img_url = res.get('images', [{}])[0].get('url')
-                if img_url:
-                    with httpx.Client(timeout=15.0) as client:
-                        r = client.get(img_url)
-                        if r.status_code == 200 and len(r.content) > 5000:
-                            filename = f"characters/avatars/ai_{uuid.uuid4().hex[:10]}.jpg"
-                            saved_path = default_storage.save(filename, ContentFile(r.content))
-                            return default_storage.url(saved_path)
+                from apps.providers.adapters.google_veo import GoogleVeoProvider
+                from apps.providers.base import GenerationRequest
+                req = GenerationRequest(prompt=prompt, aspect_ratio="1:1", duration=0)
+                res = GoogleVeoProvider().generate_image("imagen-3.0-generate-002", req)
+                if res.status == 'completed' and res.output_media_url:
+                    return res.output_media_url
             except Exception as e:
-                logger.warning(f"Fal FLUX portrait generation failed ({e}), falling back to Pollinations...")
+                logger.warning(f"Google Imagen portrait generation failed ({e}), falling back to Pollinations...")
 
         # 2. Try Pollinations AI to generate a unique, high-fidelity AI portrait tailored to prompt & style
         try:

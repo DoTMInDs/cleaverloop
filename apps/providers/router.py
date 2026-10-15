@@ -148,7 +148,7 @@ class ModelRouter:
     ) -> Optional[AIModel]:
         """
         Select an alternative model when primary provider fails during execution.
-        Supports multi-tier failover chains (Tier 1 Direct -> Tier 2 Fal.ai -> Tier 3 Mock).
+        Supports multi-tier failover chains (Tier 1 Primary -> Tier 2 Alternative Direct -> Tier 3 Mock).
         Preserves exact capability guarantees.
         """
         slugs_to_exclude = list(excluded_provider_slugs or [])

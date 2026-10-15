@@ -32,10 +32,13 @@ class CurrencyService:
                 pass
 
         # Check shared distributed cache first
-        cached_rate = cache.get('cleaverloop_usd_to_ghs_rate')
-        if cached_rate is not None:
-            cls._cached_rate = cached_rate
-            return cached_rate
+        try:
+            cached_rate = cache.get('cleaverloop_usd_to_ghs_rate')
+            if cached_rate is not None:
+                cls._cached_rate = cached_rate
+                return cached_rate
+        except Exception as e:
+            logger.warning(f"Cache get failed for usd_to_ghs_rate: {e}")
 
         now = time.time()
         if cls._cached_rate and (now - cls._last_fetched) < 3600:
@@ -49,7 +52,10 @@ class CurrencyService:
                 if rate and float(rate) > 0:
                     cls._cached_rate = round(float(rate), 2)
                     cls._last_fetched = now
-                    cache.set('cleaverloop_usd_to_ghs_rate', cls._cached_rate, timeout=3600)
+                    try:
+                        cache.set('cleaverloop_usd_to_ghs_rate', cls._cached_rate, timeout=3600)
+                    except Exception as e:
+                        logger.warning(f"Cache set failed for usd_to_ghs_rate: {e}")
                     logger.info(f"Updated live USD to GHS exchange rate: 1 USD = {cls._cached_rate} GHS")
                     return cls._cached_rate
         except Exception as e:
@@ -57,7 +63,10 @@ class CurrencyService:
 
         # Fallback default if offline
         fallback = cls._cached_rate or 11.58
-        cache.set('cleaverloop_usd_to_ghs_rate', fallback, timeout=600)
+        try:
+            cache.set('cleaverloop_usd_to_ghs_rate', fallback, timeout=600)
+        except Exception:
+            pass
         return fallback
 
     @classmethod

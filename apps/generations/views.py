@@ -479,80 +479,9 @@ def synthesize_video_audio_view(request, generation_id):
 @require_POST
 def lipsync_video_view(request, generation_id):
     """
-    1-Click Neural Lip-Sync: Animates character facial movements and mouth to synchronize with the attached audio.
+    Synchronizes attached audio track directly into the video container.
     """
-    parent_gen = get_object_or_404(
-        Generation.objects.select_related('output_media', 'audio_track', 'model', 'provider', 'project'),
-        id=generation_id,
-        user=request.user
-    )
-
-    audio_media = parent_gen.latest_audio
-    if not audio_media or not parent_gen.output_media:
-        err_msg = "Please synthesize or attach an audio track before running Neural Lip-Sync."
-        if request.headers.get('HX-Request'):
-            return HttpResponse(_render_error_card(err_msg), status=400)
-        messages.error(request, err_msg)
-        return redirect('generations:detail', pk=parent_gen.id)
-
-    # Resolve or create Lip-Sync AI Model entry (prefer high-quality Sync-3)
-    fal_provider_obj = parent_gen.provider
-    lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
-    if not lipsync_model:
-        lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
-    if not lipsync_model:
-        from apps.providers.models import AIProviderConfig
-        fal_cfg = AIProviderConfig.objects.filter(slug='fal').first() or fal_provider_obj
-        lipsync_model, _ = AIModel.objects.get_or_create(
-            model_id='fal-sync-lipsync',
-            defaults={
-                'provider': fal_cfg,
-                'display_name': 'Sync Labs Lipsync (High-Fidelity Sync-3)',
-                'modality': 'video',
-                'credit_cost_fixed': 20,
-                'credit_cost_per_second': 2,
-                'is_enabled': True
-            }
-        )
-
-    duration = parent_gen.duration or 5
-    credit_cost = lipsync_model.calculate_credit_cost(duration=duration)
-
-    try:
-        lipsync_gen = Generation.objects.create(
-            user=request.user,
-            project=parent_gen.project,
-            parent_generation=parent_gen,
-            generation_type='video',
-            provider=lipsync_model.provider,
-            model=lipsync_model,
-            model_id_snapshot=lipsync_model.model_id,
-            prompt=f"👄 Neural Lip-Sync: {parent_gen.prompt}",
-            aspect_ratio=parent_gen.aspect_ratio,
-            duration=duration,
-            quality=parent_gen.quality,
-            character=parent_gen.character,
-            audio_track=audio_media,
-            status='queued'
-        )
-        lipsync_gen.reference_media.add(parent_gen.output_media)
-        lipsync_gen.reference_media.add(audio_media)
-
-        CreditService.reserve_credits(request.user, credit_cost, lipsync_gen)
-        try:
-            dispatch_generation_task(str(lipsync_gen.id))
-        except Exception:
-            dispatch_generation_task.delay(str(lipsync_gen.id))
-    except Exception as exc:
-
-        if request.headers.get('HX-Request'):
-            return HttpResponse(_render_error_card(f"Could not start Neural Lip-Sync: {exc}"), status=400)
-        messages.error(request, f"Could not start Neural Lip-Sync: {exc}")
-        return redirect('generations:detail', pk=parent_gen.id)
-
-    if request.headers.get('HX-Request'):
-        return render(request, 'partials/generation_status.html', _get_generation_partial_context(lipsync_gen))
-    return redirect('generations:detail', pk=lipsync_gen.id)
+    return mux_audio_video_view(request, generation_id)
 
 @login_required
 @require_POST

@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
                 ('gender', models.CharField(choices=[('male', 'Male'), ('female', 'Female'), ('neutral', 'Neutral / Ambiguous'), ('custom', 'Custom Character')], default='neutral', max_length=20)),
                 ('accent', models.CharField(blank=True, default='Neutral', max_length=60)),
                 ('language', models.CharField(default='en', max_length=40)),
-                ('provider', models.CharField(default='elevenlabs', help_text='Upstream engine (elevenlabs, fal, mock)', max_length=40)),
+                ('provider', models.CharField(default='elevenlabs', help_text='Upstream engine (elevenlabs, mock)', max_length=40)),
                 ('provider_voice_id', models.CharField(blank=True, db_index=True, help_text='Canonical remote voice ID (e.g. ElevenLabs voice_id)', max_length=120)),
                 ('status', models.CharField(choices=[('ready', 'Ready for Synthesis'), ('processing', 'Cloning Neural Weights'), ('failed', 'Cloning Failed')], db_index=True, default='ready', max_length=20)),
                 ('error_message', models.TextField(blank=True)),

@@ -150,35 +150,6 @@ def api_preview_speech(request):
             if profile and profile.provider_voice_id:
                 target_voice_id = profile.provider_voice_id
 
-        # If this is a Fal voice or has recorded audio samples, synthesize directly with Fal F5-TTS
-        if profile and (profile.provider == 'fal' or profile.samples.exists()):
-            first_sample = profile.samples.first()
-            if first_sample and first_sample.audio_file:
-                from apps.providers.adapters.fal_ai import FalAIProvider
-                sample_path = first_sample.audio_file.path if hasattr(first_sample.audio_file, 'path') else first_sample.audio_file.url
-                result = FalAIProvider().clone_voice_speech(
-                    text=text,
-                    ref_audio_path_or_url=sample_path
-                )
-                if result.status == 'completed' and result.output_media_url:
-                    wallet = CreditService.get_or_create_wallet(request.user)
-                    return JsonResponse({
-                        "status": "success",
-                        "audio_url": result.output_media_url,
-                        "credits_deducted": cost,
-                        "remaining_balance": wallet.balance,
-                        "formatted_balance": wallet.formatted_balance
-                    })
-                # Refund on failure
-                if cost > 0:
-                    CreditService.grant_credits(
-                        request.user,
-                        amount=cost,
-                        transaction_type='generation_refund',
-                        description=f"Refund: Voice synthesis failed ({str(result.error_message)[:40]})"
-                    )
-                return JsonResponse({"error": result.error_message or "Fal.ai voice synthesis failed"}, status=400)
-
         if not target_voice_id:
             target_voice_id = 'adam'
 

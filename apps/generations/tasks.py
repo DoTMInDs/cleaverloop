@@ -167,38 +167,25 @@ def dispatch_generation_task(generation_id: str):
 
                     audio_res = None
 
-                    # CASE 1: Voice profile has user-recorded audio samples -> ZERO-SHOT NEURAL CLONE!
-                    if target_vp and target_vp.samples.exists():
-                        first_sample = target_vp.samples.first()
-                        if first_sample and first_sample.audio_file:
-                            sample_path = first_sample.audio_file.path if hasattr(first_sample.audio_file, 'path') else first_sample.audio_file.url
-                            logger.info(f"Synthesizing character dialogue using authentic recorded voice sample '{target_vp.name}' via Fal F5-TTS")
-                            from apps.providers.adapters.fal_ai import FalAIProvider
-                            audio_res = FalAIProvider().clone_voice_speech(
-                                text=dialogue_text,
-                                ref_audio_path_or_url=sample_path
-                            )
+                    # Voice synthesis with ElevenLabs
+                    voice_target = 'adam'  # safe fallback
+                    if target_vp:
+                        pid = target_vp.provider_voice_id or ''
+                        if pid and not pid.startswith('mock-'):
+                            voice_target = pid
+                        else:
+                            gender = (target_vp.gender or '').lower()
+                            voice_target = 'rachel' if gender == 'female' else 'adam'
+                    elif generation.quality and not generation.quality.startswith('mock-') and generation.quality not in ('standard', 'hd', 'hq'):
+                        voice_target = generation.quality
 
-                    # CASE 2: Preset / remote voice or fallback
-                    if not audio_res or audio_res.status != 'completed':
-                        voice_target = 'adam'  # safe fallback
-                        if target_vp:
-                            pid = target_vp.provider_voice_id or ''
-                            if pid and not pid.startswith('mock-') and not pid.startswith('fal-'):
-                                voice_target = pid
-                            else:
-                                gender = (target_vp.gender or '').lower()
-                                voice_target = 'rachel' if gender == 'female' else 'adam'
-                        elif generation.quality and not generation.quality.startswith('mock-') and generation.quality not in ('standard', 'hd', 'hq'):
-                            voice_target = generation.quality
-
-                        from apps.providers.adapters.elevenlabs import ElevenLabsProvider
-                        audio_req = GenerationRequest(
-                            prompt=dialogue_text,
-                            duration=generation.duration,
-                            extra_params={'voice': voice_target}
-                        )
-                        audio_res = ElevenLabsProvider().generate_audio('eleven_multilingual_v2', audio_req)
+                    from apps.providers.adapters.elevenlabs import ElevenLabsProvider
+                    audio_req = GenerationRequest(
+                        prompt=dialogue_text,
+                        duration=generation.duration,
+                        extra_params={'voice': voice_target}
+                    )
+                    audio_res = ElevenLabsProvider().generate_audio('eleven_multilingual_v2', audio_req)
                     if audio_res.status == 'completed' and audio_res.output_media_url:
                         audio_media = Media.objects.create(
                             owner=generation.user,
@@ -323,7 +310,7 @@ def dispatch_generation_task(generation_id: str):
             elif "404" in primary_err:
                 simple_reason = "model endpoint unavailable on API key"
 
-            # Try fallback tiers: live alternatives (Fal.ai, MiniMax, Kling), then mock safety net
+            # Try fallback tiers: live alternatives (MiniMax, Kling, Seedance, Wan), then mock safety net
             max_attempts = 6 if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True) else 3
             for _ in range(max_attempts):
                 fallback_model = ModelRouter.get_fallback_model(
@@ -527,24 +514,6 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
             except Exception as mux_err:
                 logger.warning(f"Auto audio mux on video completion failed: {mux_err}")
 
-        # Check if this primary video requires automated neural lip-sync pass before marking parent completed
-        needs_lipsync = (
-            generation.generation_type == 'video'
-            and generation.is_lip_sync
-            and generation.audio_track
-            and not generation.parent_generation
-            and not any(k in generation.model.model_id.lower() for k in ('lipsync', 'latentsync'))
-        )
-
-        if needs_lipsync:
-            # Store base video output media, but KEEP status = 'processing' so frontend poller remains active
-            generation.output_media = media
-            generation.pipeline_stage = "Stage 2/2: Synchronizing character speech & lip articulation..."
-            generation.save(update_fields=['output_media', 'pipeline_stage', 'external_job_id', 'model', 'provider', 'model_id_snapshot'])
-            logger.info(f"Base video ready for {generation.id}. Automatically launching unified neural lip-sync pass...")
-            _trigger_unified_neural_lipsync(generation)
-            return
-
         generation.output_media = media
         generation.status = 'completed'
         generation.completed_at = timezone.now()
@@ -577,82 +546,19 @@ def _finalize_successful_generation(generation: Generation, result: ProviderJobR
                 except Exception as e:
                     logger.warning(f"Auto audio-video mux failed: {e}")
 
-            # Case B: Child Video (e.g. Neural Lip-Sync pass) completed -> promote to parent video output and complete parent!
             elif generation.generation_type == 'video':
                 parent = generation.parent_generation
                 parent.output_media = media
                 parent.status = 'completed'
                 parent.completed_at = timezone.now()
-                parent.pipeline_stage = "Character video with synchronized speech complete!"
+                parent.pipeline_stage = "Video complete!"
                 parent.save(update_fields=['output_media', 'status', 'completed_at', 'pipeline_stage'])
                 CreditService.commit_credits(parent)
-                logger.info(f"Promoted lip-synced video media {media.id} and finalized parent generation {parent.id}")
+                logger.info(f"Finalized parent generation {parent.id}")
 
         # Commit credits
         CreditService.commit_credits(generation)
         logger.info(f"Successfully finalized generation {generation.id}")
-
-def _trigger_unified_neural_lipsync(parent_gen: Generation):
-    """
-    1-Step Unified Lip-Sync Pipeline: Automatically launches neural lip-sync pass
-    after base video finishes, connecting the base video with the cloned audio track.
-    """
-    try:
-        from apps.providers.models import AIModel, AIProviderConfig
-        fal_cfg = AIProviderConfig.objects.filter(slug='fal').first() or parent_gen.provider
-        lipsync_model = AIModel.objects.filter(model_id='fal-sync-lipsync', is_enabled=True).first()
-        if not lipsync_model:
-            lipsync_model = AIModel.objects.filter(model_id='fal-latentsync', is_enabled=True).first()
-        if not lipsync_model:
-            lipsync_model, _ = AIModel.objects.get_or_create(
-                model_id='fal-sync-lipsync',
-                defaults={
-                    'provider': fal_cfg,
-                    'display_name': 'Sync Labs Lipsync (High-Fidelity Sync-3)',
-                    'modality': 'video',
-                    'credit_cost_fixed': 0,
-                    'credit_cost_per_second': 0,
-                    'is_enabled': True
-                }
-            )
-
-        duration = parent_gen.duration or 5
-        parent_gen.pipeline_stage = "Stage 2/2: Synchronizing character speech & lip articulation..."
-        parent_gen.save(update_fields=['pipeline_stage'])
-
-        lipsync_gen = Generation.objects.create(
-            user=parent_gen.user,
-            project=parent_gen.project,
-            parent_generation=parent_gen,
-            generation_type='video',
-            provider=lipsync_model.provider,
-            model=lipsync_model,
-            model_id_snapshot=lipsync_model.model_id,
-            prompt=f"👄 Neural Lip-Sync: {parent_gen.prompt}",
-            aspect_ratio=parent_gen.aspect_ratio,
-            duration=duration,
-            character=parent_gen.character,
-            audio_track=parent_gen.audio_track,
-            status='queued'
-        )
-        if parent_gen.output_media:
-            lipsync_gen.reference_media.add(parent_gen.output_media)
-        if parent_gen.audio_track:
-            lipsync_gen.reference_media.add(parent_gen.audio_track)
-
-        try:
-            dispatch_generation_task.delay(str(lipsync_gen.id))
-        except Exception:
-            dispatch_generation_task(str(lipsync_gen.id))
-        logger.info(f"Triggered automated unified lip-sync job {lipsync_gen.id} for parent {parent_gen.id}")
-    except Exception as exc:
-        logger.error(f"Could not trigger automated neural lip-sync for {parent_gen.id}: {exc}")
-        # If automated lipsync could not be launched, finalize parent with muxed audio
-        parent_gen.status = 'completed'
-        parent_gen.completed_at = timezone.now()
-        parent_gen.pipeline_stage = "Video generation complete with synchronized audio."
-        parent_gen.save(update_fields=['status', 'completed_at', 'pipeline_stage'])
-        CreditService.commit_credits(parent_gen)
 
 def _finalize_failed_generation(generation: Generation, raw_error: str):
     """Mark generation as failed, record diagnostics, and automatically refund reserved credits."""

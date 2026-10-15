@@ -143,11 +143,13 @@ class VoiceCloneService:
                         audio_file_paths=saved_sample_paths,
                         labels=labels
                     )
-                    profile.provider = 'elevenlabs'
                 except Exception as clone_err:
-                    logger.info(f"ElevenLabs live cloning unavailable ({clone_err}), activating Fal.ai F5-TTS zero-shot voice cloning for '{profile.name}'")
-                    remote_voice_id = f"fal-voice-{profile.id.hex[:12]}"
-                    profile.provider = 'fal'
+                    if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True):
+                        logger.info(f"ElevenLabs live cloning unavailable ({clone_err}), using mock voice for '{profile.name}'")
+                        remote_voice_id = f"mock-voice-{profile.id.hex[:12]}"
+                        profile.provider = 'mock'
+                    else:
+                        raise
 
             profile.provider_voice_id = remote_voice_id
             profile.status = 'ready'
@@ -191,23 +193,14 @@ class VoiceCloneService:
             preview_text = (
                 f"Hello! This is {profile.name}'s authentic voice, powered by CleaverLoop AI."
             )
-            first_sample = profile.samples.first()
-            if first_sample and first_sample.audio_file:
-                from apps.providers.adapters.fal_ai import FalAIProvider
-                sample_path = first_sample.audio_file.path if hasattr(first_sample.audio_file, 'path') else first_sample.audio_file.url
-                result = FalAIProvider().clone_voice_speech(
-                    text=preview_text,
-                    ref_audio_path_or_url=sample_path
-                )
-            elif profile.provider == 'mock' or getattr(settings, 'MOCK_AI_PROVIDERS', False):
+            if profile.provider == 'mock' or (getattr(settings, 'MOCK_PROVIDERS_ENABLED', True) and not ElevenLabsProvider().health_check()):
                 from apps.providers.adapters.mock_provider import MockAIProvider
                 adapter = MockAIProvider()
-                req = GenerationRequest(prompt=preview_text, duration=4, extra_params={'voice': profile.provider_voice_id or str(profile.id)})
-                result = adapter.generate_audio("eleven_multilingual_v2", req)
             else:
                 adapter = ElevenLabsProvider()
-                req = GenerationRequest(prompt=preview_text, duration=4, extra_params={'voice': profile.provider_voice_id or str(profile.id)})
-                result = adapter.generate_audio("eleven_multilingual_v2", req)
+
+            req = GenerationRequest(prompt=preview_text, duration=4, extra_params={'voice': profile.provider_voice_id or str(profile.id)})
+            result = adapter.generate_audio("eleven-multilingual-v2", req)
 
             if result.status == 'completed' and result.output_media_url:
                 media = Media.objects.create(
@@ -273,9 +266,12 @@ class VoiceCloneService:
             )
             profile.provider = 'elevenlabs'
         except Exception as clone_err:
-            logger.info(f"ElevenLabs re-clone unavailable ({clone_err}), activating Fal.ai F5-TTS for '{profile.name}'")
-            remote_voice_id = f"fal-voice-{profile.id.hex[:12]}"
-            profile.provider = 'fal'
+            if getattr(settings, 'MOCK_PROVIDERS_ENABLED', True):
+                logger.info(f"ElevenLabs re-clone unavailable ({clone_err}), using mock voice for '{profile.name}'")
+                remote_voice_id = f"mock-voice-{profile.id.hex[:12]}"
+                profile.provider = 'mock'
+            else:
+                raise
 
         profile.provider_voice_id = remote_voice_id
         profile.status = 'ready'

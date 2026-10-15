@@ -178,14 +178,13 @@
                                     <span>Neural Lip-Sync Active</span>
                                 </span>
                             {% else %}
-                                <form action="{% url 'generations:lipsync_video' generation.id %}" method="POST" class="inline">
+                                <form action="{% url 'generations:mux_audio_video' generation.id %}" method="POST" class="inline">
                                     {% csrf_token %}
                                     <button type="submit"
-                                            title="AI pass to align mouth shape to audio"
+                                            title="Embed and synchronize attached audio track directly into MP4 video container"
                                             class="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-orange-500/20 text-slate-300 hover:text-orange-300 border border-white/10 hover:border-orange-500/30 font-heading font-bold text-xs uppercase tracking-wider transition flex items-center gap-1.5 cursor-pointer">
-                                        <span>👄</span>
-                                        <span>Sync Lips to Audio</span>
-                                        <span class="opacity-60 text-[10px] font-mono">• 30 cr</span>
+                                        <span>🎬</span>
+                                        <span>Mux Audio into Video</span>
                                     </button>
                                 </form>
                             {% endif %}

@@ -38,13 +38,19 @@ class SubscriptionPlan(models.Model):
         return f"{self.name} (${self.price_monthly}/mo)"
 
     def save(self, *args, **kwargs):
-        from django.core.cache import cache
-        cache.delete('active_subscription_plans')
+        try:
+            from django.core.cache import cache
+            cache.delete('active_subscription_plans')
+        except Exception:
+            pass
         super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
-        from django.core.cache import cache
-        cache.delete('active_subscription_plans')
+        try:
+            from django.core.cache import cache
+            cache.delete('active_subscription_plans')
+        except Exception:
+            pass
         super().delete(*args, **kwargs)
 
     @classmethod

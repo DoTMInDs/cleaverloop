@@ -56,7 +56,6 @@ class ProviderHealthChecker:
     def check_all_providers(cls) -> List[Dict[str, Any]]:
         """Run lightweight diagnostic probes against all configured providers."""
         results = [
-            cls.check_fal_ai(),
             cls.check_google_veo(),
             cls.check_seedance(),
             cls.check_kling_ai(),
@@ -64,56 +63,6 @@ class ProviderHealthChecker:
             cls.check_openai(),
         ]
         return results
-
-    @classmethod
-    def check_fal_ai(cls) -> Dict[str, Any]:
-        key = _resolve_api_key('FAL_KEY')
-        info = {
-            "name": "Fal.ai Hub (Alibaba Wan 2.1 & Luma Ray 2)",
-            "slug": "fal",
-            "modality": "Video & Image",
-            "is_configured": bool(key),
-            "status": "unknown",
-            "status_label": "Checking...",
-            "details": "",
-            "top_up_url": "https://fal.ai/dashboard/billing",
-            "recommended": True
-        }
-        if not key:
-            info["status"] = "unconfigured"
-            info["status_label"] = "Missing Key"
-            info["details"] = "FAL_KEY is not set in environment."
-            return info
-
-        try:
-            with httpx.Client(timeout=8.0) as client:
-                resp = client.get("https://rest.alpha.fal.ai/users/current", headers={"Authorization": f"Key {key}"})
-                if resp.status_code == 200:
-                    data = resp.json()
-                    is_locked = data.get("is_locked", False)
-                    lock_reason = data.get("lock_reason") or ""
-                    if is_locked or (lock_reason and "exhausted" in str(lock_reason).lower()):
-                        info["status"] = "unfunded"
-                        info["status_label"] = "Balance Empty"
-                        info["details"] = f"Account locked: {lock_reason or 'Zero balance'}. Deposit $5-$10 on Fal.ai."
-                    else:
-                        info["status"] = "ready"
-                        info["status_label"] = "Funded & Ready"
-                        info["details"] = "Balance active. Ready to generate Wan 2.1, Flux 1.1 Pro & Luma Ray 2 videos."
-                elif resp.status_code in (401, 403):
-                    info["status"] = "unfunded"
-                    info["status_label"] = "Invalid Key / Unauthorized"
-                    info["details"] = "Fal.ai returned unauthorized. Check your FAL_KEY in .env."
-                else:
-                    info["status"] = "error"
-                    info["status_label"] = f"HTTP {resp.status_code}"
-                    info["details"] = resp.text[:120]
-        except Exception as exc:
-            info["status"] = "error"
-            info["status_label"] = "Network Error"
-            info["details"] = str(exc)
-
-        return info
 
     @classmethod
     def check_google_veo(cls) -> Dict[str, Any]:

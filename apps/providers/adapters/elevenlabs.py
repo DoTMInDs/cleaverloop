@@ -44,7 +44,7 @@ class ElevenLabsProvider(BaseAIProvider):
     """
     Dedicated Adapter for ElevenLabs Neural Audio & Speech Generation.
     Supports Multilingual V2 TTS, Turbo V2.5, and Sound Effects & Foley.
-    Seamlessly falls back to Fal.ai Kokoro/MMAudio or Mock if direct key is absent.
+    Seamlessly falls back to Mock engine if direct key is absent or in testing mode.
     """
     provider_slug = "elevenlabs"
     BASE_URL = "https://api.elevenlabs.io/v1"
@@ -198,17 +198,6 @@ class ElevenLabsProvider(BaseAIProvider):
                             (Q(id=raw_voice) if len(raw_voice) == 36 else Q())
                         ).first()
                         if voice_profile:
-                            # If this voice profile has real recorded samples from the user, use Fal F5-TTS zero-shot cloning!
-                            first_sample = voice_profile.samples.first()
-                            if first_sample and first_sample.audio_file and (not voice_profile.provider_voice_id or voice_profile.provider_voice_id.startswith('mock-') or voice_profile.provider == 'fal'):
-                                logger.info(f"Voice profile '{voice_profile.name}' has recorded sample; dispatching to Fal F5-TTS neural clone")
-                                from apps.providers.adapters.fal_ai import FalAIProvider
-                                sample_path = first_sample.audio_file.path if hasattr(first_sample.audio_file, 'path') else first_sample.audio_file.url
-                                return FalAIProvider().clone_voice_speech(
-                                    text=request.prompt,
-                                    ref_audio_path_or_url=sample_path
-                                )
-
                             if voice_profile.gender == 'female':
                                 fallback_canonical = ELEVENLABS_VOICES['rachel']
                             elif voice_profile.gender == 'male':
@@ -266,14 +255,6 @@ class ElevenLabsProvider(BaseAIProvider):
             except Exception as exc:
                 logger.error(f"ElevenLabs direct API error: {exc}", exc_info=True)
 
-        # Failover Tier: Use Fal.ai Unified Hub (MMAudio for SFX, Kokoro for Dialogue)
-        fal_key = getattr(settings, 'FAL_KEY', '')
-        if fal_key:
-            from apps.providers.adapters.fal_ai import FalAIProvider
-            fal_adapter = FalAIProvider()
-            target_fal_model = "fal-mmaudio-v2" if ("sound" in model_id.lower() or "sfx" in model_id.lower() or "foley" in model_id.lower()) else "fal-kokoro"
-            return fal_adapter.generate_audio(target_fal_model, request)
-
         # Mock Safety Net fallback
         from apps.providers.adapters.mock_provider import MockAIProvider
         return MockAIProvider().generate_audio(model_id, request)
@@ -285,9 +266,6 @@ class ElevenLabsProvider(BaseAIProvider):
         return ProviderJobResult(external_job_id="", status="failed", error_message="Video generation not supported by ElevenLabs.")
 
     def get_status(self, external_job_id: str) -> ProviderJobResult:
-        if external_job_id.startswith("fal-ai/"):
-            from apps.providers.adapters.fal_ai import FalAIProvider
-            return FalAIProvider().get_status(external_job_id)
         return ProviderJobResult(external_job_id=external_job_id, status="completed")
 
     def cancel(self, external_job_id: str) -> bool:

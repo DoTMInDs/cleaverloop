@@ -23,6 +23,7 @@ class SeedanceProvider(BaseAIProvider):
 
     def __init__(self):
         self.api_key = _resolve_api_key('SEEDANCE_API_KEY')
+        self.custom_model = _resolve_api_key('SEEDANCE_MODEL_ID') or _resolve_api_key('SEEDANCE_ENDPOINT_ID')
 
     def generate_image(self, model_id: str, request: GenerationRequest) -> ProviderJobResult:
         return ProviderJobResult(external_job_id="", status="failed", error_message="Seedance focuses on video.")
@@ -39,9 +40,9 @@ class SeedanceProvider(BaseAIProvider):
                 retryable=False
             )
         try:
-            target_model = model_id or self.DEFAULT_MODEL
+            target_model = self.custom_model or model_id or self.DEFAULT_MODEL
             if target_model in ("seedance", "seedance-2.5", "seedance-2"):
-                target_model = self.DEFAULT_MODEL
+                target_model = self.custom_model or self.DEFAULT_MODEL
 
             endpoint = f"{self.BASE_URL}/contents/generations/tasks"
             headers = {
@@ -76,10 +77,19 @@ class SeedanceProvider(BaseAIProvider):
                         status="queued",
                         raw_response=data
                     )
+                err_text = resp.text[:400]
+                if "ModelNotOpen" in err_text:
+                    err_msg = (
+                        f"Seedance model '{target_model}' has not been activated in your BytePlus Ark Console. "
+                        "Please go to BytePlus Console -> ModelArk -> Foundation Models, click 'Activate' on Seedance 2.5 "
+                        "(or create an Endpoint in Ark and set SEEDANCE_MODEL_ID in .env)."
+                    )
+                else:
+                    err_msg = f"BytePlus ModelArk API error ({resp.status_code}): {err_text}"
                 return ProviderJobResult(
                     external_job_id="",
                     status="failed",
-                    error_message=f"BytePlus ModelArk API error ({resp.status_code}): {resp.text[:200]}"
+                    error_message=err_msg
                 )
         except Exception as exc:
             logger.error(f"Seedance generation error: {exc}")

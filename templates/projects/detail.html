@@ -3,7 +3,7 @@
 {% block title %}{{ project.name }} — Storyboard Studio{% endblock %}
 
 {% block content %}
-<div class="space-y-8 w-full pb-16" x-data="{ showAddSceneModal: false }">
+<div class="space-y-8 w-full pb-16" x-data="{ showAddSceneModal: false, showAssembleModal: false }">
 
     <!-- Top Breadcrumb & Project Category -->
     <div class="flex items-center justify-between gap-4">
@@ -44,7 +44,7 @@
                     </span>
                 </div>
                 <h1 class="text-2xl sm:text-3xl lg:text-4xl font-heading font-black text-white tracking-tight">{{ project.name }}</h1>
-                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">{{ project.description|default:"Multi-scene storyboard production pipeline powered by Fal.ai neural video & audio models." }}</p>
+                <p class="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">{{ project.description|default:"Multi-scene storyboard production pipeline powered by Google Veo, Seedance & Kling AI video engines." }}</p>
             </div>
 
             <!-- Control Action Bar -->
@@ -52,20 +52,30 @@
                 <!-- Add Scene Button -->
                 <button type="button" 
                         @click="showAddSceneModal = true" 
-                        class="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white text-xs font-bold transition flex items-center gap-2 shadow-sm">
+                        class="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-white text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer">
                     <span class="text-orange-400 text-sm font-black">+</span>
                     <span>Add Scene</span>
                 </button>
 
-                <!-- Assemble Master Video Button -->
-                <form action="{% url 'projects:assemble' project.id %}" method="POST" class="inline">
+                <!-- Batch Upload Video Clips Button -->
+                <form action="{% url 'projects:batch_upload_scenes' project.id %}" method="POST" enctype="multipart/form-data" class="inline m-0">
                     {% csrf_token %}
-                    <button type="submit" 
-                            class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-5 py-2.5 font-heading font-black text-xs uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 shadow-xl">
-                        <span>⚡</span>
-                        <span>Assemble Video</span>
-                    </button>
+                    <label class="px-4 py-2.5 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 hover:border-sky-500/50 text-sky-300 text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer"
+                           title="Select one or multiple video files from your computer (MP4, MOV, WebM, etc.) to automatically populate storyboard scenes">
+                        <span>📤</span>
+                        <span>Import Video Clips</span>
+                        <input type="file" name="video_files" multiple accept="video/mp4,video/quicktime,video/webm,video/x-msvideo,video/mkv,video/*" class="hidden" onchange="this.form.submit()">
+                    </label>
                 </form>
+
+                <!-- Assemble Master Film Button (Opens Modal) -->
+                <button type="button" 
+                        @click="showAssembleModal = true"
+                        class="fl-gradient-orange-btn fl-glow-orange hover:fl-glow-orange-lg text-white border-none rounded-xl px-5 py-2.5 font-heading font-black text-xs uppercase tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2 shadow-xl cursor-pointer">
+                    <span>⚡</span>
+                    <span>Assemble Film</span>
+                </button>
+
 
                 <!-- Delete Project Button -->
                 <form action="{% url 'projects:delete' project.id %}" method="POST" class="inline" onsubmit="return confirm('Are you sure you want to delete this entire project?');">
@@ -254,6 +264,88 @@
                     </button>
                     <button type="submit" class="fl-gradient-orange-btn text-white rounded-xl px-6 py-2.5 text-xs font-heading font-black uppercase tracking-wider shadow-lg">
                         Create Scene
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Intelligent Film Assembly Configuration Modal -->
+    <div x-show="showAssembleModal" 
+         x-cloak 
+         class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+         x-transition.opacity>
+        <div class="rounded-3xl p-6 sm:p-8 max-w-lg w-full space-y-6 border border-cyan-500/40 bg-[#0f1115] shadow-2xl relative overflow-hidden"
+             @click.outside="showAssembleModal = false">
+            <div class="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
+
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-sm">
+                        ⚡
+                    </div>
+                    <div>
+                        <h3 class="font-heading font-black text-lg text-white">Assemble Master Film</h3>
+                        <p class="text-[11px] text-slate-400 font-mono">Intelligent Multi-Scene Compilation Engine</p>
+                    </div>
+                </div>
+                <button type="button" @click="showAssembleModal = false" class="text-slate-400 hover:text-white transition">✕</button>
+            </div>
+
+            <!-- Pipeline Capabilities Badge Deck -->
+            <div class="p-3.5 rounded-2xl bg-[#13161c] border border-cyan-500/20 space-y-2 text-xs">
+                <div class="flex items-center gap-2 text-cyan-300 font-semibold font-mono text-[11px]">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    <span>Intelligent Conforming Active</span>
+                </div>
+                <ul class="text-[11px] text-slate-400 space-y-1 font-mono pl-4 list-disc">
+                    <li>Conforms mismatched aspect ratios with cinematic blurred padding</li>
+                    <li>Synchronizes framerates (30fps) & prevents audio desync across cuts</li>
+                    <li>Broadcast audio leveling (dynaudnorm / EBU R128 loudness)</li>
+                </ul>
+            </div>
+
+            <form action="{% url 'projects:assemble' project.id %}" method="POST" enctype="multipart/form-data" class="space-y-4">
+                {% csrf_token %}
+                
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center justify-between">
+                        <span>Target Master Aspect Ratio</span>
+                        <span class="text-[10px] text-slate-500 font-mono">Output standard</span>
+                    </label>
+                    <select name="target_aspect_ratio" class="w-full rounded-xl bg-black/60 border border-white/10 text-sm text-white px-3 py-2.5 outline-none focus:border-cyan-500">
+                        <option value="16:9" {% if project.aspect_ratio == '16:9' %}selected{% endif %}>Landscape (16:9) — 1920x1080 Full HD (YouTube/Cinema)</option>
+                        <option value="9:16" {% if project.aspect_ratio == '9:16' %}selected{% endif %}>Portrait / Reel (9:16) — 1080x1920 (TikTok/Shorts/IG)</option>
+                        <option value="1:1" {% if project.aspect_ratio == '1:1' %}selected{% endif %}>Square (1:1) — 1080x1080 (Social Feeds)</option>
+                        <option value="21:9" {% if project.aspect_ratio == '21:9' %}selected{% endif %}>Cinematic Widescreen (21:9) — 2560x1080 Ultra-Wide</option>
+                        <option value="4:3" {% if project.aspect_ratio == '4:3' %}selected{% endif %}>Classic (4:3) — 1440x1080 Academy</option>
+                    </select>
+                </div>
+
+                <div class="space-y-1.5">
+                    <label class="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center justify-between">
+                        <span class="flex items-center gap-1.5">
+                            <span>🎵</span>
+                            <span>Optional Background Music Score (Audio Only)</span>
+                        </span>
+                        <span class="text-[10px] text-cyan-400 font-mono">MP3, WAV, M4A</span>
+                    </label>
+                    <div class="p-3 rounded-xl bg-black/60 border border-white/10 space-y-2">
+                        <input type="file" name="bgm_file" accept="audio/*"
+                               class="w-full text-xs text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 cursor-pointer">
+                        <p class="text-[10px] text-slate-400 leading-relaxed">
+                            <strong class="text-amber-400">Notice:</strong> This input is strictly for adding a background music soundtrack. To upload your video clips, use the <span class="text-sky-300 font-bold">"📤 Import Video Clips"</span> button in the top bar or on individual scene cards.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-white/[0.06]">
+                    <button type="button" @click="showAssembleModal = false" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" class="fl-gradient-orange-btn text-white rounded-xl px-6 py-2.5 text-xs font-heading font-black uppercase tracking-wider shadow-lg flex items-center gap-2 cursor-pointer">
+                        <span>🚀</span>
+                        <span>Start Assembly</span>
                     </button>
                 </div>
             </form>

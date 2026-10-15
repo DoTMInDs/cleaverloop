@@ -62,19 +62,19 @@ class ProviderRegistryAndRouterTests(TestCase):
         self.assertGreater(cost.estimated_credits, 0)
         self.assertEqual(cost.estimated_duration_sec, 5)
 
-    def test_fal_ai_provider_registration_and_fallback(self):
-        """Verify Fal.ai adapter is registered, seeded with Wan 2.1, and acts as fallback."""
-        fal_model = AIModel.objects.filter(model_id="fal-wan-2.1").first()
-        self.assertIsNotNone(fal_model)
-        self.assertEqual(fal_model.provider.slug, "fal")
-        self.assertIn("t2v", fal_model.capabilities)
+    def test_google_veo_and_seedance_provider_registration(self):
+        """Verify Google Veo and Seedance adapters are registered and seeded."""
+        veo_model = AIModel.objects.filter(model_id="veo-3.1-generate-preview").first()
+        self.assertIsNotNone(veo_model)
+        self.assertEqual(veo_model.provider.slug, "google")
+        self.assertIn("t2v", veo_model.capabilities)
 
-        adapter = ModelRegistry.get_provider_adapter("fal")
+        adapter = ModelRegistry.get_provider_adapter("google")
         self.assertIsNotNone(adapter)
 
         # Cost estimation
         req = GenerationRequest(prompt="A futuristic flying car", aspect_ratio="16:9", duration=5)
-        cost = adapter.estimate_cost("fal-wan-2.1", req)
+        cost = adapter.estimate_cost("veo-3.1-generate-preview", req)
         self.assertGreater(cost.estimated_credits, 0)
         self.assertEqual(cost.estimated_duration_sec, 5)
 
@@ -98,7 +98,6 @@ class ProviderRegistryAndRouterTests(TestCase):
         from apps.providers.diagnostics import ProviderHealthChecker
         results = ProviderHealthChecker.check_all_providers()
         slugs = [r["slug"] for r in results]
-        self.assertIn("fal", slugs)
         self.assertIn("google_veo", slugs)
         self.assertIn("seedance", slugs)
         self.assertIn("kling", slugs)

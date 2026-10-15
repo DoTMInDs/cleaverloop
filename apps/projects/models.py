@@ -154,3 +154,8 @@ class Scene(models.Model):
     def is_generating_video(self) -> bool:
         active = self.active_generation
         return bool(active and active.generation_type in ('video', 'image'))
+
+    @property
+    def is_user_upload(self) -> bool:
+        """Indicates if scene video was directly uploaded by the user rather than AI generated."""
+        return bool(self.generated_media and not getattr(self.generated_media, 'generation_id', None))

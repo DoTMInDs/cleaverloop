@@ -10,7 +10,6 @@ from apps.providers.adapters.alibaba_wan import AlibabaWanProvider
 from apps.providers.adapters.openai_adapter import OpenAIProvider
 from apps.providers.adapters.flux import FluxProvider
 from apps.providers.adapters.minimax import MiniMaxProvider
-from apps.providers.adapters.fal_ai import FalAIProvider
 from apps.providers.adapters.elevenlabs import ElevenLabsProvider
 
 logger = logging.getLogger(__name__)
@@ -33,7 +32,6 @@ class ModelRegistry:
         cls._adapters["openai"] = OpenAIProvider()
         cls._adapters["flux"] = FluxProvider()
         cls._adapters["minimax"] = MiniMaxProvider()
-        cls._adapters["fal"] = FalAIProvider()
         cls._adapters["elevenlabs"] = ElevenLabsProvider()
 
     @classmethod
@@ -282,88 +280,6 @@ class ModelRegistry:
                         "credit_cost_fixed": 75,
                         "credit_cost_per_second": 50,
                         "priority": 92,
-                    }
-                ]
-            },
-            # Fal.ai Universal Multi-Model Fallback Hub
-            {
-                "provider": {"slug": "fal", "name": "Fal.ai Unified Hub", "is_enabled": True},
-                "models": [
-                    {
-                        "model_id": "fal-wan-2.1",
-                        "display_name": "Alibaba Wan 2.1 (via Fal.ai)",
-                        "modality": "video",
-                        "capabilities": ["t2v", "i2v"],
-                        "max_duration": 10,
-                        "supported_resolutions": ["720p", "1080p"],
-                        "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
-                        "supports_image_reference": True,
-                        "credit_cost_fixed": 70,
-                        "credit_cost_per_second": 40,
-                        "priority": 94,
-                    },
-                    {
-                        "model_id": "fal-luma-dream-machine",
-                        "display_name": "Luma Dream Machine (via Fal.ai)",
-                        "modality": "video",
-                        "capabilities": ["t2v", "i2v"],
-                        "max_duration": 10,
-                        "supported_resolutions": ["720p", "1080p"],
-                        "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
-                        "supports_image_reference": True,
-                        "credit_cost_fixed": 75,
-                        "credit_cost_per_second": 45,
-                        "priority": 90,
-                    },
-                    {
-                        "model_id": "fal-cogvideox-5b",
-                        "display_name": "CogVideoX-5B (via Fal.ai)",
-                        "modality": "video",
-                        "capabilities": ["t2v"],
-                        "max_duration": 10,
-                        "supported_resolutions": ["720p"],
-                        "supported_aspect_ratios": ["16:9", "9:16"],
-                        "credit_cost_fixed": 50,
-                        "credit_cost_per_second": 30,
-                        "priority": 75,
-                    },
-                    {
-                        "model_id": "fal-flux-pro",
-                        "display_name": "Flux 1.1 Pro Studio (via Fal.ai)",
-                        "modality": "image",
-                        "capabilities": ["t2i"],
-                        "max_duration": 0,
-                        "supported_resolutions": ["1024x1024", "1792x1024"],
-                        "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
-                        "credit_cost_fixed": 45,
-                        "credit_cost_per_second": 0,
-                        "priority": 82,
-                    },
-                    {
-                        "model_id": "fal-mmaudio-v2",
-                        "display_name": "MMAudio Foley & Sound FX (via Fal.ai)",
-                        "modality": "audio",
-                        "capabilities": ["audio", "foley", "video_to_audio"],
-                        "max_duration": 15,
-                        "supported_resolutions": [],
-                        "supported_aspect_ratios": [],
-                        "supports_audio": True,
-                        "credit_cost_fixed": 25,
-                        "credit_cost_per_second": 5,
-                        "priority": 95,
-                    },
-                    {
-                        "model_id": "fal-kokoro",
-                        "display_name": "Kokoro Voice & Dialogue TTS (via Fal.ai)",
-                        "modality": "audio",
-                        "capabilities": ["audio", "tts", "dialogue"],
-                        "max_duration": 30,
-                        "supported_resolutions": [],
-                        "supported_aspect_ratios": [],
-                        "supports_audio": True,
-                        "credit_cost_fixed": 10,
-                        "credit_cost_per_second": 2,
-                        "priority": 95,
                     }
                 ]
             },

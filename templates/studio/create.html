@@ -10,7 +10,7 @@
 function createStudioApp() {
     const dynamicModels = {
         {% for m in image_models %}
-        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "openai" %}🤖{% elif m.provider.slug == "flux" or m.provider.slug == "fal" %}🔮{% else %}🎨{% endif %}', desc: '{{ m.provider.name|escapejs }} • {{ m.credit_cost_fixed }} credits', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'image' },
+        '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "openai" %}🤖{% elif m.provider.slug == "flux" %}🔮{% else %}🎨{% endif %}', desc: '{{ m.provider.name|escapejs }} • {{ m.credit_cost_fixed }} credits', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'image' },
         {% endfor %}
         {% for m in video_models %}
         '{{ m.model_id }}': { name: '{{ m.display_name|escapejs }}', badge: '{{ m.provider.slug|upper }}', icon: '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "kling" %}⚡{% elif m.provider.slug == "minimax" %}🪐{% elif m.provider.slug == "seedance" %}🎬{% elif m.provider.slug == "mock" %}🧪{% else %}🎥{% endif %}', desc: '{{ m.provider.name|escapejs }} • {% if m.supports_audio %}Audio FX • {% endif %}{{ m.credit_cost_fixed }}cr + {{ m.credit_cost_per_second }}/s', fixed: {{ m.credit_cost_fixed }}, perSec: {{ m.credit_cost_per_second }}, type: 'video', maxDuration: {{ m.max_duration|default:10 }}, supportedDurations: {% if "wan" in m.model_id or m.max_duration <= 5 %}[5]{% elif "minimax" in m.model_id %}[5, 10]{% elif "veo" in m.model_id %}[4, 8]{% else %}[5, 10, 15]{% endif %} },
@@ -563,7 +563,7 @@ function createStudioApp() {
     <div class="rounded-2xl p-4 border border-orange-500/20 bg-orange-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs w-full">
         <div class="flex items-center gap-2.5 text-slate-300">
             <span class="text-base">⚡</span>
-            <span>Superuser Notice: To generate real cinematic video with zero rate limits, deposit $5–$10 on <a href="https://fal.ai/dashboard/billing" target="_blank" rel="noopener noreferrer" class="text-orange-400 font-bold underline hover:text-orange-300">Fal.ai</a> (Wan 2.1) or link Google Cloud billing for Veo 3.1.</span>
+            <span>Superuser Notice: To generate real cinematic video with zero rate limits, link Google Cloud billing for Veo 3.1, or configure BytePlus ModelArk for Seedance 2.5 and Kling AI keys.</span>
         </div>
         <a href="{% url 'adminpanel:dashboard' %}" class="btn btn-xs border-white/10 text-[10px] text-slate-300 hover:text-white whitespace-nowrap bg-black/40">
             API Balances ↗
@@ -1367,12 +1367,12 @@ function createStudioApp() {
 
                                 {% for m in image_models %}
                                     <button type="button"
-                                            @click="selectModel('{{ m.model_id }}', '{{ m.display_name }}', '{{ m.provider.slug|upper }}', '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "openai" %}🤖{% elif m.provider.slug == "flux" or m.provider.slug == "fal" %}🔮{% elif m.provider.slug == "mock" %}🧪{% else %}🎨{% endif %}', '{{ m.provider.name }} • {{ m.credit_cost_fixed }} credits')"
+                                            @click="selectModel('{{ m.model_id }}', '{{ m.display_name }}', '{{ m.provider.slug|upper }}', '{% if m.provider.slug == "google" %}🌐{% elif m.provider.slug == "openai" %}🤖{% elif m.provider.slug == "flux" %}🔮{% elif m.provider.slug == "mock" %}🧪{% else %}🎨{% endif %}', '{{ m.provider.name }} • {{ m.credit_cost_fixed }} credits')"
                                             :class="selectedModel === '{{ m.model_id }}' ? 'bg-orange-500/20 border-orange-500/50 text-white' : 'hover:bg-white/[0.05] border-transparent text-slate-300 hover:text-white'"
                                             class="w-full rounded-xl p-2 border text-left flex items-center justify-between gap-2.5 transition group cursor-pointer">
                                         <div class="flex items-center gap-2.5 min-w-0">
                                             <span class="w-6 h-6 rounded-md bg-white/[0.06] border border-white/10 text-white flex items-center justify-center text-xs shrink-0">
-                                                {% if m.provider.slug == 'google' %}🌐{% elif m.provider.slug == 'openai' %}🤖{% elif m.provider.slug == 'flux' or m.provider.slug == 'fal' %}🔮{% elif m.provider.slug == 'mock' %}🧪{% else %}🎨{% endif %}
+                                                {% if m.provider.slug == 'google' %}🌐{% elif m.provider.slug == 'openai' %}🤖{% elif m.provider.slug == 'flux' %}🔮{% elif m.provider.slug == 'mock' %}🧪{% else %}🎨{% endif %}
                                             </span>
                                             <div class="min-w-0">
                                                 <div class="text-xs font-semibold truncate group-hover:text-orange-300">{{ m.display_name }}</div>

@@ -37,9 +37,14 @@ def assemble_project_video_task(self, job_id: str):
 
     output_file_path = None
     try:
+        bgm_path = None
+        if job.background_music and job.background_music.file and os.path.exists(job.background_music.file.path):
+            bgm_path = job.background_music.file.path
+
         output_file_path = FFmpegService.assemble_scenes(
             scene_media_list=scene_media,
-            output_aspect_ratio=job.target_aspect_ratio
+            output_aspect_ratio=job.target_aspect_ratio,
+            background_music_path=bgm_path
         )
 
         with open(output_file_path, 'rb') as f:

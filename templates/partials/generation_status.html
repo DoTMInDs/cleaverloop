@@ -249,18 +249,17 @@
                             <source src="{{ generation.latest_audio.url }}" type="audio/ogg">
                         </audio>
 
-                        <!-- 1-Click Lip-Sync Button -->
-                        <form hx-post="{% url 'generations:lipsync_video' generation.id %}"
+                        <!-- 1-Click Audio Mux Button -->
+                        <form hx-post="{% url 'generations:mux_audio_video' generation.id %}"
                               hx-target="#generation-card-{{ generation.id }}"
                               hx-swap="outerHTML"
                               class="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
                             {% csrf_token %}
-                            <span class="text-[11px] text-slate-400">Animate lips to match this speech</span>
+                            <span class="text-[11px] text-slate-400">Embed track directly into MP4</span>
                             <button type="submit"
                                     class="fl-gradient-orange-btn text-white rounded-lg px-3 py-1 font-heading font-extrabold text-[11px] uppercase tracking-wider transition hover:scale-105 flex items-center gap-1 shadow-md shadow-orange-500/20">
-                                <span>👄</span>
-                                <span>Sync Lips to Audio</span>
-                                <span class="opacity-70 text-[9px] font-mono">• 30 cr</span>
+                                <span>🎬</span>
+                                <span>Mux Audio into Video</span>
                             </button>
                         </form>
                     </div>

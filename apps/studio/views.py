@@ -30,7 +30,7 @@ class HomeView(TemplateView):
                 'badge': 'Viral',
                 'desc': 'Wild, surreal cartoon energy with exaggerated physics, dynamic squash and stretch, designed for high social media retention.',
                 'image': '/static/images/showcase/unhinged_cartoon.jpg',
-                'model': 'Kling 2.6 & Fal Wan 2.1',
+                'model': 'Kling 2.6 & Alibaba Wan 2.1',
                 'prompt': 'Surreal wacky 90s animated creature with swirling eyes jumping out of toaster with explosive animated comic sparks.'
             },
             {

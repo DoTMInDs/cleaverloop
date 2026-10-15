@@ -24,11 +24,18 @@ class PricingPlansView(ListView):
     context_object_name = 'plans'
 
     def get_queryset(self):
-        cached = cache.get('active_subscription_plans')
-        if cached is not None:
-            return cached
+        try:
+            cached = cache.get('active_subscription_plans')
+            if cached is not None:
+                return cached
+        except Exception as e:
+            logger.warning(f"Cache get failed in PricingPlansView: {e}")
+
         plans = list(SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly'))
-        cache.set('active_subscription_plans', plans, timeout=1800)
+        try:
+            cache.set('active_subscription_plans', plans, timeout=1800)
+        except Exception as e:
+            logger.warning(f"Cache set failed in PricingPlansView: {e}")
         return plans
 
     def get_context_data(self, **kwargs):

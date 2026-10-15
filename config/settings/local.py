@@ -27,3 +27,14 @@ STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
 # Execute Celery tasks synchronously in local development if worker is not started
 CELERY_TASK_ALWAYS_EAGER = env.bool('CELERY_TASK_ALWAYS_EAGER', default=True)
 CELERY_TASK_EAGER_PROPAGATES = True
+
+# Cache configuration for local development
+# Default to in-memory cache so Redis is not required for local development.
+# If a local Redis instance is desired, set USE_LOCMEM_CACHE=False or USE_REDIS_CACHE=True in .env.
+if env.bool('USE_LOCMEM_CACHE', default=True) and not env.bool('USE_REDIS_CACHE', default=False):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'cleaverloop-local-cache',
+        }
+    }
