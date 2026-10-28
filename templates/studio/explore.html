@@ -46,6 +46,17 @@
 
     toggleLike(id) {
         this.likedItems[id] = !this.likedItems[id];
+        fetch('/generations/' + id + '/like/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        }).then(r => r.ok ? r.json() : null).then(data => {
+            if (data && typeof data.likes_count === 'number') {
+                const found = this.showcaseItems.find(x => x.id === id);
+                if (found) found.likes = data.likes_count;
+            }
+        }).catch(() => {});
     },
 
     copyPrompt(text, id) {
@@ -92,6 +103,67 @@
         }
     }
 }">
+
+    <!-- =========================================================================
+         SECTION 0: FLASHLOOP-STYLE INTERACTIVE EXPLORE HERO & FILTER BAR
+         ========================================================================= -->
+    <section class="rounded-3xl p-5 sm:p-7 border border-white/[0.08] bg-[#0e1116] shadow-2xl space-y-5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="space-y-1">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-[11px] font-mono">
+                    <span>🔥</span>
+                    <span>Live Community Cinema & Viral Formats</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-heading font-black text-white tracking-tight">
+                    Explore What Creators Are Shipping
+                </h1>
+            </div>
+
+            <!-- Search + Sort Controls -->
+            <div class="flex flex-wrap items-center gap-2.5">
+                <div class="relative w-full sm:w-64">
+                    <input type="text"
+                           x-model="searchQuery"
+                           placeholder="Search prompts, models, @creators..."
+                           class="w-full rounded-xl bg-black/60 border border-white/10 focus:border-orange-500/60 px-3.5 py-2 text-xs text-white placeholder-slate-500">
+                </div>
+                <select x-model="sortBy"
+                        class="rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-xs text-slate-200 font-mono">
+                    <option value="trending">🔥 Sort: Trending</option>
+                    <option value="likes">❤️ Sort: Most Liked</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Modality Filter Pills -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button" @click="activeTab = 'all'"
+                        :class="activeTab === 'all' ? 'bg-orange-500 text-white font-bold shadow-md' : 'bg-white/[0.04] text-slate-300 hover:text-white'"
+                        class="px-3.5 py-1.5 rounded-xl text-xs transition">
+                    ✨ All Creations
+                </button>
+                <button type="button" @click="activeTab = 'video'"
+                        :class="activeTab === 'video' ? 'bg-orange-500 text-white font-bold shadow-md' : 'bg-white/[0.04] text-slate-300 hover:text-white'"
+                        class="px-3.5 py-1.5 rounded-xl text-xs transition">
+                    🎬 AI Videos
+                </button>
+                <button type="button" @click="activeTab = 'image'"
+                        :class="activeTab === 'image' ? 'bg-orange-500 text-white font-bold shadow-md' : 'bg-white/[0.04] text-slate-300 hover:text-white'"
+                        class="px-3.5 py-1.5 rounded-xl text-xs transition">
+                    🖼️ AI Images
+                </button>
+                <a href="#explore-viral-effects"
+                   class="px-3.5 py-1.5 rounded-xl text-xs bg-orange-500/15 border border-orange-500/30 text-orange-300 hover:bg-orange-500/25 font-bold transition">
+                    ⚡ One-Tap Viral Effects ({{ viral_effects|length }})
+                </a>
+            </div>
+            <a href="{% url 'agent:studio' %}" class="text-xs font-mono font-bold text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                <span>🧠 Launch Super Agent Storyboard</span>
+                <span>→</span>
+            </a>
+        </div>
+    </section>
 
     <!-- =========================================================================
          SECTION 1: SEE WHAT YOU CAN PRODUCE ON CLeaverLOOP (Matching Screenshot 1)
@@ -458,8 +530,17 @@
 
                         <!-- Card Meta Bar -->
                         <div class="p-3 bg-[#0d0f11] flex items-center justify-between text-[11px] font-mono border-t border-white/[0.04]">
-                            <span class="text-slate-400 truncate max-w-[140px]" x-text="item.category"></span>
-                            <a :href="'{% url 'studio:create' %}?prompt=' + encodeURIComponent(item.prompt)"
+                            <div class="flex items-center gap-2 min-w-0">
+                                <button type="button"
+                                        @click.stop="toggleLike(item.id)"
+                                        :class="(likedItems[item.id] || item.is_liked) ? 'text-rose-400 border-rose-500/40 bg-rose-500/10' : 'text-slate-400 border-white/10 bg-white/[0.03]'"
+                                        class="px-2 py-0.5 rounded-lg border text-[10px] flex items-center gap-1 transition">
+                                    <span>♥</span>
+                                    <span x-text="(item.likes || 0) + (likedItems[item.id] ? 1 : 0)"></span>
+                                </button>
+                                <span class="text-slate-400 truncate max-w-[100px]" x-text="item.category"></span>
+                            </div>
+                            <a :href="'{% url 'studio:create' %}?recreate=' + item.id + '&prompt=' + encodeURIComponent(item.prompt)"
                                @click.stop
                                class="text-orange-400 font-bold hover:text-orange-300 flex items-center gap-1 transition">
                                 <span>⚡</span>
@@ -527,6 +608,50 @@
     </section>
 
     <!-- =========================================================================
+         SECTION 5: ONE-TAP VIRAL EFFECTS SHELF ON EXPLORE
+         ========================================================================= -->
+    {% if viral_effects %}
+    <section id="explore-viral-effects" class="space-y-6 pt-4 border-t border-white/[0.08]">
+        <div class="flex items-center justify-between">
+            <div class="space-y-1">
+                <span class="text-xs font-mono font-black uppercase tracking-wider text-orange-400">One-Tap VFX Schemas</span>
+                <h2 class="text-2xl sm:text-3xl font-heading font-black tracking-tight text-white uppercase">
+                    Viral <span class="text-orange-500">Video Effects</span>
+                </h2>
+                <p class="text-xs sm:text-sm text-slate-400">Type any subject and launch a parameterized cinema VFX shot in one click</p>
+            </div>
+            <a href="{% url 'agent:studio' %}" class="text-xs font-bold text-orange-400 hover:text-orange-300 font-mono">
+                Open Super Agent →
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for fx in viral_effects %}
+            <form method="post" action="{% url 'agent:apply_effect' fx.slug %}" class="fl-composer-card rounded-2xl p-5 border border-white/10 hover:border-orange-500/50 bg-[#0d1015] transition flex flex-col justify-between space-y-4">
+                {% csrf_token %}
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2.5 py-0.5 rounded-full bg-orange-500/15 border border-orange-500/30 text-[10px] font-mono font-bold text-orange-300">
+                            {{ fx.icon }} {{ fx.category }}
+                        </span>
+                        <span class="text-[10px] font-mono text-slate-400">{{ fx.aspect_ratio }} · {{ fx.duration }}s</span>
+                    </div>
+                    <h3 class="text-base font-heading font-bold text-white">{{ fx.name }}</h3>
+                    <p class="text-xs text-slate-400 leading-relaxed">{{ fx.description }}</p>
+                </div>
+                <div class="flex items-center gap-2 pt-2 border-t border-white/[0.06]">
+                    <input type="text" name="subject" placeholder="Your subject (e.g. cyber sneaker, sports car)" class="flex-1 rounded-xl bg-black/60 border border-white/10 px-3 py-2 text-xs text-white placeholder-slate-500">
+                    <button type="submit" class="fl-gradient-orange-btn text-white rounded-xl px-4 py-2 text-xs font-bold shrink-0">
+                        Try Effect →
+                    </button>
+                </div>
+            </form>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
+    <!-- =========================================================================
          INSPECT & REMIX MODAL
          ========================================================================= -->
     <div x-show="inspectModalOpen"
@@ -559,18 +684,38 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="flex items-center justify-between pt-2 border-t border-white/[0.08]">
-                <button type="button"
-                        @click="copyPrompt(activeItem.prompt, activeItem.id)"
-                        class="px-4 py-2 rounded-xl bg-white/[0.05] hover:bg-white/10 text-xs font-semibold text-white transition flex items-center gap-1.5">
-                    <span x-text="copiedId === (activeItem ? activeItem.id : null) ? '✓ Copied!' : '📋 Copy Prompt'"></span>
-                </button>
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/[0.08]">
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            @click="copyPrompt(activeItem.prompt, activeItem.id)"
+                            class="px-3.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/10 text-xs font-semibold text-white transition flex items-center gap-1.5">
+                        <span x-text="copiedId === (activeItem ? activeItem.id : null) ? '✓ Copied!' : '📋 Copy Prompt'"></span>
+                    </button>
+                    <button type="button"
+                            @click="activeItem && toggleLike(activeItem.id)"
+                            class="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-bold text-rose-300 transition flex items-center gap-1.5">
+                        <span>♥</span>
+                        <span x-text="activeItem ? ((activeItem.likes || 0) + (likedItems[activeItem.id] ? 1 : 0)) : 0"></span>
+                    </button>
+                </div>
 
-                <a :href="'{% url 'studio:create' %}?prompt=' + encodeURIComponent(activeItem ? activeItem.prompt : '') + '&aspect_ratio=' + (activeItem ? activeItem.aspect_ratio : '16:9')"
-                   class="fl-gradient-orange-btn fl-glow-orange text-white text-xs font-bold px-6 py-2.5 rounded-xl flex items-center gap-2">
-                    <span>⚡</span>
-                    <span>Remix in Studio</span>
-                </a>
+                <div class="flex flex-wrap items-center gap-2">
+                    <a :href="'{% url 'studio:create' %}?tab=video&source_image_url=' + encodeURIComponent(activeItem ? activeItem.media_url : '') + '&prompt=' + encodeURIComponent(activeItem ? activeItem.prompt : '')"
+                       class="px-4 py-2.5 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 text-xs font-bold flex items-center gap-1.5 transition">
+                        <span>🎬</span>
+                        <span>Animate as Start Frame</span>
+                    </a>
+                    <a :href="'{% url 'agent:studio' %}?prompt=' + encodeURIComponent(activeItem ? activeItem.prompt : '')"
+                       class="px-4 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition">
+                        <span>🧠</span>
+                        <span>Super Agent</span>
+                    </a>
+                    <a :href="'{% url 'studio:create' %}?recreate=' + (activeItem ? activeItem.id : '') + '&prompt=' + encodeURIComponent(activeItem ? activeItem.prompt : '') + '&aspect_ratio=' + (activeItem ? activeItem.aspect_ratio : '16:9')"
+                       class="fl-gradient-orange-btn fl-glow-orange text-white text-xs font-bold px-5 py-2.5 rounded-xl flex items-center gap-1.5">
+                        <span>⚡</span>
+                        <span>Remix in Studio</span>
+                    </a>
+                </div>
             </div>
         </div>
     </div>

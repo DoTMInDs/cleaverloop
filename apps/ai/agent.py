@@ -11,19 +11,78 @@ class SuperAgent:
     """Orchestrates natural language user ideas into structured, executable multi-scene storyboards."""
 
     @classmethod
-    def decompose_idea(cls, prompt: str, target_aspect_ratio: str = "16:9", character: object = None) -> StoryboardPlan:
+    def generate_clarifying_questions(cls, prompt: str, skill_preset: str = "general") -> list[dict]:
+        """
+        Generates 3 concise pre-production clarifying questions (Tone, Camera/Pacing, Audio/Ending)
+        before credit-consuming storyboard execution.
+        """
+        return [
+            {
+                "id": "visual_tone",
+                "question": "What visual atmosphere and color grade should anchor this production?",
+                "options": [
+                    "High-Contrast Neon & Anamorphic Glow",
+                    "Warm Golden Hour 35mm Film Stock",
+                    "Clean Hyper-Real Commercial Studio",
+                    "Dark Moody Fincher Thriller",
+                ],
+                "default": "Warm Golden Hour 35mm Film Stock",
+            },
+            {
+                "id": "pacing_style",
+                "question": "How should the camera movement and editing tempo feel?",
+                "options": [
+                    "Fast Kinetic Cuts & FPV Whip Pans",
+                    "Slow Deliberate Dolly & Steadicam Tracking",
+                    "Sweeping Aerial Establishing to Intimate Close-Up",
+                ],
+                "default": "Slow Deliberate Dolly & Steadicam Tracking",
+            },
+            {
+                "id": "narrative_focus",
+                "question": "What should drive the narrative hook across scenes?",
+                "options": [
+                    "Character Emotion & Dialogue Performance",
+                    "Visual Spectacle & Dynamic Action Physics",
+                    "Product Hero Reveal & Tactile Macro Detail",
+                ],
+                "default": "Character Emotion & Dialogue Performance",
+            },
+        ]
+
+    @classmethod
+    def decompose_idea(
+        cls,
+        prompt: str,
+        target_aspect_ratio: str = "16:9",
+        character: object = None,
+        skill_preset: str = "general",
+        clarifying_answers: dict | None = None,
+    ) -> StoryboardPlan:
         """
         Decomposes high-level user brief into a structured multi-scene storyboard with character cast.
         """
+        enriched_prompt = prompt.strip()
+        if skill_preset and skill_preset != "general":
+            from apps.ai.models import DEFAULT_AGENT_SKILLS
+            matched = next((s for s in DEFAULT_AGENT_SKILLS if s["slug"] == skill_preset), None)
+            if matched:
+                enriched_prompt = f"{enriched_prompt} [Director Skill: {matched['name']} — {matched['system_directive']}]"
+
+        if clarifying_answers and isinstance(clarifying_answers, dict):
+            notes = [f"{k.replace('_', ' ').title()}: {v}" for k, v in clarifying_answers.items() if v]
+            if notes:
+                enriched_prompt = f"{enriched_prompt} [Director Refinements: {'; '.join(notes)}]"
+
         gemini_key = getattr(settings, 'GEMINI_API_KEY', '') or getattr(settings, 'GOOGLE_AI_API_KEY', '')
         
         if gemini_key and getattr(settings, 'AGENT_LLM_PROVIDER', 'mock') != 'mock':
             try:
-                return cls._call_llm_decomposer(prompt, target_aspect_ratio, gemini_key, character=character)
+                return cls._call_llm_decomposer(enriched_prompt, target_aspect_ratio, gemini_key, character=character)
             except Exception as e:
                 logger.warning(f"LLM decomposition failed ({e}), falling back to intelligent rule-based planner.")
 
-        return cls._rule_based_decomposer(prompt, target_aspect_ratio, character=character)
+        return cls._rule_based_decomposer(enriched_prompt, target_aspect_ratio, character=character)
 
     @classmethod
     def _call_llm_decomposer(cls, user_prompt: str, aspect_ratio: str, api_key: str, character: object = None) -> StoryboardPlan:
@@ -50,7 +109,7 @@ class SuperAgent:
             "systemInstruction": {"parts": [{"text": system_instruction}]},
             "generationConfig": {"responseMimeType": "application/json"}
         }
-        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
         last_error = None
         for model in models_to_try:
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"

@@ -46,6 +46,13 @@ class Project(models.Model):
         on_delete=models.SET_NULL,
         related_name='final_render_project'
     )
+    is_favorite = models.BooleanField(default=False, db_index=True)
+    is_trashed = models.BooleanField(default=False, db_index=True)
+    director_settings = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Default Cinema Director recipe (camera body, lens, aperture, lighting, color palette) for this project"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -121,6 +128,20 @@ class Scene(models.Model):
         related_name='generated_scene'
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
+    is_draft = models.BooleanField(
+        default=True,
+        help_text="True if rendered at fast 480p draft quality before 1080p finalization"
+    )
+    resolution = models.CharField(
+        max_length=16,
+        default='480p',
+        help_text="480p draft or 1080p finalized master"
+    )
+    director_recipe = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Structured Cinema Director parameters (genre, era, camera_body, lens, aperture, movement, palette, lighting)"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -159,3 +180,23 @@ class Scene(models.Model):
     def is_user_upload(self) -> bool:
         """Indicates if scene video was directly uploaded by the user rather than AI generated."""
         return bool(self.generated_media and not getattr(self.generated_media, 'generation_id', None))
+
+
+class CinemaLook(models.Model):
+    """Reusable user-saved Cinema Director Look preset (camera, lens, lighting, color grade)."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='cinema_looks'
+    )
+    name = models.CharField(max_length=120)
+    recipe = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.owner.email})"
+

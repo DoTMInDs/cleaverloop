@@ -14,9 +14,18 @@ app.autodiscover_tasks()
 
 # Celery Routing Queues
 app.conf.task_routes = {
+    'apps.generations.tasks.dispatch_generation_task': {'queue': 'video'},
     'apps.generations.tasks.generate_video_task': {'queue': 'video'},
     'apps.generations.tasks.generate_image_task': {'queue': 'image'},
     'apps.editor.tasks.assemble_project_video_task': {'queue': 'render'},
+}
+
+# Periodic Beat Schedule
+app.conf.beat_schedule = {
+    'reap-stale-generations-every-5-minutes': {
+        'task': 'apps.generations.tasks.reap_stale_generations_task',
+        'schedule': 300.0,
+    },
 }
 
 @app.task(bind=True, ignore_result=True)

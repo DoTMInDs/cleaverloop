@@ -13,6 +13,39 @@
     redeemInput: '',
     redeemSuccess: false,
     redeemError: false,
+    redeemErrorMsg: '',
+    redeemLoading: false,
+    async submitReferralCode() {
+        const code = this.redeemInput.trim();
+        if (code.length < 4 || this.redeemLoading) return;
+        this.redeemLoading = true;
+        this.redeemError = false;
+        this.redeemErrorMsg = '';
+        this.redeemSuccess = false;
+        try {
+            const resp = await fetch('{% url "accounts:redeem_referral" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ code })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                this.redeemSuccess = true;
+                setTimeout(() => { window.location.reload(); }, 1000);
+            } else {
+                this.redeemError = true;
+                this.redeemErrorMsg = data.error || 'Could not redeem code.';
+            }
+        } catch (e) {
+            this.redeemError = true;
+            this.redeemErrorMsg = 'Network error. Please try again.';
+        } finally {
+            this.redeemLoading = false;
+        }
+    },
     copyCode() {
         navigator.clipboard.writeText('{{ referral_code }}');
         this.copiedReferral = true;
@@ -391,12 +424,13 @@
             <div class="space-y-2">
                 <input type="text" x-model="redeemInput" placeholder="e.g. 9JZUBY" maxlength="8" class="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-center font-mono text-base font-bold tracking-widest uppercase text-white focus:outline-none focus:border-amber-500 transition">
                 <div x-show="redeemSuccess" class="text-emerald-400 text-xs text-center font-medium">✓ 1,000 Credits successfully unlocked!</div>
+                <div x-show="redeemError" x-text="redeemErrorMsg" class="text-rose-400 text-xs text-center font-medium"></div>
             </div>
             <div class="flex items-center justify-end gap-2 pt-2">
                 <button @click="showRedeemModal = false" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 transition">
                     Cancel
                 </button>
-                <button @click="if(redeemInput.trim().length >= 4) { redeemSuccess = true; setTimeout(() => { showRedeemModal = false; redeemSuccess = false; redeemInput = ''; }, 1800); }" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition">
+                <button @click="submitReferralCode()" :disabled="redeemLoading || redeemInput.trim().length < 4" class="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-semibold text-xs transition">
                     Apply Code
                 </button>
             </div>

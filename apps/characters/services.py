@@ -372,11 +372,9 @@ class CharacterGeneratorService:
         }
 
         models_to_try = [
-            "gemini-3.6-flash",
-            "gemini-flash-latest",
-            "gemini-3.1-flash-lite",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
+            "gemini-flash-latest",
             "gemini-pro-latest"
         ]
         last_error = None
@@ -562,11 +560,9 @@ class CharacterGeneratorService:
         }
 
         models_to_try = [
-            "gemini-3.6-flash",
-            "gemini-flash-latest",
-            "gemini-3.1-flash-lite",
             "gemini-2.5-flash",
             "gemini-2.0-flash",
+            "gemini-flash-latest",
             "gemini-pro-latest"
         ]
         last_error = None

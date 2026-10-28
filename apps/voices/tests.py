@@ -243,3 +243,36 @@ class VoiceCloningTests(TestCase):
             self.assertEqual(data["credits_deducted"], 15)  # 15 cr on starter
             self.wallet.refresh_from_db()
             self.assertEqual(self.wallet.balance, initial_bal - 15)
+
+    def test_api_preview_speech_persists_vocal_delivery_settings(self):
+        """Verify stability, similarity_boost, style, and speed sliders are forwarded and saved on VoiceProfile."""
+        profile = VoiceProfile.objects.create(
+            user=self.user,
+            name="Prosody Tuned Voice",
+            provider_voice_id="custom_prosody_1",
+            provider="elevenlabs",
+            status="ready"
+        )
+        with patch("apps.providers.adapters.elevenlabs.ElevenLabsProvider.generate_audio") as mock_gen:
+            from apps.providers.base import ProviderJobResult
+            mock_gen.return_value = ProviderJobResult(
+                external_job_id="test_speech_2",
+                status="completed",
+                output_media_url="https://example.com/tuned_speech.mp3"
+            )
+            resp = self.client.post(reverse("voices:api_preview"), {
+                "text": "Testing vocal prosody and delivery sliders.",
+                "voice_profile_id": str(profile.id),
+                "stability": "0.35",
+                "similarity_boost": "0.85",
+                "style": "0.40",
+                "speed": "1.15",
+            })
+            self.assertEqual(resp.status_code, 200)
+            data = resp.json()
+            self.assertEqual(data["voice_settings"]["stability"], 0.35)
+            self.assertEqual(data["voice_settings"]["similarity_boost"], 0.85)
+            self.assertEqual(data["voice_settings"]["style"], 0.4)
+            self.assertEqual(data["voice_settings"]["speed"], 1.15)
+            profile.refresh_from_db()
+            self.assertEqual(profile.metadata["voice_settings"]["speed"], 1.15)

@@ -30,12 +30,22 @@ class CreditService:
         if amount <= 0:
             raise ValidationError("Grant amount must be greater than zero.")
 
+        # Normalize legacy aliases
+        if transaction_type == 'topup':
+            transaction_type = 'purchase'
+        elif transaction_type == 'subscription':
+            transaction_type = 'subscription_credit'
+
         wallet = CreditWallet.objects.select_for_update().get_or_create(user=user)[0]
         bal_before = wallet.balance
         wallet.balance += amount
         wallet.lifetime_earned += amount
+        update_fields = ['balance', 'lifetime_earned', 'updated_at']
+        if transaction_type == 'purchase':
+            wallet.purchased_credits += amount
+            update_fields.append('purchased_credits')
         bal_after = wallet.balance
-        wallet.save(update_fields=['balance', 'lifetime_earned', 'updated_at'])
+        wallet.save(update_fields=update_fields)
 
         tx = CreditTransaction.objects.create(
             wallet=wallet,
@@ -60,13 +70,14 @@ class CreditService:
         external_subscription_id: str = '',
         email_token: str = '',
         grant_monthly_credits: bool = True,
+        billing_cycle: str = 'monthly',
     ):
         """
         Atomically activate or renew a subscription:
-        1. Updates or creates Subscription with active status and 30-day validity window.
+        1. Updates or creates Subscription with active status and validity window (30 days monthly / 365 days annual).
         2. Sets user's CreditWallet.subscription_tier = plan.slug.
         3. Sets CreditWallet.subscription_credits = plan.credits_per_month.
-        4. Sets CreditWallet.subscription_renewal_date = now + 30 days.
+        4. Sets CreditWallet.subscription_renewal_date = period_end.
         5. Grants the plan's monthly credits idempotently with external_reference.
         """
         from apps.billing.models import Subscription
@@ -74,7 +85,8 @@ class CreditService:
         import datetime
 
         now = timezone.now()
-        period_end = now + datetime.timedelta(days=30)
+        days = 365 if str(billing_cycle).lower() == 'annual' else 30
+        period_end = now + datetime.timedelta(days=days)
 
         # Update or create Subscription model
         sub_defaults = {

@@ -351,4 +351,114 @@ class CreditLedgerTests(TestCase):
         )
         self.assertEqual(selected_ultra.model_id, 'veo-3.1-standard')
 
+    def test_purchased_credits_increment_and_legacy_type_normalization(self):
+        """Verify top-up purchases increment wallet.purchased_credits and normalize 'topup' -> 'purchase'."""
+        tx = CreditService.grant_credits(
+            user=self.user,
+            amount=25000,
+            transaction_type='topup',
+            description='Credit Pack Purchase',
+            external_reference='pack_ref_001'
+        )
+        wallet = CreditWallet.objects.get(user=self.user)
+        self.assertEqual(wallet.purchased_credits, 25000)
+        self.assertIsNotNone(tx)
+        self.assertEqual(tx.transaction_type, 'purchase')
+
+    def test_annual_subscription_activation_and_effective_pricing(self):
+        """Verify annual billing sets 365-day period and computes discounted annual USD price."""
+        from apps.billing.models import SubscriptionPlan, Subscription
+        from apps.billing.paystack import PaystackService
+        from decimal import Decimal
+
+        plan = SubscriptionPlan.objects.create(
+            name='Creator',
+            slug='creator',
+            price_monthly=Decimal('59.00'),
+            price_annually=Decimal('0.00'),
+            credits_per_month=400000,
+        )
+        effective_annual = PaystackService.get_effective_usd_price(plan, 'annual')
+        self.assertEqual(effective_annual, Decimal('588.00'))
+        effective_monthly = PaystackService.get_effective_usd_price(plan, 'monthly')
+        self.assertEqual(effective_monthly, Decimal('59.00'))
+
+        CreditService.activate_subscription(
+            user=self.user,
+            plan=plan,
+            reference='sub_annual_test_01',
+            billing_cycle='annual'
+        )
+        sub = Subscription.objects.get(user=self.user)
+        delta_days = (sub.current_period_end - sub.current_period_start).days
+        self.assertGreaterEqual(delta_days, 364)
+
+    def test_tier_character_and_modality_quotas_enforced(self):
+        """Verify per-tier max_characters, max_parallel_videos, and max_parallel_images."""
+        from django.urls import reverse
+        from apps.characters.models import Character
+
+        wallet = CreditWallet.objects.get(user=self.user)
+        wallet.subscription_tier = 'free'
+        wallet.save()
+        self.assertEqual(wallet.max_characters, 1)
+        self.assertEqual(wallet.max_parallel_videos, 1)
+        self.assertEqual(wallet.max_parallel_images, 1)
+
+        # Create 1 character (allowed on Free)
+        Character.objects.create(owner=self.user, name='Hero One')
+
+        # Second character should be blocked by quota
+        self.client.login(email='test@cleaverloop.ai', password='password123')
+        resp = self.client.post(reverse('characters:generate_ai'), {'brief': 'A second hero'})
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn('Character limit reached', resp.json()['error'])
+
+        # Upgrade to Creator -> 50 characters allowed
+        wallet.subscription_tier = 'creator'
+        wallet.save()
+        self.assertEqual(wallet.max_characters, 50)
+        self.assertEqual(wallet.max_parallel_videos, 3)
+        self.assertEqual(wallet.max_parallel_images, 4)
+
+    def test_provider_diagnostics_operational_vs_unfunded(self):
+        """Verify Kling, MiniMax, and OpenAI diagnostics report operational on HTTP 200 and unfunded on billing codes."""
+        from unittest.mock import patch, MagicMock
+        from apps.providers.diagnostics import ProviderHealthChecker
+
+        with patch('apps.providers.diagnostics._resolve_api_key', return_value='test_key'):
+            with patch('apps.providers.diagnostics.httpx.Client') as mock_client_cls:
+                mock_client = MagicMock()
+                mock_client_cls.return_value.__enter__.return_value = mock_client
+
+                # HTTP 200 healthy response for Kling & OpenAI
+                ok_resp = MagicMock(status_code=200, content=b'{"code": 0}')
+                ok_resp.json.return_value = {'code': 0}
+                mock_client.get.return_value = ok_resp
+
+                kling_res = ProviderHealthChecker.check_kling_ai()
+                self.assertEqual(kling_res['status'], 'operational')
+
+                openai_res = ProviderHealthChecker.check_openai()
+                self.assertEqual(openai_res['status'], 'operational')
+
+                # Kling code 1102 -> unfunded
+                unfunded_kling = MagicMock(status_code=400, content=b'{"code": 1102}')
+                unfunded_kling.json.return_value = {'code': 1102, 'message': 'Account balance insufficient'}
+                mock_client.get.return_value = unfunded_kling
+                self.assertEqual(ProviderHealthChecker.check_kling_ai()['status'], 'unfunded')
+
+                # MiniMax HTTP 200 with status_code 0 -> operational
+                mm_ok = MagicMock(status_code=200, content=b'{"base_resp": {"status_code": 0}}')
+                mm_ok.json.return_value = {'base_resp': {'status_code': 0, 'status_msg': 'success'}}
+                mock_client.get.return_value = mm_ok
+                self.assertEqual(ProviderHealthChecker.check_minimax()['status'], 'operational')
+
+                # MiniMax status_code 1008 -> unfunded
+                mm_unfunded = MagicMock(status_code=200, content=b'{"base_resp": {"status_code": 1008}}')
+                mm_unfunded.json.return_value = {'base_resp': {'status_code': 1008, 'status_msg': 'insufficient balance'}}
+                mock_client.get.return_value = mm_unfunded
+                self.assertEqual(ProviderHealthChecker.check_minimax()['status'], 'unfunded')
+
+
 

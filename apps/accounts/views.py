@@ -1,12 +1,16 @@
+import hashlib
+import json
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.views import LoginView as DjangoLoginView
 from django.views.generic import CreateView, TemplateView
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
+from django.http import JsonResponse
 from apps.accounts.forms import UserRegisterForm, UserLoginForm
 
-from django.http import JsonResponse
 
 class RegisterView(CreateView):
     form_class = UserRegisterForm
@@ -44,6 +48,7 @@ class RegisterView(CreateView):
             }, status=400)
         return super().form_invalid(form)
 
+
 class LoginView(DjangoLoginView):
     form_class = UserLoginForm
     template_name = 'accounts/login.html'
@@ -73,7 +78,6 @@ def logout_view(request):
     logout(request)
     return redirect('accounts:login')
 
-import hashlib
 
 def generate_user_referral_code(user) -> str:
     """Generate a consistent, human-friendly 6-character alphanumeric code for a user."""
@@ -86,6 +90,7 @@ def generate_user_referral_code(user) -> str:
         code_chars.append(charset[num % len(charset)])
         num //= len(charset)
     return "".join(code_chars)
+
 
 class ProfileView(LoginRequiredMixin, TemplateView):
     template_name = 'accounts/profile.html'
@@ -103,13 +108,89 @@ class ProfileView(LoginRequiredMixin, TemplateView):
         referral_code = generate_user_referral_code(user)
         referral_code_spaced = " ".join(list(referral_code))
 
+        from apps.accounts.models import ReferralRedemption
+        from django.db.models import Sum
+        referrals_qs = ReferralRedemption.objects.filter(referrer=user)
+        referrals_count = referrals_qs.count()
+        earned_credits = referrals_qs.aggregate(total=Sum('credits_awarded'))['total'] or 0
+        has_redeemed_referral = ReferralRedemption.objects.filter(referee=user).exists()
+
         context.update({
             'subscription': subscription,
             'plan_name': plan_name,
             'referral_code': referral_code,
             'referral_code_spaced': referral_code_spaced,
-            'referrals_count': 0,
-            'earned_credits': 0,
+            'referrals_count': referrals_count,
+            'earned_credits': earned_credits,
+            'has_redeemed_referral': has_redeemed_referral,
         })
         return context
 
+
+@login_required
+@require_POST
+def redeem_referral_code_view(request):
+    """Validates and redeems a 6-character creator referral code, awarding 1,000 bonus credits to both users."""
+    from apps.accounts.models import User, ReferralRedemption
+    from apps.credits.services import CreditService
+    from django.db import transaction
+
+    try:
+        if request.content_type and 'application/json' in request.content_type:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+            raw_code = payload.get('code', '')
+        else:
+            raw_code = request.POST.get('code', '')
+    except Exception:
+        raw_code = request.POST.get('code', '')
+
+    code = "".join(str(raw_code).strip().upper().split())
+    if len(code) < 4:
+        return JsonResponse({'success': False, 'error': 'Please enter a valid 6-character referral code.'}, status=400)
+
+    user = request.user
+    if ReferralRedemption.objects.filter(referee=user).exists():
+        return JsonResponse({'success': False, 'error': 'You have already redeemed a referral code on this account.'}, status=400)
+
+    own_code = generate_user_referral_code(user)
+    if code == own_code:
+        return JsonResponse({'success': False, 'error': 'You cannot redeem your own referral code.'}, status=400)
+
+    referrer = None
+    for candidate in User.objects.exclude(id=user.id).only('id', 'email'):
+        if generate_user_referral_code(candidate) == code:
+            referrer = candidate
+            break
+
+    if not referrer:
+        return JsonResponse({'success': False, 'error': 'Referral code not found. Please check the code and try again.'}, status=404)
+
+    reward_amount = 1000
+    with transaction.atomic():
+        ReferralRedemption.objects.create(
+            referrer=referrer,
+            referee=user,
+            code_used=code,
+            credits_awarded=reward_amount,
+        )
+        referee_tx = CreditService.grant_credits(
+            user=user,
+            amount=reward_amount,
+            transaction_type='bonus',
+            description=f'Referral bonus unlocked with code {code}',
+            external_reference=f'referral:referee:{user.id}',
+        )
+        CreditService.grant_credits(
+            user=referrer,
+            amount=reward_amount,
+            transaction_type='bonus',
+            description=f'Referral reward: {user.email} redeemed your code {code}',
+            external_reference=f'referral:referrer:{referrer.id}:{user.id}',
+        )
+
+    return JsonResponse({
+        'success': True,
+        'credits_added': reward_amount,
+        'new_balance': referee_tx.balance_after,
+        'message': f'{reward_amount:,} bonus credits unlocked!',
+    })

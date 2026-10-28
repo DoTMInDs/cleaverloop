@@ -179,15 +179,33 @@ class PaystackService:
     _MOCK_TRANSACTIONS = {}
 
     @classmethod
-    def initialize_transaction(cls, user, plan: SubscriptionPlan, callback_url: str) -> dict:
+    def get_effective_usd_price(cls, plan: SubscriptionPlan, billing_cycle: str = 'monthly') -> float:
+        """Compute total USD amount to bill for monthly vs annual cycle."""
+        if str(billing_cycle).lower() == 'annual':
+            if plan.price_annually and float(plan.price_annually) > 0:
+                return float(plan.price_annually)
+            annual_totals = {
+                'starter': 180.00,
+                'creator': 588.00,
+                'ultra': 1188.00,
+            }
+            if plan.slug in annual_totals:
+                return annual_totals[plan.slug]
+            return round(float(plan.price_monthly) * 12 * 0.8, 2)
+        return float(plan.price_monthly)
+
+    @classmethod
+    def initialize_transaction(cls, user, plan: SubscriptionPlan, callback_url: str, billing_cycle: str = 'monthly') -> dict:
         """Initialize payment transaction with Paystack and return checkout authorization URL."""
+        effective_usd = cls.get_effective_usd_price(plan, billing_cycle)
         if cls.is_mock_mode():
             mock_ref = f"mock_ref_{uuid.uuid4().hex[:14]}"
-            mock_checkout_url = f"{callback_url}?reference={mock_ref}&plan_id={plan.id}"
+            sep = "&" if "?" in callback_url else "?"
+            mock_checkout_url = f"{callback_url}{sep}reference={mock_ref}&plan_id={plan.id}&billing_cycle={billing_cycle}"
             cls._MOCK_TRANSACTIONS[mock_ref] = {
                 "status": "success",
                 "reference": mock_ref,
-                "amount": int(plan.price_monthly * 100),
+                "amount": int(round(effective_usd * 100)),
                 "gateway_response": "Successful (Mock Mode)",
                 "customer": {
                     "customer_code": f"CUS_{user.id}",
@@ -198,6 +216,7 @@ class PaystackService:
                     "user_email": user.email,
                     "plan_id": str(plan.id),
                     "plan_slug": plan.slug,
+                    "billing_cycle": billing_cycle,
                     "payment_type": "subscription",
                 },
                 "authorization": {
@@ -230,12 +249,12 @@ class PaystackService:
 
         currency = getattr(settings, 'PAYSTACK_CURRENCY', 'GHS')
         if currency.upper() == 'GHS':
-            ghs_amount, rate = CurrencyService.convert_usd_to_ghs(plan.price_monthly)
+            ghs_amount, rate = CurrencyService.convert_usd_to_ghs(effective_usd)
             amount_subunit = int(round(ghs_amount * 100))
         else:
-            ghs_amount = float(plan.price_monthly)
+            ghs_amount = float(effective_usd)
             rate = 1.0
-            amount_subunit = int(plan.price_monthly * 100)
+            amount_subunit = int(round(effective_usd * 100))
 
         payload = {
             "email": user.email,
@@ -248,8 +267,9 @@ class PaystackService:
                 "plan_id": str(plan.id),
                 "plan_slug": plan.slug,
                 "plan_code": plan_code,
+                "billing_cycle": billing_cycle,
                 "credits_per_month": plan.credits_per_month,
-                "usd_price": f"${plan.price_monthly:.2f} USD",
+                "usd_price": f"${effective_usd:.2f} USD",
                 "exchange_rate": f"1 USD = {rate:.2f} GHS",
                 "payment_type": "subscription",
                 "custom_fields": [

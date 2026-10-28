@@ -18,7 +18,7 @@ class WalletDetailView(LoginRequiredMixin, ListView):
         if tx_type == 'generation':
             qs = qs.filter(transaction_type__in=['generation_hold', 'generation_consume'])
         elif tx_type == 'grants':
-            qs = qs.filter(transaction_type__in=['bonus', 'topup', 'subscription'])
+            qs = qs.filter(transaction_type__in=['bonus', 'purchase', 'subscription_credit', 'topup', 'subscription'])
         elif tx_type == 'refund':
             qs = qs.filter(transaction_type='generation_refund')
         return qs

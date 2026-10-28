@@ -3,7 +3,7 @@
 {% block title %}{{ project.name }} — Storyboard Studio{% endblock %}
 
 {% block content %}
-<div class="space-y-8 w-full pb-16" x-data="{ showAddSceneModal: false, showAssembleModal: false }">
+<div class="space-y-8 w-full pb-16" x-data="{ showAddSceneModal: false, showAssembleModal: false, showDirectorPanel: false }">
 
     <!-- Top Breadcrumb & Project Category -->
     <div class="flex items-center justify-between gap-4">
@@ -49,6 +49,14 @@
 
             <!-- Control Action Bar -->
             <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto shrink-0">
+                <!-- Cinema Director Recipe Button -->
+                <button type="button"
+                        @click="showDirectorPanel = !showDirectorPanel"
+                        class="px-4 py-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold transition flex items-center gap-2 shadow-sm cursor-pointer">
+                    <span>🎥</span>
+                    <span>Cinema Director &amp; Looks</span>
+                </button>
+
                 <!-- Add Scene Button -->
                 <button type="button" 
                         @click="showAddSceneModal = true" 
@@ -88,6 +96,122 @@
                 </form>
             </div>
         </div>
+    </div>
+
+    <!-- Cinema Director Controls & Saved Looks Deck -->
+    <div x-show="showDirectorPanel" x-collapse class="rounded-3xl bg-[#0c0e13] border border-amber-500/30 p-6 sm:p-8 space-y-6 shadow-2xl">
+        <div class="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-white/[0.08]">
+            <div>
+                <h2 class="text-lg font-heading font-black text-white flex items-center gap-2">
+                    <span>🎥</span>
+                    <span>Cinema Director Camera, Lens, Lighting &amp; Color Suite</span>
+                </h2>
+                <p class="text-xs text-slate-400">Configure Hollywood camera bodies, anamorphic lenses, apertures, 28 camera movements, and reusable Saved Looks.</p>
+            </div>
+            {% if saved_looks %}
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="text-[10px] font-mono uppercase text-amber-400 font-bold">Saved Looks:</span>
+                {% for look in saved_looks %}
+                <form action="{% url 'projects:apply_look' project.id look.id %}" method="POST" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="px-3 py-1 rounded-xl bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 text-xs font-semibold transition cursor-pointer">
+                        ✨ {{ look.name }}
+                    </button>
+                </form>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+        <form action="{% url 'projects:save_look' project.id %}" method="POST" class="space-y-4">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Genre Recipe (7)</label>
+                    <select name="genre" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        <option value="">— Custom Genre —</option>
+                        {% for g in cinema_catalog.genres %}
+                        <option value="{{ g.id }}" {% if project.director_settings.genre == g.id %}selected{% endif %}>{{ g.icon }} {{ g.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Film Era (5)</label>
+                    <select name="era" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        <option value="">— Any Era —</option>
+                        {% for e in cinema_catalog.eras %}
+                        <option value="{{ e.id }}" {% if project.director_settings.era == e.id %}selected{% endif %}>{{ e.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Camera Body (4)</label>
+                    <select name="camera_body" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        {% for b in cinema_catalog.camera_bodies %}
+                        <option value="{{ b.id }}" {% if project.director_settings.camera_body == b.id %}selected{% endif %}>{{ b.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Optics &amp; Lens (3)</label>
+                    <select name="lens" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        {% for l in cinema_catalog.lenses %}
+                        <option value="{{ l.id }}" {% if project.director_settings.lens == l.id %}selected{% endif %}>{{ l.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Aperture Stop (3)</label>
+                    <select name="aperture" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        {% for a in cinema_catalog.apertures %}
+                        <option value="{{ a.id }}" {% if project.director_settings.aperture == a.id %}selected{% endif %}>{{ a.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Camera Movement (28 Moves)</label>
+                    <select name="camera_movement" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        {% for group, moves in cinema_catalog.camera_movement_groups.items %}
+                        <optgroup label="{{ group }}">
+                            {% for m in moves %}
+                            <option value="{{ m }}" {% if project.director_settings.camera_movement == m %}selected{% endif %}>{{ m }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Color Palette Grade</label>
+                    <select name="color_palette" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        {% for cp in cinema_catalog.color_palettes %}
+                        <option value="{{ cp.id }}" {% if project.director_settings.color_palette == cp.id %}selected{% endif %}>{{ cp.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="space-y-1">
+                    <label class="text-[11px] font-bold uppercase text-slate-400">Lighting Setup (6)</label>
+                    <select name="lighting" class="w-full rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3 py-2.5">
+                        {% for lt in cinema_catalog.lighting_presets %}
+                        <option value="{{ lt.id }}" {% if project.director_settings.lighting == lt.id %}selected{% endif %}>{{ lt.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
+                <div class="flex flex-wrap items-center gap-3">
+                    <input type="text" name="look_name" placeholder="Optional: Save as Reusable Look (e.g. Neo-Noir 65mm)"
+                           class="rounded-xl bg-black/60 border border-white/10 text-xs text-white px-3.5 py-2 w-72 outline-none focus:border-amber-500">
+                    <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                        <input type="checkbox" name="apply_to_all_scenes" value="true" checked class="rounded border-white/20 bg-black text-amber-500">
+                        <span>Apply to all scenes in project</span>
+                    </label>
+                </div>
+                <button type="submit" class="fl-gradient-orange-btn text-white rounded-xl px-5 py-2 text-xs font-heading font-black uppercase tracking-wider cursor-pointer">
+                    Save &amp; Apply Director Recipe
+                </button>
+            </div>
+        </form>
     </div>
 
     <!-- Active Master Assembly Live Status -->

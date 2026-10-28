@@ -52,6 +52,37 @@ class ProfileViewTests(TestCase):
         self.assertEqual(len(code1), 6)
         self.assertTrue(code1.isupper())
 
+    def test_referral_redemption_awards_both_users(self):
+        referrer = User.objects.create_user(email='referrer@cleaverloop.ai', username='referrer', password='password123')
+        referrer_code = generate_user_referral_code(referrer)
+
+        self.client.login(email='essetech3@gmail.com', password='testpassword123')
+        resp = self.client.post(
+            reverse('accounts:redeem_referral'),
+            data={'code': referrer_code},
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        self.assertEqual(data['credits_added'], 1000)
+
+        self.wallet.refresh_from_db()
+        referrer_wallet = CreditService.get_or_create_wallet(referrer)
+        self.assertEqual(self.wallet.balance, 1500)  # 500 starter + 1000 referral
+        self.assertEqual(referrer_wallet.balance, 1500)
+
+        # Duplicate redemption should be blocked
+        resp_dup = self.client.post(reverse('accounts:redeem_referral'), data={'code': referrer_code})
+        self.assertEqual(resp_dup.status_code, 400)
+        self.assertFalse(resp_dup.json()['success'])
+
+    def test_self_referral_is_blocked(self):
+        own_code = generate_user_referral_code(self.user)
+        self.client.login(email='essetech3@gmail.com', password='testpassword123')
+        resp = self.client.post(reverse('accounts:redeem_referral'), data={'code': own_code})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn('own referral code', resp.json()['error'])
+
 class AuthViewTests(TestCase):
     def setUp(self):
         self.client = Client()

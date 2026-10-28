@@ -205,8 +205,111 @@
                     </span>
                     <div class="p-3 rounded-xl bg-black/50 border border-orange-500/20 text-xs text-slate-300 font-mono break-words leading-relaxed">
                         <span>{{ character.build_prompt_cue }}</span>
-                        <span x-show="currentPoseCue" class="text-amber-400 font-semibold" x-text="', Pose: ' + currentPoseCue"></span>
+                        <span x-show="currentPoseCue" class="text-amber-400 font-semibold" x-text="', ' + currentPoseCue"></span>
                     </div>
+                </div>
+
+                <!-- 4-Angle Turnaround Sheet & Expression Matrix -->
+                <div class="space-y-3 pt-3 border-t border-white/[0.06]">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <span class="text-cyan-400">📐</span>
+                            <span>4-Angle Turnaround Sheet & Expression Matrix</span>
+                        </span>
+                        <form method="post" action="{% url 'characters:generate_turnaround' character.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="px-2.5 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/30 text-[10px] font-mono font-bold text-cyan-300 transition">
+                                🔄 Lock 360° Sheet & Expressions
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {% for angle in character.get_turnaround_angles %}
+                        <button type="button"
+                                @click="currentPoseCue = '{{ angle.prompt_cue|escapejs }}'"
+                                class="p-2.5 rounded-xl bg-[#0b0d0f] hover:bg-cyan-500/10 border border-white/[0.08] hover:border-cyan-500/40 text-left transition space-y-1">
+                            <div class="flex items-center justify-between text-xs">
+                                <span>{{ angle.icon }}</span>
+                                <span class="text-[9px] font-mono text-cyan-400">360°</span>
+                            </div>
+                            <div class="text-[11px] font-bold text-white truncate">{{ angle.label }}</div>
+                        </button>
+                        {% endfor %}
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                        <span class="text-[10px] font-mono text-slate-400 mr-1">🎭 Expressions:</span>
+                        {% for exp in character.get_expressions %}
+                        <button type="button"
+                                @click="currentPoseCue = 'Expression: {{ exp.prompt_cue|escapejs }}'"
+                                class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-amber-500/15 border border-white/10 hover:border-amber-500/40 text-[11px] text-slate-300 hover:text-amber-200 transition flex items-center gap-1">
+                            <span>{{ exp.icon }}</span>
+                            <span>{{ exp.label }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Character Variants & Style Universes Section -->
+                <div class="space-y-3 pt-3 border-t border-white/[0.06]" x-data="{ showVariantForm: false }">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <span class="text-orange-400">🧬</span>
+                            <span>Wardrobe & Universe Variants (Same Locked Face DNA)</span>
+                        </span>
+                        <button type="button" @click="showVariantForm = !showVariantForm" class="px-2.5 py-1 rounded-lg bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-[10px] font-mono font-bold text-orange-300 transition">
+                            + Create Variant
+                        </button>
+                    </div>
+
+                    {% if character.parent_character %}
+                        <div class="text-[11px] text-slate-400 font-mono">
+                            Base Character: <a href="{% url 'characters:detail' character.parent_character.pk %}" class="text-orange-400 underline">{{ character.parent_character.name }}</a>
+                        </div>
+                    {% endif %}
+
+                    {% with variants=character.variants.all %}
+                    {% if variants %}
+                        <div class="flex flex-wrap gap-2">
+                            {% for v in variants %}
+                                <a href="{% url 'characters:detail' v.pk %}" class="px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-orange-500/15 border border-white/10 hover:border-orange-500/40 text-xs text-slate-200 flex items-center gap-2 transition">
+                                    <span>🎭</span>
+                                    <span>{{ v.variant_label|default:v.name }}</span>
+                                    <span class="text-[9px] font-mono text-orange-400 uppercase">{{ v.universe_style }}</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% endwith %}
+
+                    <!-- Collapsible Variant Creation Form -->
+                    <form x-show="showVariantForm" x-cloak method="post" action="{% url 'characters:create_variant' character.pk %}" class="p-3.5 rounded-2xl bg-[#0b0d0f] border border-orange-500/30 space-y-3">
+                        {% csrf_token %}
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="block text-[10px] font-mono text-slate-400 mb-1">Variant Label</label>
+                                <input type="text" name="variant_label" required placeholder="e.g. Tactical Armor, Gala Tuxedo, Cybernetic" class="w-full rounded-lg bg-black/60 border border-white/10 px-2.5 py-1.5 text-xs text-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-mono text-slate-400 mb-1">Style Universe Lock</label>
+                                <select name="universe_style" class="w-full rounded-lg bg-black/60 border border-white/10 px-2.5 py-1.5 text-xs text-white">
+                                    <option value="cinematic" {% if character.universe_style == 'cinematic' %}selected{% endif %}>Live-Action Cinematic</option>
+                                    <option value="3d_cgi" {% if character.universe_style == '3d_cgi' %}selected{% endif %}>3D CGI Feature</option>
+                                    <option value="anime" {% if character.universe_style == 'anime' %}selected{% endif %}>Anime Studio</option>
+                                    <option value="cyberpunk" {% if character.universe_style == 'cyberpunk' %}selected{% endif %}>Cyberpunk Sci-Fi</option>
+                                    <option value="claymation" {% if character.universe_style == 'claymation' %}selected{% endif %}>Stop-Motion Claymation</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-mono text-slate-400 mb-1">New Wardrobe / Outfit Cues</label>
+                            <input type="text" name="clothing_description" value="{{ character.clothing_description }}" class="w-full rounded-lg bg-black/60 border border-white/10 px-2.5 py-1.5 text-xs text-white">
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="submit" class="fl-gradient-orange-btn text-white rounded-lg px-4 py-1.5 text-xs font-bold">Forge Variant →</button>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Action Toolbar -->

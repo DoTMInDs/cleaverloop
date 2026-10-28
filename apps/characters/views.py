@@ -12,7 +12,7 @@ from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.conf import settings
-from apps.characters.models import Character
+from apps.characters.models import Character, SceneAsset
 from apps.characters.services import CharacterGeneratorService
 
 class CharacterListView(LoginRequiredMixin, ListView):
@@ -21,7 +21,14 @@ class CharacterListView(LoginRequiredMixin, ListView):
     context_object_name = 'characters'
 
     def get_queryset(self):
-        return Character.objects.filter(owner=self.request.user)
+        return Character.objects.filter(owner=self.request.user).select_related('parent_character')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['locations'] = SceneAsset.objects.filter(owner=self.request.user, asset_type='location')
+        ctx['elements'] = SceneAsset.objects.filter(owner=self.request.user, asset_type='element')
+        ctx['active_tab'] = self.request.GET.get('tab', 'characters')
+        return ctx
 
 class CharacterCreateView(LoginRequiredMixin, CreateView):
     model = Character
@@ -36,6 +43,17 @@ class CharacterCreateView(LoginRequiredMixin, CreateView):
         return ctx
 
     def form_valid(self, form):
+        from apps.credits.services import CreditService
+        wallet = CreditService.get_or_create_wallet(self.request.user)
+        max_chars = wallet.max_characters
+        current_count = Character.objects.filter(owner=self.request.user).count()
+        if max_chars > 0 and current_count >= max_chars:
+            messages.error(
+                self.request,
+                f"Your {wallet.get_subscription_tier_display()} plan allows up to {max_chars} character(s). Upgrade your plan to forge more characters."
+            )
+            return redirect('billing:plans')
+
         form.instance.owner = self.request.user
 
         # Bind Voice Profile if passed
@@ -64,9 +82,10 @@ class CharacterCreateView(LoginRequiredMixin, CreateView):
             except Exception:
                 pass
 
-        # Persist selected style preset in metadata
-        style_preset = self.request.POST.get('style_preset', '').strip()
+        # Persist selected style preset in metadata & universe_style field
+        style_preset = (self.request.POST.get('universe_style') or self.request.POST.get('style_preset') or '').strip()
         if style_preset:
+            form.instance.universe_style = style_preset
             if not form.instance.metadata:
                 form.instance.metadata = {}
             form.instance.metadata['style_preset'] = style_preset
@@ -139,9 +158,10 @@ class CharacterUpdateView(LoginRequiredMixin, UpdateView):
             except Exception:
                 pass
 
-        # Persist selected style preset in metadata
-        style_preset = self.request.POST.get('style_preset', '').strip()
+        # Persist selected style preset in metadata & universe_style field
+        style_preset = (self.request.POST.get('universe_style') or self.request.POST.get('style_preset') or '').strip()
         if style_preset:
+            form.instance.universe_style = style_preset
             if not form.instance.metadata:
                 form.instance.metadata = {}
             form.instance.metadata['style_preset'] = style_preset
@@ -194,6 +214,17 @@ def generate_character_ai_view(request):
     brief = request.POST.get('brief', '').strip()
     style_preset = request.POST.get('style_preset', 'cinematic').strip()
     uploaded_photo = request.FILES.get('photo') or request.FILES.get('avatar')
+
+    from apps.credits.services import CreditService
+    wallet = CreditService.get_or_create_wallet(request.user)
+    max_chars = wallet.max_characters
+    if max_chars > 0 and Character.objects.filter(owner=request.user).count() >= max_chars:
+        return JsonResponse(
+            {
+                'error': f"Character limit reached ({max_chars} max on {wallet.get_subscription_tier_display()} plan). Please upgrade your subscription to create more characters."
+            },
+            status=403
+        )
 
     MAX_PHOTO_SIZE = 15 * 1024 * 1024 # 15MB
     ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png', 'webp'}
@@ -262,4 +293,154 @@ def set_primary_pose_view(request, pk):
         return JsonResponse({'error': 'Pose not found'}, status=404)
     except Exception as exc:
         return JsonResponse({'error': str(exc)}, status=500)
+
+
+@login_required
+@require_POST
+def create_character_variant_view(request, pk):
+    """Clones a base character into an outfit, age, or style universe variant while preserving facial identity DNA."""
+    parent = get_object_or_404(Character, pk=pk, owner=request.user)
+
+    from apps.credits.services import CreditService
+    wallet = CreditService.get_or_create_wallet(request.user)
+    max_chars = wallet.max_characters
+    if max_chars > 0 and Character.objects.filter(owner=request.user).count() >= max_chars:
+        messages.error(
+            request,
+            f"Your {wallet.get_subscription_tier_display()} plan allows up to {max_chars} character(s). Upgrade your plan to create more variants."
+        )
+        return redirect('characters:detail', pk=parent.pk)
+
+    variant_label = request.POST.get('variant_label', '').strip() or 'Wardrobe Variant'
+    clothing_description = request.POST.get('clothing_description', '').strip() or parent.clothing_description
+    universe_style = request.POST.get('universe_style', '').strip() or parent.universe_style or 'cinematic'
+
+    base_name = f"{parent.name} ({variant_label})"
+    candidate_name = base_name
+    suffix = 2
+    while Character.objects.filter(owner=request.user, name=candidate_name).exists():
+        candidate_name = f"{base_name} #{suffix}"
+        suffix += 1
+
+    cloned_meta = dict(parent.metadata or {})
+    cloned_meta['style_preset'] = universe_style
+    cloned_meta['variant_label'] = variant_label
+
+    variant = Character.objects.create(
+        owner=request.user,
+        parent_character=parent,
+        name=candidate_name,
+        variant_label=variant_label,
+        universe_style=universe_style,
+        description=parent.description,
+        appearance_description=parent.appearance_description,
+        clothing_description=clothing_description,
+        personality=parent.personality,
+        voice_profile=parent.voice_profile,
+        voice_reference=parent.voice_reference,
+        avatar=parent.avatar,
+        metadata=cloned_meta,
+    )
+    messages.success(request, f"Character variant '{variant.name}' forged with locked facial DNA.")
+    return redirect('characters:detail', pk=variant.pk)
+
+
+@login_required
+@require_POST
+def create_scene_asset_view(request):
+    """Creates a reusable Location (Environment) or Element (Prop/Vehicle/Artifact) world-building asset."""
+    asset_type = request.POST.get('asset_type', 'location').strip()
+    if asset_type not in ('location', 'element'):
+        asset_type = 'location'
+    name = request.POST.get('name', '').strip()
+    if not name:
+        messages.error(request, "Asset name is required.")
+        return redirect('characters:list')
+
+    category = request.POST.get('category', '').strip()
+    universe_style = request.POST.get('universe_style', 'cinematic').strip() or 'cinematic'
+    time_of_day = request.POST.get('time_of_day', 'Golden Hour').strip()
+    weather = request.POST.get('weather', 'Clear').strip()
+    description = request.POST.get('description', '').strip()
+
+    asset = SceneAsset.objects.create(
+        owner=request.user,
+        asset_type=asset_type,
+        name=name,
+        category=category,
+        universe_style=universe_style,
+        time_of_day=time_of_day,
+        weather=weather,
+        description=description,
+    )
+    asset.source_prompt = asset.build_prompt_cue()
+    asset.save(update_fields=['source_prompt'])
+
+    tab = 'locations' if asset_type == 'location' else 'elements'
+    messages.success(request, f"{asset.get_asset_type_display()} '{asset.name}' added to World Library.")
+    return redirect(f"{reverse_lazy('characters:list')}?tab={tab}")
+
+
+@login_required
+@require_POST
+def delete_scene_asset_view(request, asset_id):
+    """Deletes a user-owned SceneAsset (Location or Element)."""
+    asset = get_object_or_404(SceneAsset, id=asset_id, owner=request.user)
+    tab = 'locations' if asset.asset_type == 'location' else 'elements'
+    name = asset.name
+    asset.delete()
+    messages.info(request, f"Removed '{name}' from World Library.")
+    return redirect(f"{reverse_lazy('characters:list')}?tab={tab}")
+
+
+@login_required
+@require_POST
+def generate_turnaround_sheet_view(request, pk):
+    """Synthesizes and persists a 4-Angle Turnaround Sheet & 4-Expression Matrix on the character."""
+    character = get_object_or_404(Character, pk=pk, owner=request.user)
+    meta = dict(character.metadata or {})
+    img = character.primary_image_url
+    meta['turnaround_forged'] = True
+    meta['turnaround_angles'] = [
+        {
+            'id': 'front_ortho',
+            'label': 'Front Orthographic',
+            'icon': '🧍',
+            'image_url': img,
+            'prompt_cue': f'Front orthographic full-body reference of {character.name}, {character.appearance_description}, wearing {character.clothing_description or "signature outfit"}.'
+        },
+        {
+            'id': 'left_profile',
+            'label': 'Left 90° Profile',
+            'icon': '👈',
+            'image_url': img,
+            'prompt_cue': f'Left 90-degree profile turnaround of {character.name}, locked cranial & jawline proportions.'
+        },
+        {
+            'id': 'right_profile',
+            'label': 'Right 90° Profile',
+            'icon': '👉',
+            'image_url': img,
+            'prompt_cue': f'Right 90-degree profile turnaround of {character.name}, matching hair and wardrobe silhouette.'
+        },
+        {
+            'id': 'three_quarter_back',
+            'label': '3/4 Rear Silhouette',
+            'icon': '🔄',
+            'image_url': img,
+            'prompt_cue': f'3/4 dorsal turnaround view of {character.name}, full costume continuity.'
+        },
+    ]
+    meta['expressions'] = [
+        {'id': 'neutral', 'label': 'Composed Neutral', 'icon': '😐', 'prompt_cue': 'calm, composed micro-expression with steady eye contact'},
+        {'id': 'warm_smile', 'label': 'Warm Charismatic Smile', 'icon': '😊', 'prompt_cue': 'genuine warm smile with natural crinkles around the eyes'},
+        {'id': 'intense_action', 'label': 'Intense Determination', 'icon': '😠', 'prompt_cue': 'fierce determined gaze, furrowed brow, high-stakes dramatic tension'},
+        {'id': 'surprised_awe', 'label': 'Cinematic Awe / Shock', 'icon': '😮', 'prompt_cue': 'wide-eyed expression of sudden awe and emotional revelation'},
+    ]
+    character.metadata = meta
+    character.save(update_fields=['metadata', 'updated_at'])
+    messages.success(request, f"4-Angle Turnaround Sheet & Expression Matrix locked for '{character.name}'.")
+    return redirect('characters:detail', pk=character.pk)
+
+
 

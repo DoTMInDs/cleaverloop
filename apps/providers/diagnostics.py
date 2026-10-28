@@ -200,10 +200,10 @@ class ProviderHealthChecker:
                 )
                 if resp.status_code in (200, 400):
                     data = resp.json()
-                    if data.get("code") in (0, 1201):
-                        info["status"] = "unfunded"
-                        info["status_label"] = "Needs Points Recharge"
-                        info["details"] = "API key authenticated. Recent generation reported code 1102 (Points balance empty). Recharge points on Kling Console."
+                    if data.get("code") in (0, 1200, 1201):
+                        info["status"] = "operational"
+                        info["status_label"] = "Operational"
+                        info["details"] = "Kling API key authenticated and video endpoint reachable."
                     elif data.get("code") == 1102:
                         info["status"] = "unfunded"
                         info["status_label"] = "Balance Empty (1102)"
@@ -212,6 +212,10 @@ class ProviderHealthChecker:
                         info["status"] = "error"
                         info["status_label"] = f"Code {data.get('code')}"
                         info["details"] = data.get("message", "")
+                elif resp.status_code == 402:
+                    info["status"] = "unfunded"
+                    info["status_label"] = "Needs Points Recharge"
+                    info["details"] = "Kling account requires points recharge."
                 elif resp.status_code == 401:
                     info["status"] = "error"
                     info["status_label"] = "Invalid Key (401)"
@@ -254,9 +258,20 @@ class ProviderHealthChecker:
                     headers={"Authorization": f"Bearer {key}"}
                 )
                 if resp.status_code == 200:
+                    data = resp.json() if resp.content else {}
+                    base_code = (data.get("base_resp") or {}).get("status_code")
+                    if base_code == 1008:
+                        info["status"] = "unfunded"
+                        info["status_label"] = "Needs Balance Top-Up"
+                        info["details"] = "MiniMax returned insufficient balance (code 1008). Top up on MiniMax portal."
+                    else:
+                        info["status"] = "operational"
+                        info["status_label"] = "Operational"
+                        info["details"] = "MiniMax API key authenticated and video endpoint operational."
+                elif resp.status_code == 402:
                     info["status"] = "unfunded"
                     info["status_label"] = "Needs Balance Top-Up"
-                    info["details"] = "API key authenticated. Recent submission returned insufficient balance (code 1008). Top up on MiniMax portal."
+                    info["details"] = "MiniMax account requires balance top-up."
                 elif resp.status_code == 401:
                     info["status"] = "error"
                     info["status_label"] = "Invalid Key"
@@ -299,9 +314,13 @@ class ProviderHealthChecker:
                     headers={"Authorization": f"Bearer {key}"}
                 )
                 if resp.status_code == 200:
+                    info["status"] = "operational"
+                    info["status_label"] = "Operational"
+                    info["details"] = "OpenAI API key authenticated and models endpoint operational."
+                elif resp.status_code in (402, 429):
                     info["status"] = "unfunded"
                     info["status_label"] = "Credit Balance Exhausted"
-                    info["details"] = "Key authenticated. Organization has 0 remaining credits. Add credits at platform.openai.com."
+                    info["details"] = "Organization quota or credit balance exhausted. Add credits at platform.openai.com."
                 elif resp.status_code == 401:
                     info["status"] = "error"
                     info["status_label"] = "Invalid Key (401)"

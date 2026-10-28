@@ -411,7 +411,7 @@
                                     {{ tx.created_at|date:"M d, Y H:i" }}
                                 </td>
                                 <td class="py-3 px-4 whitespace-nowrap">
-                                    {% if tx.transaction_type == 'bonus' or tx.transaction_type == 'subscription' or tx.transaction_type == 'topup' %}
+                                    {% if tx.transaction_type == 'bonus' or tx.transaction_type == 'subscription_credit' or tx.transaction_type == 'purchase' or tx.transaction_type == 'subscription' or tx.transaction_type == 'topup' %}
                                         <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                                             {{ tx.get_transaction_type_display }}
                                         </span>

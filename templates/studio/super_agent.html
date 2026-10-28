@@ -8,6 +8,7 @@
     promptText: '',
     aspectRatio: '16:9',
     characterId: '',
+    skillPreset: 'general',
     isSynthesizing: false,
     
     presets: [
@@ -129,6 +130,7 @@
         {% csrf_token %}
         <input type="hidden" name="aspect_ratio" :value="aspectRatio">
         <input type="hidden" name="character_id" :value="characterId">
+        <input type="hidden" name="skill_preset" :value="skillPreset">
 
         <!-- Responsive 12-Column Full-Width Studio Layout -->
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 xl:gap-8 items-start w-full">
@@ -160,6 +162,28 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- Agent Skill Presets Selector -->
+                    {% if agent_skills %}
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between text-[11px] font-semibold text-slate-400">
+                            <span>🧠 Select Specialized Agent Director Skill:</span>
+                            <span class="text-[10px] font-mono text-orange-400" x-text="'@' + skillPreset"></span>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            {% for skill in agent_skills %}
+                            <button type="button"
+                                    @click="skillPreset = '{{ skill.slug }}'; aspectRatio = '{{ skill.default_aspect_ratio }}'"
+                                    :class="skillPreset === '{{ skill.slug }}' ? 'bg-orange-500/20 border-orange-500 text-white ring-1 ring-orange-500/40' : 'bg-white/[0.03] border-white/[0.08] text-slate-300 hover:border-white/20'"
+                                    class="px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5"
+                                    title="{{ skill.description }}">
+                                <span>{{ skill.icon }}</span>
+                                <span>{{ skill.name }}</span>
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
 
                     <!-- Storyboard Idea Presets -->
                     <div class="space-y-2">
@@ -411,6 +435,102 @@
 
     <!-- Target Container for Agent Plan Card (HTMX Target) -->
     <div id="agent-plan-result" class="empty:hidden"></div>
+
+    <!-- ===================================================
+         PAST AGENT CONVERSATION THREADS & SAVED STORYBOARDS
+         =================================================== -->
+    {% if conversations %}
+    <div class="space-y-4 pt-6 border-t border-white/[0.08]">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-orange-400 animate-pulse"></span>
+                <h3 class="text-base font-heading font-bold text-white flex items-center gap-2">
+                    <span>Saved Agent Conversation Threads</span>
+                    <span class="px-2 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.08] text-[10px] text-orange-400 font-mono">{{ conversations|length }} saved</span>
+                </h3>
+            </div>
+            <span class="text-xs text-slate-400 font-mono">Click any thread to resume & edit storyboard</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {% for conv in conversations %}
+                <div class="rounded-2xl bg-[#0e1013] border border-white/[0.08] hover:border-orange-500/40 p-4 flex flex-col justify-between gap-3 transition group">
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between text-[10px] font-mono">
+                            <span class="px-2 py-0.5 rounded bg-orange-500/15 border border-orange-500/30 text-orange-300 font-bold uppercase">
+                                @{{ conv.skill_preset }}
+                            </span>
+                            <span class="px-2 py-0.5 rounded {% if conv.status == 'executed' %}bg-emerald-500/15 text-emerald-300 border border-emerald-500/30{% else %}bg-amber-500/15 text-amber-300 border border-amber-500/30{% endif %}">
+                                {{ conv.status|upper }}
+                            </span>
+                        </div>
+                        <h4 class="text-xs font-bold text-white group-hover:text-orange-300 transition truncate">{{ conv.title }}</h4>
+                        <p class="text-[10px] text-slate-500 font-mono">{{ conv.aspect_ratio }} • {{ conv.updated_at|timesince }} ago</p>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 pt-2 border-t border-white/[0.05]">
+                        <button type="button"
+                                hx-get="{% url 'agent:conversation_detail' conv.id %}"
+                                hx-target="#agent-plan-result"
+                                hx-swap="innerHTML"
+                                @click="document.getElementById('agent-plan-result')?.scrollIntoView({ behavior: 'smooth', block: 'start' })"
+                                class="text-[11px] font-bold text-orange-400 hover:text-orange-300 transition cursor-pointer flex items-center gap-1">
+                            <span>📂 Reload Plan</span>
+                        </button>
+                        {% if conv.project %}
+                            <a href="{% url 'projects:detail' conv.project.id %}"
+                               class="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition">
+                                Open Film →
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- ===================================================
+         ONE-TAP VIRAL VIDEO EFFECTS STUDIO
+         =================================================== -->
+    {% if viral_effects %}
+    <div class="space-y-4 pt-6 border-t border-white/[0.08]">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="inline-flex items-center gap-1.5 text-[11px] font-mono text-orange-400 uppercase font-bold">
+                    <span>⚡</span>
+                    <span>One-Tap Viral VFX Schemas</span>
+                </div>
+                <h3 class="text-lg font-heading font-black text-white">Instant Viral Video Effects</h3>
+            </div>
+            <span class="text-xs text-slate-400 font-mono">{{ viral_effects|length }} Ready-to-Render VFX</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for fx in viral_effects %}
+            <form method="post" action="{% url 'agent:apply_effect' fx.slug %}" class="fl-composer-card rounded-2xl p-4 border border-white/10 hover:border-orange-500/40 transition flex flex-col justify-between space-y-3">
+                {% csrf_token %}
+                <input type="hidden" name="character_id" :value="characterId">
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="px-2 py-0.5 rounded-md bg-orange-500/15 border border-orange-500/30 text-[10px] font-mono font-bold text-orange-300">
+                            {{ fx.icon }} {{ fx.category }}
+                        </span>
+                        <span class="text-[10px] font-mono text-slate-400">{{ fx.aspect_ratio }} · {{ fx.duration }}s</span>
+                    </div>
+                    <h4 class="text-sm font-heading font-bold text-white">{{ fx.name }}</h4>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">{{ fx.description }}</p>
+                </div>
+                <div class="flex items-center gap-2 pt-2 border-t border-white/[0.06]">
+                    <input type="text" name="subject" placeholder="Subject (e.g. a golden cyber sneaker)" class="flex-1 rounded-xl bg-black/50 border border-white/10 px-3 py-1.5 text-xs text-white placeholder-slate-500">
+                    <button type="submit" class="fl-gradient-orange-btn text-white rounded-xl px-3.5 py-1.5 text-xs font-bold shrink-0">
+                        Launch →
+                    </button>
+                </div>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
 
     <!-- ===================================================
          RECENT STORYBOARD PROJECTS FEED

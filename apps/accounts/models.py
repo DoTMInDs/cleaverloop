@@ -46,3 +46,30 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class ReferralRedemption(models.Model):
+    """Tracks referral code redemptions and bonus credit awards between creators."""
+    referrer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='referrals_made',
+        help_text='The user whose referral code was redeemed.'
+    )
+    referee = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='referral_redeemed',
+        help_text='The user who redeemed the referral code (one per account).'
+    )
+    code_used = models.CharField(max_length=16, db_index=True)
+    credits_awarded = models.PositiveIntegerField(default=1000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Referral Redemption')
+        verbose_name_plural = _('Referral Redemptions')
+
+    def __str__(self):
+        return f"{self.referee.email} redeemed {self.code_used} from {self.referrer.email}"

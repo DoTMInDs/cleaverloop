@@ -57,6 +57,8 @@ services:
           type: redis
           name: cleaverloop-redis
           property: connectionString
+      - key: STORAGE_BACKEND
+        value: s3
 
   # -------------------------------------------------------------
   # 3. CleaverLoop AI Celery Beat (Periodic Tasks / Health Poller)
@@ -86,6 +88,8 @@ services:
           type: redis
           name: cleaverloop-redis
           property: connectionString
+      - key: STORAGE_BACKEND
+        value: s3
 
 # -------------------------------------------------------------
 # Databases & Key-Value Stores

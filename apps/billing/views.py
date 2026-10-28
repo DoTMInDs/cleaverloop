@@ -73,16 +73,21 @@ class InitializeCheckoutView(LoginRequiredMixin, View):
             return redirect('billing:portal')
 
         callback_url = request.build_absolute_uri(reverse('billing:callback'))
-        # Include plan_id in callback for fallback resolution
+        billing_cycle = request.POST.get('billing_cycle', 'monthly').strip().lower()
+        if billing_cycle not in ('monthly', 'annual'):
+            billing_cycle = 'monthly'
+
+        # Include plan_id and billing_cycle in callback for fallback resolution
         if '?' in callback_url:
-            callback_url += f"&plan_id={plan.id}"
+            callback_url += f"&plan_id={plan.id}&billing_cycle={billing_cycle}"
         else:
-            callback_url += f"?plan_id={plan.id}"
+            callback_url += f"?plan_id={plan.id}&billing_cycle={billing_cycle}"
 
         res = PaystackService.initialize_transaction(
             user=request.user,
             plan=plan,
-            callback_url=callback_url
+            callback_url=callback_url,
+            billing_cycle=billing_cycle
         )
 
         if res.get('status') and res.get('data', {}).get('authorization_url'):
@@ -206,15 +211,17 @@ class PaymentCallbackView(LoginRequiredMixin, View):
             plan = SubscriptionPlan.objects.filter(slug='creator').first() or SubscriptionPlan.objects.filter(price_monthly__gt=0).first()
 
         # In live mode, ensure the verified transaction amount matches or exceeds plan price
+        billing_cycle = str(metadata.get('billing_cycle') or request.GET.get('billing_cycle') or 'monthly').lower()
         if not PaystackService.is_mock_mode() and plan and plan.price_monthly > 0:
             paid_amount = v_data.get('amount')
             from django.conf import settings
             currency = getattr(settings, 'PAYSTACK_CURRENCY', 'GHS')
+            expected_usd = PaystackService.get_effective_usd_price(plan, billing_cycle)
             if currency.upper() == 'GHS':
-                expected_ghs, _ = CurrencyService.convert_usd_to_ghs(plan.price_monthly)
+                expected_ghs, _ = CurrencyService.convert_usd_to_ghs(expected_usd)
                 expected_amount = int(round(expected_ghs * 100))
             else:
-                expected_amount = int(plan.price_monthly * 100)
+                expected_amount = int(expected_usd * 100)
 
             # Allow 5% tolerance for minor exchange rate variations or plan-matched pricing
             if paid_amount is not None and paid_amount < (expected_amount * 0.95):
@@ -233,7 +240,8 @@ class PaymentCallbackView(LoginRequiredMixin, View):
             reference=reference,
             customer_code=v_data.get('customer', {}).get('customer_code', ''),
             external_subscription_id=v_data.get('plan', '') or v_data.get('subscription_code', ''),
-            grant_monthly_credits=True
+            grant_monthly_credits=True,
+            billing_cycle=billing_cycle
         )
         messages.success(
             request,

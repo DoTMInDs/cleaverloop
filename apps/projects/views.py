@@ -12,7 +12,8 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_POST
 from django.contrib.auth.decorators import login_required
 
-from apps.projects.models import Project, Scene
+from apps.projects.models import Project, Scene, CinemaLook
+from apps.projects.cinema_recipes import get_cinema_catalog, build_director_prompt_modifier
 from apps.media.models import Media
 from apps.generations.models import Generation
 from apps.providers.router import ModelRouter
@@ -28,7 +29,29 @@ class ProjectListView(LoginRequiredMixin, ListView):
     context_object_name = 'projects'
 
     def get_queryset(self):
-        return Project.objects.filter(owner=self.request.user)
+        qs = Project.objects.filter(owner=self.request.user)
+        tab = self.request.GET.get('tab', 'all')
+        if tab == 'favorites':
+            qs = qs.filter(is_favorite=True, is_trashed=False)
+        elif tab == 'trash':
+            qs = qs.filter(is_trashed=True)
+        else:
+            qs = qs.filter(is_trashed=False)
+
+        q = self.request.GET.get('q', '').strip()
+        if q:
+            qs = qs.filter(name__icontains=q)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        base_qs = Project.objects.filter(owner=self.request.user)
+        ctx['active_tab'] = self.request.GET.get('tab', 'all')
+        ctx['search_query'] = self.request.GET.get('q', '').strip()
+        ctx['all_count'] = base_qs.filter(is_trashed=False).count()
+        ctx['favorites_count'] = base_qs.filter(is_favorite=True, is_trashed=False).count()
+        ctx['trash_count'] = base_qs.filter(is_trashed=True).count()
+        return ctx
 
 class ProjectCreateView(LoginRequiredMixin, CreateView):
     model = Project
@@ -66,6 +89,8 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx['scenes'] = self.object.scenes.select_related('generated_media').prefetch_related('characters').all()
+        ctx['cinema_catalog'] = get_cinema_catalog()
+        ctx['saved_looks'] = CinemaLook.objects.filter(owner=self.request.user)
         if self.object.status == 'rendering':
             ctx['active_assembly_job'] = AssemblyJob.objects.filter(
                 project=self.object,
@@ -124,6 +149,14 @@ def generate_scene_view(request, scene_id):
     if not is_allowed:
         return HttpResponse(f"<div class='text-rose-400 p-2 text-xs'>{msg}</div>", status=400)
 
+    merged_recipe = {}
+    if project.director_settings:
+        merged_recipe.update(project.director_settings)
+    if scene.director_recipe:
+        merged_recipe.update(scene.director_recipe)
+    director_cue = build_director_prompt_modifier(merged_recipe)
+    effective_prompt = f"{scene.prompt}. {director_cue}" if director_cue else scene.prompt
+
     generation = Generation.objects.create(
         user=request.user,
         project=project,
@@ -132,9 +165,10 @@ def generate_scene_view(request, scene_id):
         provider=model.provider,
         model=model,
         model_id_snapshot=model.model_id,
-        prompt=scene.prompt,
+        prompt=effective_prompt,
         duration=scene.duration,
         aspect_ratio=project.aspect_ratio,
+        quality='standard' if scene.is_draft else 'hd',
         status='queued'
     )
 
@@ -218,6 +252,17 @@ def add_scene_view(request, project_id):
     camera_direction = request.POST.get('camera_direction', '').strip()
     visual_style = request.POST.get('visual_style', '').strip()
     dialogue = request.POST.get('dialogue', '').strip()
+    is_draft = request.POST.get('is_draft', 'true').lower() not in ('false', '0', 'no')
+
+    director_recipe = {}
+    for key in ('genre', 'era', 'camera_body', 'lens', 'aperture', 'camera_movement', 'color_palette', 'lighting'):
+        val = request.POST.get(key, '').strip()
+        if val:
+            director_recipe[key] = val
+    if not camera_direction and director_recipe.get('camera_movement'):
+        camera_direction = director_recipe['camera_movement']
+    if not visual_style and director_recipe.get('color_palette'):
+        visual_style = director_recipe['color_palette']
 
     Scene.objects.create(
         project=project,
@@ -227,6 +272,9 @@ def add_scene_view(request, project_id):
         camera_direction=camera_direction,
         visual_style=visual_style,
         dialogue=dialogue,
+        is_draft=is_draft,
+        resolution='480p' if is_draft else '1080p',
+        director_recipe=director_recipe or (project.director_settings or {}),
         duration=max(1, min(duration, 10))
     )
     messages.success(request, f"Added Scene {next_order} to {project.name}.")
@@ -467,4 +515,102 @@ def batch_upload_scenes_view(request, project_id):
         messages.error(request, "Could not upload files. Ensure they are valid video files (MP4, MOV, WebM, AVI).")
 
     return redirect('projects:detail', pk=project.pk)
+
+
+@login_required
+@require_POST
+def toggle_project_favorite_view(request, pk):
+    """Toggle favorite star status on a project."""
+    project = get_object_or_404(Project, pk=pk, owner=request.user)
+    project.is_favorite = not project.is_favorite
+    project.save(update_fields=['is_favorite', 'updated_at'])
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+        return JsonResponse({'success': True, 'is_favorite': project.is_favorite})
+    return redirect(request.META.get('HTTP_REFERER') or reverse('projects:list'))
+
+
+@login_required
+@require_POST
+def toggle_project_trash_view(request, pk):
+    """Move a project to trash or restore it from trash."""
+    project = get_object_or_404(Project, pk=pk, owner=request.user)
+    project.is_trashed = not project.is_trashed
+    project.save(update_fields=['is_trashed', 'updated_at'])
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+        return JsonResponse({'success': True, 'is_trashed': project.is_trashed})
+    messages.info(request, f"Project '{project.name}' {'moved to Trash' if project.is_trashed else 'restored from Trash'}.")
+    return redirect(request.META.get('HTTP_REFERER') or reverse('projects:list'))
+
+
+@login_required
+@require_POST
+def save_cinema_look_view(request, project_id):
+    """Save Cinema Director camera, lens, lighting, and color recipe to the project and optionally as a reusable Look."""
+    project = get_object_or_404(Project, id=project_id, owner=request.user)
+    recipe = {}
+    for key in ('genre', 'era', 'camera_body', 'lens', 'aperture', 'camera_movement', 'color_palette', 'lighting'):
+        val = request.POST.get(key, '').strip()
+        if val:
+            recipe[key] = val
+
+    project.director_settings = recipe
+    project.save(update_fields=['director_settings', 'updated_at'])
+
+    look_name = request.POST.get('look_name', '').strip()
+    saved_look = None
+    if look_name and recipe:
+        saved_look = CinemaLook.objects.create(
+            owner=request.user,
+            name=look_name,
+            recipe=recipe,
+        )
+
+    if request.POST.get('apply_to_all_scenes') in ('1', 'true', 'on'):
+        for sc in project.scenes.all():
+            sc.director_recipe = recipe
+            if recipe.get('camera_movement'):
+                sc.camera_direction = recipe['camera_movement']
+            if recipe.get('color_palette'):
+                sc.visual_style = recipe['color_palette']
+            sc.save(update_fields=['director_recipe', 'camera_direction', 'visual_style', 'updated_at'])
+
+    if request.headers.get('x-requested-with') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+        return JsonResponse({
+            'success': True,
+            'recipe': recipe,
+            'look_id': str(saved_look.id) if saved_look else None,
+            'prompt_modifier': build_director_prompt_modifier(recipe),
+        })
+
+    messages.success(request, f"Cinema Director recipe {'and saved look ' + repr(look_name) + ' ' if saved_look else ''}applied to '{project.name}'.")
+    return redirect('projects:detail', pk=project.pk)
+
+
+@login_required
+@require_POST
+def apply_cinema_look_view(request, project_id, look_id):
+    """Apply a previously saved CinemaLook preset to a project and its scenes."""
+    project = get_object_or_404(Project, id=project_id, owner=request.user)
+    look = get_object_or_404(CinemaLook, id=look_id, owner=request.user)
+    project.director_settings = look.recipe
+    project.save(update_fields=['director_settings', 'updated_at'])
+
+    for sc in project.scenes.all():
+        sc.director_recipe = look.recipe
+        sc.save(update_fields=['director_recipe', 'updated_at'])
+
+    messages.success(request, f"Applied saved look '{look.name}' across '{project.name}'.")
+    return redirect('projects:detail', pk=project.pk)
+
+
+@login_required
+@require_POST
+def finalize_scene_take_view(request, scene_id):
+    """Promote a 480p draft scene take to 1080p finalized master resolution and trigger HD render."""
+    scene = get_object_or_404(Scene, id=scene_id, project__owner=request.user)
+    scene.is_draft = False
+    scene.resolution = '1080p'
+    scene.save(update_fields=['is_draft', 'resolution', 'updated_at'])
+    return generate_scene_view(request, scene_id)
+
 

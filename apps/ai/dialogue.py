@@ -89,7 +89,7 @@ class AIDialogueDirector:
             "generationConfig": {"responseMimeType": "application/json"}
         }
 
-        models_to_try = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-flash-latest"]
+        models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"]
         for model in models_to_try:
             endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
             try:

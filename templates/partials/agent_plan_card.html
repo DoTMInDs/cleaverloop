@@ -1,36 +1,60 @@
-<div class="rounded-3xl bg-[#0f1114] border border-orange-500/40 p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden animate-fadeIn">
+<div class="rounded-3xl bg-[#0f1114] border border-orange-500/40 p-6 sm:p-8 space-y-6 shadow-2xl relative overflow-hidden animate-fadeIn"
+     x-data="{
+        editMode: false,
+        planData: {{ plan_json }},
+        recalculateTotals() {
+            if (!this.planData || !this.planData.scenes) return;
+            let totalDur = 0;
+            this.planData.scenes.forEach(s => {
+                totalDur += parseInt(s.duration || 5, 10);
+            });
+            this.planData.estimated_total_duration = totalDur;
+        }
+     }">
     <!-- Top Ambient Flare -->
     <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent"></div>
 
     <!-- Executive Storyboard Summary Header -->
     <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 pb-6 border-b border-white/[0.08]">
-        <div class="space-y-2">
+        <div class="space-y-2 flex-1 min-w-0">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center gap-1.5 shadow-sm">
                     <span>✨</span>
                     <span>Synthesized Storyboard Plan</span>
                 </span>
-                <span class="px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] text-xs font-mono text-slate-300">
+                <span class="px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] text-xs font-mono text-slate-300" x-text="planData.aspect_ratio">
                     {{ plan.aspect_ratio }}
                 </span>
                 <span class="px-2 py-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] text-xs font-mono text-orange-300">
                     {{ plan.scenes|length }} Sequential Scenes
                 </span>
+                <button type="button" @click="editMode = !editMode"
+                        :class="editMode ? 'bg-orange-500 text-white border-orange-400' : 'bg-white/[0.06] text-orange-300 border-orange-500/30 hover:bg-orange-500/20'"
+                        class="px-2.5 py-0.5 rounded-lg border text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1">
+                    <span>✏️</span>
+                    <span x-text="editMode ? 'Done Editing Scenes' : 'Edit Scene Prompts & Timing'"></span>
+                </button>
             </div>
-            <h2 class="text-2xl sm:text-3xl font-heading font-black text-white tracking-tight">{{ plan.project_title }}</h2>
-            <p class="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">{{ plan.project_description }}</p>
+            <template x-if="!editMode">
+                <h2 class="text-2xl sm:text-3xl font-heading font-black text-white tracking-tight" x-text="planData.project_title">{{ plan.project_title }}</h2>
+            </template>
+            <template x-if="editMode">
+                <input type="text" x-model="planData.project_title"
+                       class="w-full max-w-xl px-3 py-1.5 rounded-xl bg-black/60 border border-orange-500/40 text-lg font-heading font-bold text-white focus:outline-none">
+            </template>
+            <p class="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed" x-text="planData.project_description">{{ plan.project_description }}</p>
         </div>
 
         <!-- Metric Counter Badges -->
         <div class="flex items-center gap-3 bg-[#141619] px-4 py-3 rounded-2xl border border-white/[0.08] shrink-0 shadow-inner">
             <div class="text-center px-2">
                 <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Estimated Cost</span>
-                <span class="text-base sm:text-lg font-extrabold text-orange-400 font-mono">{{ plan.estimated_total_credits }} cr</span>
+                <span class="text-base sm:text-lg font-extrabold text-orange-400 font-mono" x-text="planData.estimated_total_credits + ' cr'">{{ plan.estimated_total_credits }} cr</span>
             </div>
             <div class="h-8 w-px bg-white/10"></div>
             <div class="text-center px-2">
                 <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total Runtime</span>
-                <span class="text-base sm:text-lg font-extrabold text-white font-mono">{{ plan.estimated_total_duration }}s</span>
+                <span class="text-base sm:text-lg font-extrabold text-white font-mono" x-text="planData.estimated_total_duration + 's'">{{ plan.estimated_total_duration }}s</span>
             </div>
         </div>
     </div>
@@ -86,75 +110,146 @@
         </div>
         
         <div class="grid grid-cols-1 gap-3.5">
-            {% for s in plan.scenes %}
+            <template x-for="(s, idx) in planData.scenes" :key="s.order">
                 <div class="p-4 sm:p-5 rounded-2xl bg-[#131518]/90 border border-white/[0.06] hover:border-orange-500/40 transition-all duration-200 flex flex-col md:flex-row gap-4 items-start justify-between group shadow-sm">
-                    <div class="flex items-start gap-3.5 flex-1 min-w-0">
+                    <div class="flex items-start gap-3.5 flex-1 min-w-0 w-full">
                         <!-- Step Badge -->
-                        <div class="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-mono font-bold text-xs flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-orange-500/25 transition">
-                            0{{ s.order }}
+                        <div class="w-8 h-8 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-400 font-mono font-bold text-xs flex items-center justify-center shrink-0 group-hover:scale-105 group-hover:bg-orange-500/25 transition"
+                             x-text="'0' + s.order">
                         </div>
 
-                        <!-- Scene Details -->
-                        <div class="space-y-2 min-w-0 flex-1">
+                        <!-- Scene Details (Read Mode vs Inline Edit Mode) -->
+                        <div class="space-y-2 min-w-0 flex-1 w-full">
                             <div class="flex flex-wrap items-center gap-2">
-                                <h4 class="text-sm font-bold text-white group-hover:text-orange-300 transition">{{ s.title }}</h4>
-                                <span class="px-2 py-0.5 rounded bg-white/[0.06] text-slate-300 font-mono text-[10px]">{{ s.duration }}s</span>
-                                {% if s.character_name %}
+                                <template x-if="!editMode">
+                                    <h4 class="text-sm font-bold text-white group-hover:text-orange-300 transition" x-text="s.title"></h4>
+                                </template>
+                                <template x-if="editMode">
+                                    <input type="text" x-model="s.title"
+                                           class="px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 text-xs font-bold text-white focus:border-orange-500 focus:outline-none">
+                                </template>
+                                <span class="px-2 py-0.5 rounded bg-white/[0.06] text-slate-300 font-mono text-[10px]" x-text="s.duration + 's'"></span>
+                                <template x-if="s.character_name">
                                     <span class="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-amber-300 font-mono text-[10px] flex items-center gap-1">
                                         <span>👤</span>
-                                        <span>{{ s.character_name }}</span>
+                                        <span x-text="s.character_name"></span>
                                     </span>
-                                {% endif %}
+                                </template>
                             </div>
 
-                            <p class="text-xs text-slate-300 leading-relaxed">{{ s.prompt }}</p>
-
-                            {% if s.character_action %}
-                                <div class="px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] text-[11px] text-amber-200/90 flex items-center gap-1.5">
-                                    <span class="text-amber-400 font-bold">⚡ Character Action:</span>
-                                    <span>{{ s.character_action }}</span>
+                            <template x-if="!editMode">
+                                <p class="text-xs text-slate-300 leading-relaxed" x-text="s.prompt"></p>
+                            </template>
+                            <template x-if="editMode">
+                                <div class="space-y-2 pt-1">
+                                    <textarea rows="2" x-model="s.prompt"
+                                              class="w-full px-3 py-2 rounded-xl bg-black/60 border border-white/15 text-xs text-white focus:border-orange-500 focus:outline-none"
+                                              placeholder="Scene visual prompt..."></textarea>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <div>
+                                            <label class="text-[9px] font-mono text-slate-400 uppercase block">Duration (s)</label>
+                                            <select x-model.number="s.duration" @change="recalculateTotals()"
+                                                    class="w-full px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 text-xs text-white">
+                                                <option :value="5">5s Shot</option>
+                                                <option :value="8">8s Shot</option>
+                                                <option :value="10">10s Shot</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-mono text-slate-400 uppercase block">Camera Direction</label>
+                                            <input type="text" x-model="s.camera_direction"
+                                                   class="w-full px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 text-xs text-cyan-300"
+                                                   placeholder="e.g. Slow dolly in">
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-mono text-slate-400 uppercase block">Spoken Dialogue</label>
+                                            <input type="text" x-model="s.dialogue"
+                                                   class="w-full px-2.5 py-1 rounded-lg bg-black/60 border border-white/15 text-xs text-amber-300"
+                                                   placeholder="Optional spoken line">
+                                        </div>
+                                    </div>
                                 </div>
-                            {% endif %}
+                            </template>
 
                             <!-- Director Notes Tags -->
-                            {% if s.camera_direction or s.visual_style or s.dialogue %}
-                                <div class="flex flex-wrap gap-2 pt-1 text-[10px]">
-                                    {% if s.camera_direction %}
-                                        <span class="px-2 py-0.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 flex items-center gap-1 font-mono">
-                                            <span>📹</span>
-                                            <span>{{ s.camera_direction }}</span>
-                                        </span>
-                                    {% endif %}
-                                    {% if s.visual_style %}
-                                        <span class="px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center gap-1 font-mono">
-                                            <span>🎨</span>
-                                            <span>{{ s.visual_style }}</span>
-                                        </span>
-                                    {% endif %}
-                                    {% if s.dialogue %}
-                                        <span class="px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center gap-1 font-mono">
-                                            <span>🎙️</span>
-                                            <span>{{ s.dialogue }}</span>
-                                        </span>
-                                    {% endif %}
-                                </div>
-                            {% endif %}
+                            <div class="flex flex-wrap gap-2 pt-1 text-[10px]" x-show="!editMode && (s.camera_direction || s.visual_style || s.dialogue)">
+                                <template x-if="s.camera_direction">
+                                    <span class="px-2 py-0.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 flex items-center gap-1 font-mono">
+                                        <span>📹</span>
+                                        <span x-text="s.camera_direction"></span>
+                                    </span>
+                                </template>
+                                <template x-if="s.visual_style">
+                                    <span class="px-2 py-0.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-300 flex items-center gap-1 font-mono">
+                                        <span>🎨</span>
+                                        <span x-text="s.visual_style"></span>
+                                    </span>
+                                </template>
+                                <template x-if="s.dialogue">
+                                    <span class="px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-center gap-1 font-mono">
+                                        <span>🎙️</span>
+                                        <span x-text="s.dialogue"></span>
+                                    </span>
+                                </template>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Scene Duration Pill -->
-                    <div class="shrink-0 text-right font-mono text-xs font-bold text-orange-400">
-                        {{ s.duration }}s Frame
+                    <div class="shrink-0 text-right font-mono text-xs font-bold text-orange-400" x-text="s.duration + 's Frame'">
                     </div>
                 </div>
-            {% endfor %}
+            </template>
         </div>
     </div>
+
+    <!-- Pre-Production Clarifying Questions Refinement Bar (0 Credits) -->
+    {% if clarifying_questions %}
+    <form hx-post="{% url 'agent:plan' %}"
+          hx-target="#agent-plan-result"
+          hx-swap="innerHTML"
+          class="p-4 sm:p-5 rounded-2xl bg-[#12151a] border border-cyan-500/30 space-y-3">
+        {% csrf_token %}
+        <input type="hidden" name="prompt" value="{{ prompt }}">
+        <input type="hidden" name="aspect_ratio" value="{{ plan.aspect_ratio }}">
+        <input type="hidden" name="skill_preset" value="{{ skill_preset|default:'general' }}">
+        {% if plan.selected_character_id %}
+            <input type="hidden" name="character_id" value="{{ plan.selected_character_id }}">
+        {% endif %}
+        {% if conversation %}
+            <input type="hidden" name="conversation_id" value="{{ conversation.id }}">
+        {% endif %}
+        <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-2">
+                <span>🎯 Pre-Production Clarifying Questions</span>
+                <span class="text-[10px] text-slate-400 font-normal">(Refine tone & pacing before spending credits)</span>
+            </h3>
+            <button type="submit" class="px-3 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-[11px] font-bold text-cyan-200 transition">
+                🔄 Re-Synthesize Plan (0 cr)
+            </button>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {% for q in clarifying_questions %}
+            <div class="space-y-1">
+                <label class="block text-[10px] font-mono text-slate-300">{{ q.question }}</label>
+                <select name="{{ q.id }}" class="w-full rounded-xl bg-black/50 border border-white/10 px-2.5 py-1.5 text-xs text-white">
+                    {% for opt in q.options %}
+                    <option value="{{ opt }}" {% if opt == q.default %}selected{% endif %}>{{ opt }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+        </div>
+    </form>
+    {% endif %}
 
     <!-- Execution & Approval Bar -->
     <form action="{% url 'agent:execute' %}" method="POST" class="pt-5 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
         {% csrf_token %}
-        <input type="hidden" name="plan_data" value="{{ plan_json }}">
+        <input type="hidden" name="plan_data" :value="JSON.stringify(planData)" value="{{ plan_json }}">
+        {% if conversation %}
+            <input type="hidden" name="conversation_id" value="{{ conversation.id }}">
+        {% endif %}
         
         <div class="text-xs text-slate-400 text-center sm:text-left">
             <span class="text-white font-semibold">Ready to launch production?</span>

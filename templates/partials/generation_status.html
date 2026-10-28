@@ -106,10 +106,21 @@
                         <div class="h-full bg-gradient-to-r from-brand-600 via-indigo-400 to-cyan-400 rounded-full w-4/5 animate-pulse skeleton-shimmer"></div>
                     </div>
 
-                    <div class="flex items-center justify-center gap-2 text-[10px] font-mono text-slate-400">
-                        <span class="text-emerald-400 font-semibold">Step 2/3</span>
-                        <span>•</span>
-                        <span class="animate-pulse">Rendering Neural Noise</span>
+                    <div class="flex flex-col items-center gap-2 text-[10px] font-mono text-slate-400">
+                        <div class="flex items-center justify-center gap-1.5 flex-wrap">
+                            <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">1. In queue ✓</span>
+                            <span>→</span>
+                            <span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">2. Warming up ✓</span>
+                            <span>→</span>
+                            <span class="px-2 py-0.5 rounded bg-brand-500/25 text-white border border-brand-400/50 animate-pulse font-bold">3. Generating</span>
+                            <span>→</span>
+                            <span class="px-2 py-0.5 rounded bg-white/5 text-slate-400">4. Rendering</span>
+                            <span>→</span>
+                            <span class="px-2 py-0.5 rounded bg-white/5 text-slate-400">5. Finishing up</span>
+                        </div>
+                        <span class="text-amber-300 font-semibold">
+                            ⏱️ ETA: {% if generation.generation_type == 'video' %}~45s remaining{% else %}~12s remaining{% endif %}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -403,9 +414,21 @@
                     {% endif %}
                 </div>
 
-                <!-- Action Download -->
+                <!-- Action Recreate & Download -->
                 {% if generation.output_media %}
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        {% if generation.generation_type == 'image' %}
+                            <a href="{% url 'studio:create' %}?tab=video&source_image_url={{ generation.output_media.url|urlencode }}&prompt={{ generation.prompt|urlencode }}&aspect_ratio={{ generation.aspect_ratio }}"
+                               class="btn btn-sm btn-ghost border border-cyan-500/40 text-cyan-300 text-xs flex items-center gap-1 hover:border-cyan-400"
+                               title="Animate this image into a video start frame">
+                                <span>🎬</span>
+                                <span>Animate to Video</span>
+                            </a>
+                        {% endif %}
+                        <a href="{% url 'studio:create' %}?recreate={{ generation.id }}" class="btn btn-sm btn-ghost border border-orange-500/30 text-orange-300 text-xs flex items-center gap-1 hover:border-orange-500" title="Recreate with same prompt & settings">
+                            <span>🔄</span>
+                            <span>Recreate</span>
+                        </a>
                         {% if generation.latest_audio %}
                             <a href="{{ generation.latest_audio.url }}" download class="btn btn-sm btn-ghost border border-orange-500/30 text-orange-400 text-xs flex items-center gap-1 hover:border-orange-500" title="Download Audio Track">
                                 <span>🎵</span>

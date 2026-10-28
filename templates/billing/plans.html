@@ -381,6 +381,7 @@
                         {% else %}
                             <form method="POST" action="{% url 'billing:checkout' plan.id %}">
                                 {% csrf_token %}
+                                <input type="hidden" name="billing_cycle" :value="annual ? 'annual' : 'monthly'">
                                 {% if plan.slug == 'creator' %}
                                     <button type="submit"
                                             class="w-full py-3.5 px-4 rounded-xl font-heading font-black text-xs text-white uppercase tracking-wider

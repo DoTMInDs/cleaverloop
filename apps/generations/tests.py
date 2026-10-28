@@ -162,3 +162,166 @@ class GenerationWorkflowTests(TestCase):
         })
         self.assertEqual(resp.status_code, 400)
         self.assertIn("Unsupported file type", resp.content.decode('utf-8'))
+
+    @patch('apps.generations.tasks.dispatch_generation_task.delay')
+    def test_batch_generation_and_modality_concurrency_limits(self, mock_dispatch):
+        """Verify batch_count creates multiple generations up to tier modality concurrency limits."""
+        wallet = CreditWallet.objects.get(user=self.user)
+        wallet.subscription_tier = 'creator'  # allows 3 parallel videos, 4 parallel images
+        wallet.balance = 500000
+        wallet.save()
+
+        client = Client()
+        client.force_login(self.user)
+
+        # Request batch of 3 images -> should create 3 queued generations
+        resp = client.post('/generations/create/', {
+            'generation_type': 'image',
+            'prompt': 'Cyberpunk skyline at dusk',
+            'aspect_ratio': '16:9',
+            'batch_count': 3,
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Generation.objects.filter(user=self.user, generation_type='image', status='queued').count(), 3)
+
+        # Now 3 image jobs are active; requesting a batch of 2 more exceeds Creator max_parallel_images (4)
+        resp_exceed = client.post('/generations/create/', {
+            'generation_type': 'image',
+            'prompt': 'Another batch',
+            'batch_count': 2,
+        })
+        self.assertEqual(resp_exceed.status_code, 429)
+        self.assertIn("Image concurrency limit reached", resp_exceed.content.decode('utf-8'))
+
+    @patch('apps.generations.tasks.dispatch_generation_task.delay')
+    def test_upscale_edit_and_voice_translate_modes(self, mock_dispatch):
+        """Verify upscale (2x/4x), edit by typing, and voice studio modes create valid generations."""
+        client = Client()
+        client.force_login(self.user)
+
+        # 1. Upscale 4x
+        resp_up = client.post('/generations/create/', {
+            'generation_type': 'upscale',
+            'upscale_scale': '4x',
+            'prompt': 'Crisp architectural photography',
+        })
+        self.assertEqual(resp_up.status_code, 200)
+        up_gen = Generation.objects.filter(user=self.user, generation_type='upscale').first()
+        self.assertIsNotNone(up_gen)
+        self.assertIn('[Upscale 4x]', up_gen.prompt)
+
+        # 2. Edit by typing
+        Generation.objects.filter(user=self.user).update(status='completed')
+        resp_edit = client.post('/generations/create/', {
+            'generation_type': 'edit',
+            'prompt': 'Replace sky with aurora borealis',
+        })
+        self.assertEqual(resp_edit.status_code, 200)
+        self.assertTrue(Generation.objects.filter(user=self.user, generation_type='edit').exists())
+
+        # 3. Voice Studio with emotion tag and translation
+        Generation.objects.filter(user=self.user).update(status='completed')
+        resp_voice = client.post('/generations/create/', {
+            'generation_type': 'voice',
+            'voice_mode': 'translate',
+            'target_language': 'Spanish',
+            'prompt': '[excited] Welcome to the future of cinema!',
+        })
+        self.assertEqual(resp_voice.status_code, 200)
+        audio_gen = Generation.objects.filter(user=self.user, generation_type='audio').first()
+        self.assertIsNotNone(audio_gen)
+        self.assertIn('[Translate to Spanish]', audio_gen.prompt)
+        self.assertIn('[excited]', audio_gen.prompt)
+
+    def test_recreate_deep_link_in_create_studio(self):
+        """Verify ?recreate=<id> populates Create Studio context with source generation parameters."""
+        gen = Generation.objects.create(
+            user=self.user,
+            generation_type='video',
+            provider=self.provider,
+            model=self.model,
+            model_id_snapshot=self.model.model_id,
+            prompt='A dramatic noir detective in a rain-drenched alley',
+            aspect_ratio='21:9',
+            duration=10,
+            status='completed'
+        )
+        client = Client()
+        client.force_login(self.user)
+        resp = client.get(f'/studio/create/?recreate={gen.id}&tab=upscale')
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.context['recreate_generation'].id, gen.id)
+        html = resp.content.decode('utf-8')
+        self.assertIn('A dramatic noir detective in a rain-drenched alley', html)
+        self.assertIn('Super-Resolution Neural Upscaler', html)
+        self.assertIn('Batch Variations', html)
+
+    def test_explore_page_viral_effects_and_persistent_community_likes(self):
+        """Verify Explore 2.0 renders Viral Effects shelf and persists community likes."""
+        gen = Generation.objects.create(
+            user=self.user,
+            generation_type='video',
+            provider=self.provider,
+            model=self.model,
+            model_id_snapshot=self.model.model_id,
+            prompt='A sleek cyber sports car racing through neon tunnels',
+            status='completed'
+        )
+        client = Client()
+        client.force_login(self.user)
+
+        # Toggle community like ON
+        like_resp = client.post(f'/generations/{gen.id}/like/')
+        self.assertEqual(like_resp.status_code, 200)
+        data = like_resp.json()
+        self.assertTrue(data['liked'])
+        first_count = data['likes_count']
+
+        # Toggle community like OFF
+        unlike_resp = client.post(f'/generations/{gen.id}/like/')
+        self.assertEqual(unlike_resp.status_code, 200)
+        self.assertFalse(unlike_resp.json()['liked'])
+        self.assertEqual(unlike_resp.json()['likes_count'], first_count - 1)
+
+        # Explore view renders hero bar & viral effects
+        exp_resp = client.get('/studio/explore/')
+        self.assertEqual(exp_resp.status_code, 200)
+        self.assertGreaterEqual(len(exp_resp.context['viral_effects']), 6)
+        self.assertIn('Explore What Creators Are Shipping', exp_resp.content.decode('utf-8'))
+
+    @patch('apps.generations.tasks.dispatch_generation_task.delay')
+    def test_pro_style_preset_camera_motion_sfx_and_prompt_enhancer(self, mock_dispatch):
+        """Verify style_preset, camera_motion, auto_sfx, source_image_url, and prompt enhancer API."""
+        client = Client()
+        client.force_login(self.user)
+
+        # 1. Enhance Prompt API
+        enh_resp = client.post('/generations/api/enhance-prompt/', {
+            'prompt': 'A lone astronaut walking on Mars',
+            'modality': 'video',
+            'style_preset': 'film_35mm',
+            'camera_motion': 'Slow Dolly In',
+        })
+        self.assertEqual(enh_resp.status_code, 200)
+        enhanced = enh_resp.json()['enhanced_prompt']
+        self.assertIn('Slow Dolly In', enhanced)
+
+        # 2. Create video with style_preset, camera_motion, auto_sfx, and source_image_url
+        gen_resp = client.post('/generations/create/', {
+            'generation_type': 'video',
+            'prompt': 'A lone astronaut walking on Mars',
+            'style_preset': 'film_35mm',
+            'camera_motion': '360 Orbit',
+            'auto_sfx': 'true',
+            'sfx_prompt': 'deep Martian wind and suit breathing',
+            'source_image_url': '/static/images/showcase/brand_video_car.jpg',
+            'duration': 5,
+        })
+        self.assertEqual(gen_resp.status_code, 200)
+        gen = Generation.objects.filter(user=self.user).order_by('-created_at').first()
+        self.assertIn('Kodak Vision3 500T 35mm', gen.prompt)
+        self.assertIn('[Camera Motion: 360 Orbit]', gen.prompt)
+        self.assertIn('[SFX: deep Martian wind and suit breathing]', gen.prompt)
+        self.assertTrue(gen.reference_media.exists())
+
+

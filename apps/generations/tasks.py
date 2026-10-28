@@ -266,7 +266,8 @@ def dispatch_generation_task(generation_id: str):
         )
 
         # Call provider adapter based on type
-        if generation.generation_type == 'image':
+        # Call provider adapter based on type / model modality
+        if generation.generation_type in ('image', 'edit', 'upscale') and generation.model.modality == 'image':
             result: ProviderJobResult = adapter.generate_image(generation.model.model_id, req)
         elif generation.generation_type == 'audio':
             result: ProviderJobResult = adapter.generate_audio(generation.model.model_id, req)
@@ -327,7 +328,7 @@ def dispatch_generation_task(generation_id: str):
                 logger.info(f"Failing over generation {generation.id} to [{fallback_model.model_id}] ({fallback_model.provider.name})")
 
                 fallback_adapter = ModelRegistry.get_provider_adapter(fallback_model.provider.slug)
-                if generation.generation_type == 'image':
+                if generation.generation_type in ('image', 'edit', 'upscale') and fallback_model.modality == 'image':
                     fb_result = fallback_adapter.generate_image(fallback_model.model_id, req)
                 elif generation.generation_type == 'audio':
                     fb_result = fallback_adapter.generate_audio(fallback_model.model_id, req)
@@ -442,7 +443,8 @@ def poll_generation_task(generation_id: str, attempt: int = 1):
 def _finalize_successful_generation(generation: Generation, result: ProviderJobResult):
     """Create Media asset, link to generation/scene/project, commit credits, and mark complete."""
     with transaction.atomic():
-        if generation.generation_type == 'image':
+        # Call provider adapter based on type / model modality
+        if generation.generation_type in ('image', 'edit', 'upscale') and generation.model.modality == 'image':
             media_type = 'image'
             ext = 'png' if result.output_media_url and '.png' in result.output_media_url.lower() else 'jpg'
         elif generation.generation_type == 'audio':

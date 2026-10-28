@@ -178,6 +178,15 @@ class CreateStudioView(LoginRequiredMixin, TemplateView):
         ctx['characters'] = Character.objects.filter(owner=user)
         ctx['projects'] = Project.objects.filter(owner=user)
         ctx['recent_generations'] = Generation.objects.filter(user=user, parent_generation__isnull=True).select_related('output_media', 'model', 'provider')[:12]
+
+        recreate_id = self.request.GET.get('recreate', '').strip()
+        if recreate_id:
+            try:
+                recreate_gen = Generation.objects.select_related('model', 'character').filter(id=recreate_id).first()
+                if recreate_gen:
+                    ctx['recreate_generation'] = recreate_gen
+            except Exception:
+                pass
         ctx['trending_presets'] = [
             {
                 'id': 'vintage_cartoon',
@@ -323,7 +332,10 @@ class ExploreView(TemplateView):
                 title = clean_p[:45] + ('...' if len(clean_p) > 45 else '')
 
             hash_val = abs(hash(str(gen.id)))
-            likes_count = (hash_val % 4200) + 380
+            meta = gen.provider_response if isinstance(gen.provider_response, dict) else {}
+            liked_user_ids = meta.get('liked_user_ids', [])
+            likes_count = meta.get('community_likes_count') or ((hash_val % 4200) + 380 + len(liked_user_ids))
+            is_liked_by_me = bool(user and str(user.id) in liked_user_ids)
 
             dynamic_user_items.append({
                 'id': str(gen.id),
@@ -340,6 +352,7 @@ class ExploreView(TemplateView):
                 'team': team,
                 'produce_format': produce_format,
                 'likes': likes_count,
+                'is_liked': is_liked_by_me,
                 'is_staff_pick': bool(gen.character is not None or (gen.duration and gen.duration >= 10)),
                 'character_name': gen.character.name if gen.character else '',
                 'prompt': gen.prompt,
@@ -616,6 +629,8 @@ class ExploreView(TemplateView):
         ]
 
         ctx['community_showcase'] = dynamic_user_items
+        from apps.ai.models import ViralEffectTemplate
+        ctx['viral_effects'] = ViralEffectTemplate.ensure_seeded()
         return ctx
 
 

@@ -228,6 +228,53 @@
                     </div>
                 </div>
 
+                <!-- Vocal Delivery & Prosody Tuning Sliders -->
+                <div class="p-4 rounded-2xl bg-black/50 border border-white/[0.07] space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-[10px] font-mono uppercase tracking-wider text-orange-400 font-bold">🎛️ Vocal Delivery & Prosody Tuning</span>
+                        <button type="button" @click="stability = 0.5; similarityBoost = 0.75; styleExaggeration = 0.0; speed = 1.0"
+                                class="text-[10px] font-mono text-slate-400 hover:text-white transition cursor-pointer">Reset Defaults</button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 text-xs">
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-mono">
+                                <span class="text-slate-400">Stability</span>
+                                <span class="text-white font-bold" x-text="`${Math.round(stability * 100)}%`"></span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05" x-model.number="stability"
+                                   class="w-full accent-orange-500 cursor-pointer h-1.5 bg-white/10 rounded-lg">
+                            <span class="text-[9px] text-slate-500 block">Lower = more expressive</span>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-mono">
+                                <span class="text-slate-400">Similarity Lock</span>
+                                <span class="text-white font-bold" x-text="`${Math.round(similarityBoost * 100)}%`"></span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05" x-model.number="similarityBoost"
+                                   class="w-full accent-orange-500 cursor-pointer h-1.5 bg-white/10 rounded-lg">
+                            <span class="text-[9px] text-slate-500 block">Timbre & clarity adherence</span>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-mono">
+                                <span class="text-slate-400">Style Drama</span>
+                                <span class="text-white font-bold" x-text="`${Math.round(styleExaggeration * 100)}%`"></span>
+                            </div>
+                            <input type="range" min="0" max="1" step="0.05" x-model.number="styleExaggeration"
+                                   class="w-full accent-orange-500 cursor-pointer h-1.5 bg-white/10 rounded-lg">
+                            <span class="text-[9px] text-slate-500 block">Dramatic inflection boost</span>
+                        </div>
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-[10px] font-mono">
+                                <span class="text-slate-400">Pacing Speed</span>
+                                <span class="text-orange-300 font-bold" x-text="`${speed.toFixed(2)}x`"></span>
+                            </div>
+                            <input type="range" min="0.7" max="1.3" step="0.05" x-model.number="speed"
+                                   class="w-full accent-orange-500 cursor-pointer h-1.5 bg-white/10 rounded-lg">
+                            <span class="text-[9px] text-slate-500 block">0.70x slow — 1.30x rapid</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Action Controls Bar -->
                 <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-white/[0.06]">
                     <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
@@ -530,6 +577,10 @@
 function voiceDetailConsole() {
     return {
         auditionText: 'Welcome to CleaverLoop AI, where your cinematic vision comes alive.',
+        stability: {{ voice.metadata.voice_settings.stability|default:0.5 }},
+        similarityBoost: {{ voice.metadata.voice_settings.similarity_boost|default:0.75 }},
+        styleExaggeration: {{ voice.metadata.voice_settings.style|default:0.0 }},
+        speed: {{ voice.metadata.voice_settings.speed|default:1.0 }},
         isTesting: false,
         testAudioUrl: '{{ voice.preview_url|default:"" }}',
         copied: false,
@@ -551,6 +602,10 @@ function voiceDetailConsole() {
             const formData = new FormData();
             formData.append('text', this.auditionText.trim());
             formData.append('voice_profile_id', '{{ voice.id }}');
+            formData.append('stability', this.stability);
+            formData.append('similarity_boost', this.similarityBoost);
+            formData.append('style', this.styleExaggeration);
+            formData.append('speed', this.speed);
             formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
 
             try {

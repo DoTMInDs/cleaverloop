@@ -153,10 +153,47 @@ def api_preview_speech(request):
         if not target_voice_id:
             target_voice_id = 'adam'
 
+        # Parse vocal delivery tuning parameters (Stability, Similarity Boost, Style, Speed)
+        try:
+            stability = max(0.0, min(1.0, float(request.POST.get('stability', 0.5) or 0.5)))
+        except (TypeError, ValueError):
+            stability = 0.5
+        try:
+            similarity_boost = max(0.0, min(1.0, float(request.POST.get('similarity_boost', 0.75) or 0.75)))
+        except (TypeError, ValueError):
+            similarity_boost = 0.75
+        try:
+            style = max(0.0, min(1.0, float(request.POST.get('style', 0.0) or 0.0)))
+        except (TypeError, ValueError):
+            style = 0.0
+        try:
+            speed = max(0.7, min(1.3, float(request.POST.get('speed', 1.0) or 1.0)))
+        except (TypeError, ValueError):
+            speed = 1.0
+
+        voice_settings = {
+            'stability': round(stability, 2),
+            'similarity_boost': round(similarity_boost, 2),
+            'style': round(style, 2),
+            'speed': round(speed, 2),
+        }
+
+        if profile:
+            meta = dict(profile.metadata or {})
+            meta['voice_settings'] = voice_settings
+            profile.metadata = meta
+            profile.save(update_fields=['metadata'])
+
         req = GenerationRequest(
             prompt=text,
-            duration=max(3, int(len(text.split()) / 2.5)),
-            extra_params={'voice': target_voice_id}
+            duration=max(3, int(len(text.split()) / (2.5 * speed))),
+            extra_params={
+                'voice': target_voice_id,
+                'stability': voice_settings['stability'],
+                'similarity_boost': voice_settings['similarity_boost'],
+                'style': voice_settings['style'],
+                'speed': voice_settings['speed'],
+            }
         )
         eleven_adapter = ElevenLabsProvider()
         result = eleven_adapter.generate_audio("eleven_multilingual_v2", req)
@@ -166,6 +203,7 @@ def api_preview_speech(request):
             return JsonResponse({
                 "status": "success",
                 "audio_url": result.output_media_url,
+                "voice_settings": voice_settings,
                 "credits_deducted": cost,
                 "remaining_balance": wallet.balance,
                 "formatted_balance": wallet.formatted_balance

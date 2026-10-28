@@ -89,3 +89,89 @@ class ProjectAuthorizationTests(TestCase):
         owner_resp = self.client.get(job_url)
         self.assertEqual(owner_resp.status_code, 200)
         self.assertEqual(owner_resp.json()['status'], 'rendering')
+
+    def test_project_favorite_and_trash_filtering(self):
+        """Verify project favorite toggle, trash toggle, and tab filtering."""
+        self.client.login(email="alice@cleaverloop.ai", password="password123")
+        fav_url = reverse('projects:toggle_favorite', kwargs={'pk': self.project_a.pk})
+        self.client.post(fav_url)
+        self.project_a.refresh_from_db()
+        self.assertTrue(self.project_a.is_favorite)
+
+        # Favorites tab includes project_a
+        resp_fav = self.client.get(reverse('projects:list') + '?tab=favorites')
+        self.assertEqual(resp_fav.status_code, 200)
+        self.assertIn(self.project_a, resp_fav.context['projects'])
+
+        # Move to trash
+        trash_url = reverse('projects:toggle_trash', kwargs={'pk': self.project_a.pk})
+        self.client.post(trash_url)
+        self.project_a.refresh_from_db()
+        self.assertTrue(self.project_a.is_trashed)
+
+        # Default list hides trashed project; trash tab shows it
+        resp_all = self.client.get(reverse('projects:list'))
+        self.assertNotIn(self.project_a, resp_all.context['projects'])
+        resp_trash = self.client.get(reverse('projects:list') + '?tab=trash')
+        self.assertIn(self.project_a, resp_trash.context['projects'])
+
+    def test_save_and_apply_cinema_look_and_recipe_modifier(self):
+        """Verify Cinema Director recipe saves a reusable CinemaLook and compiles cinematography cues."""
+        from apps.projects.models import CinemaLook
+        from apps.projects.cinema_recipes import get_cinema_catalog, build_director_prompt_modifier
+
+        catalog = get_cinema_catalog()
+        self.assertEqual(len(catalog['genres']), 7)
+        self.assertEqual(len(catalog['eras']), 5)
+        self.assertEqual(len(catalog['camera_bodies']), 4)
+        self.assertEqual(len(catalog['all_camera_movements']), 28)
+
+        self.client.login(email="alice@cleaverloop.ai", password="password123")
+        save_url = reverse('projects:save_look', kwargs={'project_id': self.project_a.pk})
+        resp = self.client.post(save_url, {
+            'genre': 'thriller',
+            'era': '1970s_grit',
+            'camera_body': 'ARRI Alexa 65',
+            'lens': 'Anamorphic',
+            'aperture': 'f/1.4',
+            'camera_movement': 'Slow Push In',
+            'color_palette': 'Bleach Bypass',
+            'lighting': 'Chiaroscuro',
+            'look_name': 'Neo-Noir 65mm',
+            'apply_to_all_scenes': 'true',
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.project_a.refresh_from_db()
+        self.scene_a.refresh_from_db()
+        self.assertEqual(self.project_a.director_settings.get('camera_body'), 'ARRI Alexa 65')
+        self.assertEqual(self.scene_a.director_recipe.get('lens'), 'Anamorphic')
+
+        look = CinemaLook.objects.filter(owner=self.user_a, name='Neo-Noir 65mm').first()
+        self.assertIsNotNone(look)
+        cue = build_director_prompt_modifier(look.recipe)
+        self.assertIn('ARRI Alexa 65', cue)
+        self.assertIn('anamorphic', cue.lower())
+
+    def test_draft_scene_finalization_to_1080p(self):
+        """Verify finalizing a 480p draft scene promotes it to 1080p master and dispatches HD generation."""
+        from unittest.mock import patch
+        from apps.providers.registry import ModelRegistry
+        from apps.credits.models import CreditWallet
+
+        ModelRegistry.seed_initial_catalog()
+        wallet = CreditWallet.objects.get(user=self.user_a)
+        wallet.subscription_tier = 'creator'
+        wallet.balance = 100000
+        wallet.save()
+
+        self.assertTrue(self.scene_a.is_draft)
+        self.assertEqual(self.scene_a.resolution, '480p')
+
+        self.client.login(email="alice@cleaverloop.ai", password="password123")
+        with patch('apps.projects.views.dispatch_generation_task.delay'):
+            resp = self.client.post(reverse('projects:finalize_scene', kwargs={'scene_id': self.scene_a.id}))
+        self.assertEqual(resp.status_code, 200)
+        self.scene_a.refresh_from_db()
+        self.assertFalse(self.scene_a.is_draft)
+        self.assertEqual(self.scene_a.resolution, '1080p')
+

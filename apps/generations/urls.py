@@ -9,8 +9,10 @@ urlpatterns = [
     path('<uuid:pk>/', views.GenerationDetailView.as_view(), name='detail'),
     path('<uuid:generation_id>/status/', views.generation_status_partial, name='status'),
     path('<uuid:generation_id>/favorite/', views.toggle_favorite_view, name='favorite'),
+    path('<uuid:generation_id>/like/', views.toggle_community_like_view, name='like'),
     path('<uuid:generation_id>/synthesize-audio/', views.synthesize_video_audio_view, name='synthesize_audio'),
     path('<uuid:generation_id>/lipsync/', views.lipsync_video_view, name='lipsync_video'),
     path('<uuid:generation_id>/mux-sound/', views.mux_audio_video_view, name='mux_audio_video'),
     path('api/generate-dialogue/', views.deduce_dialogue_api_view, name='api_generate_dialogue'),
+    path('api/enhance-prompt/', views.enhance_prompt_api_view, name='api_enhance_prompt'),
 ]

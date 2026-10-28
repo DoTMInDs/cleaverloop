@@ -50,6 +50,28 @@ class CreditWallet(models.Model):
         return limits.get(self.subscription_tier, 1)
 
     @property
+    def max_parallel_videos(self) -> int:
+        plan = self.current_plan
+        if plan and getattr(plan, 'max_parallel_videos', None):
+            return plan.max_parallel_videos
+        return {'free': 1, 'starter': 2, 'creator': 3, 'ultra': 8}.get(self.subscription_tier, 1)
+
+    @property
+    def max_parallel_images(self) -> int:
+        plan = self.current_plan
+        if plan and getattr(plan, 'max_parallel_images', None):
+            return plan.max_parallel_images
+        return {'free': 1, 'starter': 2, 'creator': 4, 'ultra': 8}.get(self.subscription_tier, 1)
+
+    @property
+    def max_characters(self) -> int:
+        """Returns maximum custom characters/elements allowed (0 = unlimited)."""
+        plan = self.current_plan
+        if plan is not None and hasattr(plan, 'max_characters'):
+            return plan.max_characters
+        return {'free': 1, 'starter': 5, 'creator': 50, 'pro': 50, 'ultra': 0}.get(self.subscription_tier, 1)
+
+    @property
     def current_plan(self):
         """Safely fetch active SubscriptionPlan if available."""
         sub = getattr(self.user, 'subscription', None)

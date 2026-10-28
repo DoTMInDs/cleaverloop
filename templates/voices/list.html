@@ -365,14 +365,46 @@
                                         </template>
                                     </div>
 
-                                    <!-- Script Teleprompter Card -->
-                                    <div class="rounded-xl bg-[#090b0e] border border-white/[0.06] p-3 space-y-1.5">
-                                        <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
-                                            <span class="text-orange-400 font-bold">📜 Suggested Reading Script</span>
-                                            <span>Natural, clear cadence</span>
+                                    <!-- Live Recording Quality & Duration Meter + Guided Multi-Mode Teleprompter -->
+                                    <div class="rounded-xl bg-[#090b0e] border border-white/[0.06] p-3.5 space-y-2.5" x-data="{ scriptMode: 'cinema' }">
+                                        <!-- Calibration Duration Meter -->
+                                        <div class="space-y-1">
+                                            <div class="flex items-center justify-between text-[10px] font-mono">
+                                                <span class="text-slate-400 uppercase font-bold">Neural Lock Calibration Meter</span>
+                                                <span :class="recordedSeconds >= 30 ? 'text-emerald-400 font-bold' : (recordedSeconds >= 10 ? 'text-amber-400 font-bold' : 'text-slate-500')"
+                                                      x-text="recordedSeconds >= 30 ? '✓ Optimal Neural Lock (30s+)' : (recordedSeconds >= 10 ? '⚡ Good Sample (Read to 30s for best fidelity)' : 'Minimum 10s required (30s+ recommended)')"></span>
+                                            </div>
+                                            <div class="w-full h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
+                                                <div class="h-full transition-all duration-300 rounded-full"
+                                                     :class="recordedSeconds >= 30 ? 'bg-emerald-500' : (recordedSeconds >= 10 ? 'bg-amber-500' : 'bg-rose-500')"
+                                                     :style="`width: ${Math.min(100, Math.round((recordedSeconds / 30) * 100))}%`"></div>
+                                            </div>
                                         </div>
-                                        <p class="text-[11px] text-slate-300 italic leading-relaxed">
+
+                                        <!-- Teleprompter Mode Selector -->
+                                        <div class="flex items-center justify-between gap-2 pt-1 border-t border-white/[0.06]">
+                                            <span class="text-[10px] font-mono text-orange-400 font-bold">📜 Guided Teleprompter</span>
+                                            <div class="flex items-center gap-1">
+                                                <button type="button" @click="scriptMode = 'cinema'"
+                                                        :class="scriptMode === 'cinema' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' : 'bg-white/[0.04] text-slate-400 border-white/10'"
+                                                        class="px-2 py-0.5 rounded text-[9px] font-mono border transition cursor-pointer">Narrative Cinema</button>
+                                                <button type="button" @click="scriptMode = 'commercial'"
+                                                        :class="scriptMode === 'commercial' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' : 'bg-white/[0.04] text-slate-400 border-white/10'"
+                                                        class="px-2 py-0.5 rounded text-[9px] font-mono border transition cursor-pointer">High-Energy Ad</button>
+                                                <button type="button" @click="scriptMode = 'dialogue'"
+                                                        :class="scriptMode === 'dialogue' ? 'bg-orange-500/20 text-orange-300 border-orange-500/40' : 'bg-white/[0.04] text-slate-400 border-white/10'"
+                                                        class="px-2 py-0.5 rounded text-[9px] font-mono border transition cursor-pointer">Dramatic Acting</button>
+                                            </div>
+                                        </div>
+
+                                        <p x-show="scriptMode === 'cinema'" class="text-[11px] text-slate-300 italic leading-relaxed">
                                             "The rainbow is a division of white light into many beautiful colors. When sunlight strikes raindrops in the atmosphere, they act as tiny prisms and form a vivid arch across the sky. Throughout centuries, storytellers and adventurers have sought the legendary pot of gold resting at its edge."
+                                        </p>
+                                        <p x-show="scriptMode === 'commercial'" class="text-[11px] text-slate-300 italic leading-relaxed" style="display:none;">
+                                            "Stop scrolling for a second—have you ever wondered how top studios launch cinematic campaigns in minutes instead of months? With CleaverLoop AI, one idea turns into a fullyvoiced storyboard ready for every screen."
+                                        </p>
+                                        <p x-show="scriptMode === 'dialogue'" class="text-[11px] text-slate-300 italic leading-relaxed" style="display:none;">
+                                            "Listen to me carefully. The signal coming from Sector Seven isn't random static—it's a countdown. If we don't lock the coordinates before sunrise, the entire archive disappears."
                                         </p>
                                     </div>
                                 </div>
@@ -381,14 +413,14 @@
                                 <input type="file" name="recorded_audio" x-ref="recordedAudioInput" class="hidden">
                             </div>
 
-                            <!-- Tab 2: Audio File Upload Dropzone -->
+                            <!-- Tab 2: Audio or Video Stem File Upload Dropzone -->
                             <div x-show="activeTab === 'upload'" class="space-y-3" x-transition>
                                 <div @dragover.prevent="isDragging = true"
                                      @dragleave.prevent="isDragging = false"
                                      @drop.prevent="handleFileDrop($event)"
                                      :class="isDragging ? 'border-orange-500 bg-orange-500/10' : 'border-white/10 bg-black/40 hover:border-white/20'"
                                      class="border-2 border-dashed rounded-2xl p-6 text-center transition cursor-pointer relative">
-                                    <input type="file" name="audio_samples" multiple accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac"
+                                    <input type="file" name="audio_samples" multiple accept="audio/*,video/*,.mp3,.wav,.m4a,.ogg,.flac,.mp4,.mov,.webm"
                                            @change="handleFileSelect($event)" x-ref="fileInput"
                                            class="absolute inset-0 opacity-0 cursor-pointer">
                                     <div class="space-y-2 pointer-events-none">
@@ -396,8 +428,8 @@
                                             📁
                                         </div>
                                         <div>
-                                            <p class="text-xs font-bold text-white">Drag & drop high-quality audio files, or <span class="text-orange-400 underline">browse</span></p>
-                                            <p class="text-[10px] text-slate-400 mt-0.5">Supports WAV, MP3, M4A, FLAC (Clean voice samples, 1-5 minutes recommended)</p>
+                                            <p class="text-xs font-bold text-white">Drag & drop audio or video files, or <span class="text-orange-400 underline">browse</span></p>
+                                            <p class="text-[10px] text-slate-400 mt-0.5">Supports WAV, MP3, M4A, FLAC & Video Stems (MP4, MOV, WebM — 30s to 5m clean speech recommended)</p>
                                         </div>
                                     </div>
                                 </div>
